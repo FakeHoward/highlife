@@ -275,7 +275,11 @@ const en = {
   "rooms.noMembers": "No joined members yet.",
   "rooms.power": "Level {level}",
   "rooms.addToSpace": "Add to space",
-  "rooms.addToSpacePlaceholder": "Space room ID",
+  "rooms.addToFolder": "Add to folder",
+  "rooms.folderSection": "Folder (space)",
+  "rooms.folderHint": "Spaces work like chat folders: put this room in one to filter the sidebar.",
+  "rooms.noSpacesYet": "Create a space from the sidebar folder button first",
+  "rooms.addToSpacePlaceholder": "Choose a space",
   "rooms.addToSpaceDone": "Room added to space",
 
   // Search
@@ -295,11 +299,13 @@ const en = {
   "call.active": "active",
   "call.idle": "idle",
   "call.notice":
-    "Element Call runs in-widget with HighLife as the Widget API host. Media still depends on the LiveKit backend.",
+    "In-app call uses Element Call for this room. Prefer Open in call site if the embed stalls.",
   "call.frameTitle": "Element Call",
-  "call.bannerActive": "A MatrixRTC call is active in this room",
+  "call.bannerActive": "A call is active in this room",
   "call.join": "Join call",
-  "call.widgetReady": "Widget capabilities negotiated",
+  "call.widgetReady": "Connected to call widget",
+  "call.stillLoading": "Still loading — try Open in call site",
+  "call.openExternal": "Open in call site",
 
   // Threads
   "thread.title": "Thread",
@@ -576,7 +582,11 @@ const ru: Record<MessageKey, string> = {
   "rooms.noMembers": "Пока нет участников.",
   "rooms.power": "Уровень {level}",
   "rooms.addToSpace": "Добавить в пространство",
-  "rooms.addToSpacePlaceholder": "ID пространства",
+  "rooms.addToFolder": "В папку",
+  "rooms.folderSection": "Папка (пространство)",
+  "rooms.folderHint": "Пространства как папки чатов: добавьте комнату, чтобы фильтровать список слева.",
+  "rooms.noSpacesYet": "Сначала создайте пространство кнопкой с папкой слева",
+  "rooms.addToSpacePlaceholder": "Выберите пространство",
   "rooms.addToSpaceDone": "Комната добавлена в пространство",
 
   "search.title": "Поиск сообщений",
@@ -594,11 +604,13 @@ const ru: Record<MessageKey, string> = {
   "call.active": "активно",
   "call.idle": "ожидание",
   "call.notice":
-    "Element Call работает во виджете, HighLife выступает хостом Widget API. Медиа зависит от LiveKit.",
+    "Встроенный звонок — Element Call для этой комнаты. Если виджет зависает, откройте сайт звонков.",
   "call.frameTitle": "Element Call",
-  "call.bannerActive": "В этой комнате активен звонок MatrixRTC",
+  "call.bannerActive": "В этой комнате идёт звонок",
   "call.join": "Присоединиться к звонку",
-  "call.widgetReady": "Возможности виджета согласованы",
+  "call.widgetReady": "Виджет звонка подключён",
+  "call.stillLoading": "Всё ещё грузится — попробуйте сайт звонков",
+  "call.openExternal": "Открыть сайт звонков",
 
   "thread.title": "Тред",
   "thread.loading": "Загрузка треда…",

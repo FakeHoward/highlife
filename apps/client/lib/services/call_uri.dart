@@ -44,19 +44,34 @@ Uri? buildElementCallUri({
 
 const callMemberStateEventType = 'org.matrix.msc3401.call.member';
 
-/// Heuristic active MatrixRTC session via MSC3401 call.member state contents.
+/// Active MatrixRTC session via non-expired MSC3401 call.member memberships.
+///
+/// Do not treat leftover `m.call` / `devices` keys alone as an active call —
+/// Element Call often leaves those after everyone hangs up.
 bool hasActiveCallMemberStates(
-  Iterable<Map<String, dynamic>> memberContents,
-) {
+  Iterable<Map<String, dynamic>> memberContents, {
+  DateTime? now,
+}) {
+  final clock = now ?? DateTime.now();
+  final nowMs = clock.millisecondsSinceEpoch;
   for (final content in memberContents) {
     if (content.isEmpty) continue;
     final memberships = content['memberships'];
-    if (memberships is List && memberships.isNotEmpty) return true;
-    if (content.containsKey('devices') ||
-        content.containsKey('m.devices') ||
-        content.containsKey('m.call') ||
-        content.containsKey('m.application')) {
-      return true;
+    if (memberships is! List || memberships.isEmpty) continue;
+    for (final raw in memberships) {
+      if (raw is! Map) continue;
+      final membership = Map<String, dynamic>.from(raw);
+      final expires = membership['expires_ts'] ?? membership['expires'];
+      if (expires is num && expires.toInt() > 0 && expires.toInt() <= nowMs) {
+        continue;
+      }
+      final kind = '${membership['membership'] ?? ''}'.toLowerCase();
+      if (kind.isEmpty ||
+          kind == 'join' ||
+          kind == 'call' ||
+          kind == 'connected') {
+        return true;
+      }
     }
   }
   return false;

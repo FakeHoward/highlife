@@ -8,6 +8,7 @@ import {
   createRoom,
   deleteServerKeyBackup,
   enableExistingKeyBackup,
+  fetchOpenIdToken,
   getCallCapability,
   getCryptoStatus,
   getIncomingVerification,
@@ -426,12 +427,15 @@ export function Settings({ onClose }: { onClose: () => void }) {
           />
         </label>
         <button className="button" type="button" disabled={!recoveryKeyInput.trim() || cryptoBusy} onClick={() => {
-          try {
+          void runCrypto(async () => {
             rememberRecoveryKey(recoveryKeyInput);
-            setCryptoMessage(t("settings.recoveryKeySaved"));
-          } catch (error) {
-            setCryptoMessage(error instanceof Error ? error.message : t("settings.genericError"));
-          }
+            try {
+              const result = await restoreFromKeyBackup();
+              setCryptoMessage(t("settings.restored", result));
+            } catch {
+              setCryptoMessage(t("settings.recoveryKeySaved"));
+            }
+          });
         }}>{t("settings.useRecoveryKey")}</button>
         {newRecoveryKey && (
           <div className="recovery-key-panel" role="status">
@@ -525,64 +529,75 @@ export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onC
           ))}
         </div>
       </div>
-      <form className="inline-form" onSubmit={(event) => {
-        event.preventDefault();
-        void invite(room.roomId, userId)
-          .then(() => setStatus(t("rooms.invitationSent")))
-          .catch((error: Error) => setStatus(error.message));
-      }}>
-        <input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder={t("rooms.invitePlaceholder")} aria-label={t("rooms.inviteUser")} required />
-        <button className="button">{t("rooms.invite")}</button>
-      </form>
+      <div className="settings-section">
+        <p className="eyebrow">{t("rooms.invite")}</p>
+        <form className="stack-form" onSubmit={(event) => {
+          event.preventDefault();
+          void invite(room.roomId, userId)
+            .then(() => setStatus(t("rooms.invitationSent")))
+            .catch((error: Error) => setStatus(error.message));
+        }}>
+          <label>
+            <span>{t("rooms.inviteUser")}</span>
+            <input value={userId} onChange={(event) => setUserId(event.target.value)} placeholder={t("rooms.invitePlaceholder")} required />
+          </label>
+          <button className="button" type="submit">{t("rooms.invite")}</button>
+        </form>
+      </div>
       {!room.isSpace && (
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const target = spaceId.trim();
-            if (!target) return;
-            void addRoomToSpace(target, room.roomId)
-              .then(() => {
-                setStatus(t("rooms.addToSpaceDone"));
-                setSpaceId("");
-              })
-              .catch((error: Error) => setStatus(error.message));
+        <div className="settings-section">
+          <p className="eyebrow">{t("rooms.folderSection")}</p>
+          <p className="muted small">{t("rooms.folderHint")}</p>
+          {spaces.length === 0 ? (
+            <p className="muted small">{t("rooms.noSpacesYet")}</p>
+          ) : (
+            <form
+              className="stack-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const target = spaceId.trim();
+                if (!target) return;
+                void addRoomToSpace(target, room.roomId)
+                  .then(() => {
+                    setStatus(t("rooms.addToSpaceDone"));
+                    setSpaceId("");
+                  })
+                  .catch((error: Error) => setStatus(error.message));
+              }}
+            >
+              <label>
+                <span>{t("rooms.addToSpace")}</span>
+                <select
+                  value={spaceId}
+                  onChange={(event) => setSpaceId(event.target.value)}
+                  required
+                >
+                  <option value="">{t("rooms.addToSpacePlaceholder")}</option>
+                  {spaces.map((space) => (
+                    <option key={space.roomId} value={space.roomId}>{space.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button className="button" type="submit" disabled={!spaceId.trim()}>
+                {t("rooms.addToFolder")}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+      {status && <p className="muted" role="status">{status}</p>}
+      <div className="settings-section settings-section-last">
+        <button
+          className="button danger"
+          type="button"
+          onClick={() => {
+            if (!window.confirm(t("rooms.leaveConfirm"))) return;
+            void leaveRoom(room.roomId).then(onLeft);
           }}
         >
-          {spaces.length > 0 ? (
-            <select
-              value={spaceId}
-              onChange={(event) => setSpaceId(event.target.value)}
-              aria-label={t("rooms.addToSpace")}
-              required
-            >
-              <option value="">{t("rooms.addToSpacePlaceholder")}</option>
-              {spaces.map((space) => (
-                <option key={space.roomId} value={space.roomId}>{space.name}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              value={spaceId}
-              onChange={(event) => setSpaceId(event.target.value)}
-              placeholder={t("rooms.addToSpacePlaceholder")}
-              aria-label={t("rooms.addToSpace")}
-              required
-            />
-          )}
-          <button className="button" type="submit">{t("rooms.addToSpace")}</button>
-        </form>
-      )}
-      {status && <p className="muted">{status}</p>}
-      <button
-        className="button danger"
-        onClick={() => {
-          if (!window.confirm(t("rooms.leaveConfirm"))) return;
-          void leaveRoom(room.roomId).then(onLeft);
-        }}
-      >
-        {t("rooms.leave")}
-      </button>
+          {t("rooms.leave")}
+        </button>
+      </div>
     </Modal>
   );
 }
@@ -648,6 +663,7 @@ export function CallSurface({ roomId, onClose }: { roomId: string; onClose: () =
   const identity = getSessionIdentity();
   const frame = useRef<HTMLIFrameElement>(null);
   const [widgetReady, setWidgetReady] = useState(false);
+  const [slowLoad, setSlowLoad] = useState(false);
   const url = useMemo(() => buildElementCallUrl({
     baseUrl: base,
     parentUrl: configuredParent,
@@ -664,14 +680,24 @@ export function CallSurface({ roomId, onClose }: { roomId: string; onClose: () =
   useEffect(() => {
     if (!url || !targetOrigin) return;
     setWidgetReady(false);
-    return attachElementCallWidgetHost({
+    setSlowLoad(false);
+    const timer = window.setTimeout(() => setSlowLoad(true), 8000);
+    const detach = attachElementCallWidgetHost({
       widgetId: callWidgetId(roomId),
       roomId,
       targetOrigin,
       getContentWindow: () => frame.current?.contentWindow,
       sendEvent: sendWidgetRoomEvent,
-      onCapabilityChange: () => setWidgetReady(true),
+      getOpenIdToken: fetchOpenIdToken,
+      onCapabilityChange: () => {
+        setWidgetReady(true);
+        window.clearTimeout(timer);
+      },
     });
+    return () => {
+      window.clearTimeout(timer);
+      detach();
+    };
   }, [roomId, targetOrigin, url]);
 
   return (
@@ -688,7 +714,15 @@ export function CallSurface({ roomId, onClose }: { roomId: string; onClose: () =
         </div>
       ) : (
         <>
-          <p className="call-notice">{t("call.notice")}{widgetReady ? ` · ${t("call.widgetReady")}` : ""}</p>
+          <div className="call-toolbar">
+            <p className="call-notice">
+              {t("call.notice")}
+              {widgetReady ? ` · ${t("call.widgetReady")}` : slowLoad ? ` · ${t("call.stillLoading")}` : ""}
+            </p>
+            <a className="button" href={url} target="_blank" rel="noreferrer">
+              {t("call.openExternal")}
+            </a>
+          </div>
           <iframe
             ref={frame}
             className="call-frame"

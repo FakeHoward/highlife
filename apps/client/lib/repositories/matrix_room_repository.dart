@@ -47,6 +47,20 @@ class MatrixRoomRepository {
     );
   }
 
+  /// Private Matrix space (sidebar folder).
+  Future<String> createSpace(String name, {String? topic}) {
+    final trimmedTopic = topic?.trim();
+    return client.createSpace(
+      name: name.trim(),
+      topic: trimmedTopic == null || trimmedTopic.isEmpty ? null : trimmedTopic,
+      visibility: Visibility.private,
+    );
+  }
+
+  Future<void> addRoomToSpace(Room space, Room room) {
+    return space.setSpaceChild(room.id);
+  }
+
   Future<String> startDirectChat(
     String userId, {
     bool enableEncryption = true,

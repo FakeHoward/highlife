@@ -138,6 +138,7 @@ class HighLifeSession extends ChangeNotifier {
     if (_client!.isLogged()) {
       _rooms = MatrixRoomRepository(_client!);
       _startPushPipeline();
+      unawaited(_refreshOwnDevices(_client!));
     }
     _ready = true;
     notifyListeners();
@@ -389,6 +390,7 @@ class HighLifeSession extends ChangeNotifier {
       }
       _rooms = MatrixRoomRepository(client);
       _startPushPipeline();
+      unawaited(_refreshOwnDevices(client));
     } catch (e) {
       _error = mapAuthError(e);
     } finally {
@@ -423,6 +425,7 @@ class HighLifeSession extends ChangeNotifier {
       }
       _rooms = MatrixRoomRepository(client);
       _startPushPipeline();
+      unawaited(_refreshOwnDevices(client));
     } catch (e) {
       _error = mapAuthError(e);
     } finally {
@@ -475,6 +478,7 @@ class HighLifeSession extends ChangeNotifier {
       }
       _rooms = MatrixRoomRepository(client);
       _startPushPipeline();
+      unawaited(_refreshOwnDevices(client));
     } catch (e) {
       _error = mapAuthError(e, registering: true);
     } finally {
@@ -570,6 +574,28 @@ class HighLifeSession extends ChangeNotifier {
     if (repository == null || name.trim().isEmpty) return;
     await repository.createRoom(name, enableEncryption: enableEncryption);
     notifyListeners();
+  }
+
+  Future<void> createSpace(String name, {String? topic}) async {
+    final repository = _rooms;
+    if (repository == null || name.trim().isEmpty) return;
+    await repository.createSpace(name, topic: topic);
+    notifyListeners();
+  }
+
+  Future<void> addRoomToSpace(Room space, Room room) async {
+    final repository = _rooms;
+    if (repository == null) return;
+    await repository.addRoomToSpace(space, room);
+    notifyListeners();
+  }
+
+  /// Refresh own device list so peer clients (e.g. web) can receive megolm shares.
+  Future<void> _refreshOwnDevices(Client client) async {
+    if (!_cryptoAvailable) return;
+    try {
+      await client.updateUserDeviceKeys();
+    } catch (_) {}
   }
 
   Future<String?> startDirectChat(

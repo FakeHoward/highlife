@@ -110,14 +110,47 @@ class _RoomListScreenState extends State<RoomListScreen> {
                     )
                   : ListView(
                       children: [
-                        if (spaces.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                            child: Text(
-                              s.spaces,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(
+                                    s.spaces,
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: s.createSpace,
+                                onPressed: () =>
+                                    _roomAction(session, s, 'space'),
+                                icon: const Icon(
+                                  Icons.create_new_folder_outlined,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        if (spaces.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: Text(
+                              s.spacesFolderHint,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .extension<HighLifeTokens>()
+                                        ?.muted,
+                                  ),
+                            ),
+                          )
+                        else
                           for (final space in spaces)
                             _SpaceTile(
                               space: space,
@@ -134,8 +167,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                               selectedRoomId: _selected?.id,
                               emptySubtitle: s.noMessagesYet,
                             ),
-                          const Divider(height: 1),
-                        ],
+                        const Divider(height: 1),
                         if (invites.isNotEmpty) ...[
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -212,6 +244,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
     var encrypt = session.cryptoAvailable;
     final isDm = action == 'dm';
     final isCreate = action == 'create';
+    final isSpace = action == 'space';
     final colors = Theme.of(context).colorScheme;
     final value = await showDialog<String>(
       context: context,
@@ -219,23 +252,35 @@ class _RoomListScreenState extends State<RoomListScreen> {
         builder: (context, setLocal) => AlertDialog(
           backgroundColor: colors.surface,
           title: Text(
-            isDm
-                ? s.startDirectMessage
-                : (isCreate ? s.newRoom : s.joinRoom),
+            isSpace
+                ? s.createSpace
+                : (isDm
+                    ? s.startDirectMessage
+                    : (isCreate ? s.newRoom : s.joinRoom)),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (isSpace)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    s.spacesFolderHint,
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ),
               TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: isDm
-                      ? s.matrixUserId
-                      : (isCreate ? s.roomName : s.roomIdOrAlias),
+                  labelText: isSpace
+                      ? s.spaceName
+                      : (isDm
+                          ? s.matrixUserId
+                          : (isCreate ? s.roomName : s.roomIdOrAlias)),
                   hintText: isDm
                       ? s.userIdHint
-                      : (isCreate ? null : s.roomAliasHint),
+                      : (isCreate || isSpace ? null : s.roomAliasHint),
                 ),
                 onSubmitted: (value) => Navigator.pop(context, value),
               ),
@@ -257,9 +302,11 @@ class _RoomListScreenState extends State<RoomListScreen> {
             HlButton.primary(
               onPressed: () => Navigator.pop(context, controller.text),
               label: Text(
-                isDm
-                    ? s.startDmAction
-                    : (isCreate ? s.create : s.join),
+                isSpace
+                    ? s.createSpace
+                    : (isDm
+                        ? s.startDmAction
+                        : (isCreate ? s.create : s.join)),
               ),
             ),
           ],
@@ -277,6 +324,10 @@ class _RoomListScreenState extends State<RoomListScreen> {
         if (!mounted || roomId == null) return;
         final room = session.client?.getRoomById(roomId);
         if (room != null) setState(() => _selected = room);
+        return;
+      }
+      if (isSpace) {
+        await session.createSpace(value);
         return;
       }
       if (isCreate) {

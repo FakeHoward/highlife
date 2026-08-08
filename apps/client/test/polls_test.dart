@@ -83,5 +83,33 @@ void main() {
       ]),
       isTrue,
     );
+    // Leftover m.call / devices without memberships is not an active call.
+    expect(
+      hasActiveCallMemberStates([
+        {
+          'm.call': {'id': 'x'},
+          'devices': {'DEV': {}},
+        },
+      ]),
+      isFalse,
+    );
+    final past = DateTime.utc(2020).millisecondsSinceEpoch;
+    expect(
+      hasActiveCallMemberStates(
+        [
+          {
+            'memberships': [
+              {
+                'device_id': 'DEV',
+                'membership': 'join',
+                'expires_ts': past,
+              },
+            ],
+          },
+        ],
+        now: DateTime.utc(2024),
+      ),
+      isFalse,
+    );
   });
 }

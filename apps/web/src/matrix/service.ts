@@ -149,6 +149,7 @@ const historyStates = new Map<string, HistoryState>();
 const threadTimelines = new Map<string, Awaited<ReturnType<MatrixClient["getThreadTimeline"]>>>();
 const secretStorageKeys = new Map<string, Uint8Array<ArrayBuffer>>();
 let cachedSecretStorageKey: { keyId: string; privateKey: Uint8Array<ArrayBuffer> } | null = null;
+const RECOVERY_KEY_SESSION = "highlife.recoveryKey";
 let pendingIncomingVerification: VerificationRequest | null = null;
 const verificationListeners = new Set<() => void>();
 
@@ -343,6 +344,21 @@ async function start(session: StoredSession): Promise<void> {
       cryptoDatabasePrefix: `highlife-${session.userId}-${session.deviceId}`,
     });
     attachIncomingVerification(client);
+    // Prefer unlocking an existing identity over creating a new one.
+    try {
+      const stored = sessionStorage.getItem(RECOVERY_KEY_SESSION);
+      if (stored) rememberRecoveryKey(stored);
+    } catch {
+      /* ignore */
+    }
+    try {
+      await client.getCrypto()?.checkKeyBackupAndEnable();
+    } catch {
+      /* no backup yet */
+    }
+    if (cachedSecretStorageKey) {
+      void restoreFromKeyBackup().catch(() => undefined);
+    }
   } catch (error) {
     publish({ error: `Encryption unavailable: ${messageOf(error)}` });
   }
@@ -528,6 +544,11 @@ export async function logout(): Promise<void> {
   pendingIncomingVerification = null;
   cachedSecretStorageKey = null;
   secretStorageKeys.clear();
+  try {
+    sessionStorage.removeItem(RECOVERY_KEY_SESSION);
+  } catch {
+    /* ignore */
+  }
   await clearSession();
   if (userId && deviceId) {
     await clearCryptoDatabases(userId, deviceId);
@@ -968,6 +989,11 @@ export async function addRoomToSpace(spaceId: string, roomId: string): Promise<v
   const active = requiredClient();
   const via = [new URL(active.baseUrl).hostname];
   await active.sendStateEvent(spaceId, "m.space.child" as typeof EventType.RoomTopic, { via } as never, roomId);
+  try {
+    await active.sendStateEvent(roomId, "m.space.parent" as typeof EventType.RoomTopic, { via } as never, spaceId);
+  } catch {
+    /* parent link needs power in the room; child link alone is enough for sidebar */
+  }
 }
 
 export async function createPoll(
@@ -1196,11 +1222,33 @@ export async function getKeyBackupDetails(): Promise<KeyBackupDetails> {
 }
 
 export function rememberRecoveryKey(recoveryKey: string): string {
-  const privateKey = decodeRecoveryKey(recoveryKey.trim());
+  const trimmed = recoveryKey.trim();
+  const privateKey = decodeRecoveryKey(trimmed);
   const key = privateKey as Uint8Array<ArrayBuffer>;
   cachedSecretStorageKey = { keyId: "recovery", privateKey: key };
   secretStorageKeys.set("recovery", key);
-  return encodeRecoveryKey(privateKey) ?? recoveryKey.trim();
+  try {
+    sessionStorage.setItem(RECOVERY_KEY_SESSION, trimmed);
+  } catch {
+    /* ignore */
+  }
+  return encodeRecoveryKey(privateKey) ?? trimmed;
+}
+
+/** OpenID token for Element Call Widget API (`get_openid`). */
+export async function fetchOpenIdToken(): Promise<{
+  access_token: string;
+  token_type: string;
+  matrix_server_name: string;
+  expires_in: number;
+} | null> {
+  const active = client;
+  if (!active?.getUserId()) return null;
+  try {
+    return await active.getOpenIdToken();
+  } catch {
+    return null;
+  }
 }
 
 export async function setupRecoveryAndKeyBackup(): Promise<{ recoveryKey: string }> {
@@ -1393,9 +1441,14 @@ export function getCallCapability(roomId: string): {
   } catch {
     configured = false;
   }
+  // matrix-js-sdk caches an empty MatrixRTC session per room after Room events;
+  // Boolean(session) alone is always true. Require live memberships.
+  const session = active.matrixRTC.getActiveRoomSession(room);
+  const memberships = session?.memberships;
+  const callActive = Boolean(memberships && memberships.length > 0);
   return {
     available: window.isSecureContext && configured,
-    active: Boolean(active.matrixRTC.getActiveRoomSession(room)),
+    active: callActive,
     ...(!window.isSecureContext
       ? { reason: "Calls require a secure HTTPS context" }
       : !configured

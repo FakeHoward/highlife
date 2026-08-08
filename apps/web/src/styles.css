@@ -192,15 +192,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   padding: 10px 12px;
   width: 100%;
 }
-.login-form input, .stack-form input, .inline-form input {
+.login-form input, .stack-form input, .stack-form select, .inline-form input, .inline-form select {
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
   min-height: 43px;
   padding: 9px 11px;
   width: 100%;
 }
-.login-form input:focus, .stack-form input:focus, .inline-form input:focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+.stack-form select, .inline-form select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-repeat: no-repeat;
+  background-size: 6px 6px, 6px 6px;
+  cursor: pointer;
+  padding-right: 34px;
+}
+.login-form input:focus, .stack-form input:focus, .stack-form select:focus, .inline-form input:focus, .inline-form select:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent-soft);
+}
 .form-note { color: var(--faint); font-size: 11px; margin: -5px 0 0; text-align: center; }
 
 .workspace { display: grid; grid-template-columns: minmax(240px, 28vw) minmax(0, 1fr); height: 100%; }
@@ -711,7 +729,17 @@ audio { display: block; margin-top: 7px; max-width: 100%; }
 .stack-form { display: grid; gap: 15px; }
 .stack-form .check { align-items: center; display: flex; }.stack-form .check input { min-height: auto; width: auto; }
 .inline-form { display: grid; gap: 8px; grid-template-columns: 1fr auto; }
-.settings-section { border-bottom: 1px solid var(--line); display: grid; gap: 10px; padding-bottom: 18px; }
+.settings-section { border-bottom: 1px solid var(--line); display: grid; gap: 10px; margin-bottom: 14px; padding-bottom: 18px; }
+.settings-section-last { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+.call-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.call-toolbar .call-notice { flex: 1 1 220px; margin: 0; }
 .member-list { display: grid; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
 .member-list article, .member-list li {
   border: 1px solid var(--line);

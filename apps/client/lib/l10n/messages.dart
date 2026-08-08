@@ -168,6 +168,15 @@ class AppStrings {
   String get startDmAction => _('startDmAction');
   String get spaces => _('spaces');
   String get noRoomsInSpace => _('noRoomsInSpace');
+  String get createSpace => _('createSpace');
+  String get spaceName => _('spaceName');
+  String get spacesFolderHint => _('spacesFolderHint');
+  String get folderSection => _('folderSection');
+  String get folderHint => _('folderHint');
+  String get addToFolder => _('addToFolder');
+  String get addToSpacePlaceholder => _('addToSpacePlaceholder');
+  String get noSpacesYet => _('noSpacesYet');
+  String get addToSpaceDone => _('addToSpaceDone');
 
   // Settings / crypto / calls
   String get encryptionAvailable => _('encryptionAvailable');
@@ -622,6 +631,42 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'noRoomsInSpace': {
     AppLocale.en: 'No joined rooms in this space yet',
     AppLocale.ru: 'В этом пространстве пока нет комнат',
+  },
+  'createSpace': {
+    AppLocale.en: 'New space',
+    AppLocale.ru: 'Новое пространство',
+  },
+  'spaceName': {
+    AppLocale.en: 'Space name',
+    AppLocale.ru: 'Название пространства',
+  },
+  'spacesFolderHint': {
+    AppLocale.en: 'Like Telegram folders — create a space, then add chats to it.',
+    AppLocale.ru: 'Как папки в Telegram: создайте пространство и добавьте чаты.',
+  },
+  'folderSection': {
+    AppLocale.en: 'Folder (space)',
+    AppLocale.ru: 'Папка (пространство)',
+  },
+  'folderHint': {
+    AppLocale.en: 'Spaces work like chat folders: put this room in one to filter the list.',
+    AppLocale.ru: 'Пространства как папки чатов: добавьте комнату, чтобы фильтровать список.',
+  },
+  'addToFolder': {
+    AppLocale.en: 'Add to folder',
+    AppLocale.ru: 'В папку',
+  },
+  'addToSpacePlaceholder': {
+    AppLocale.en: 'Choose a space',
+    AppLocale.ru: 'Выберите пространство',
+  },
+  'noSpacesYet': {
+    AppLocale.en: 'Create a space from the folder button first',
+    AppLocale.ru: 'Сначала создайте пространство кнопкой с папкой',
+  },
+  'addToSpaceDone': {
+    AppLocale.en: 'Added to space',
+    AppLocale.ru: 'Добавлено в пространство',
   },
   'encryptionAvailable': {
     AppLocale.en: 'Encryption available',

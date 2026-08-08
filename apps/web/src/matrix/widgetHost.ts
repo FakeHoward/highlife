@@ -5,12 +5,20 @@
 
 export type WidgetSendEventFn = (roomId: string, type: string, content: Record<string, unknown>, stateKey?: string) => Promise<{ event_id?: string }>;
 
+export type WidgetOpenIdFn = () => Promise<{
+  access_token: string;
+  token_type: string;
+  matrix_server_name: string;
+  expires_in: number;
+} | null>;
+
 export interface WidgetHostOptions {
   widgetId: string;
   roomId: string;
   targetOrigin: string;
   getContentWindow: () => Window | null | undefined;
   sendEvent?: WidgetSendEventFn;
+  getOpenIdToken?: WidgetOpenIdFn;
   onCapabilityChange?: (capabilities: string[]) => void;
 }
 
@@ -116,7 +124,20 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
     }
 
     if (action === "get_openid") {
-      reply(request, { state: "blocked" });
+      if (!options.getOpenIdToken) {
+        reply(request, { state: "blocked" });
+        return;
+      }
+      try {
+        const token = await options.getOpenIdToken();
+        if (!token) {
+          reply(request, { state: "blocked" });
+          return;
+        }
+        reply(request, { state: "allowed", ...token });
+      } catch {
+        reply(request, { state: "blocked" });
+      }
       return;
     }
 

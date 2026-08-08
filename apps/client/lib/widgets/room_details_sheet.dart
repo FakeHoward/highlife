@@ -50,6 +50,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
   List<User> _members = const [];
   var _loading = true;
   String? _status;
+  String? _spaceId;
 
   @override
   void initState() {
@@ -85,6 +86,25 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
       if (!mounted) return;
       setState(() => _status = widget.strings.invitationSent);
       await _refresh();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _status = e.toString());
+    }
+  }
+
+  Future<void> _addToSpace() async {
+    final spaceId = _spaceId;
+    if (spaceId == null || spaceId.isEmpty) return;
+    final space = widget.session.client?.getRoomById(spaceId);
+    if (space == null) return;
+    setState(() => _status = null);
+    try {
+      await widget.session.addRoomToSpace(space, widget.room);
+      if (!mounted) return;
+      setState(() {
+        _status = widget.strings.addToSpaceDone;
+        _spaceId = null;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _status = e.toString());
@@ -233,6 +253,64 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                       ),
                     ],
                   ),
+                  if (!room.isSpace) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      s.folderSection,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      s.folderHint,
+                      style: TextStyle(color: tokens.muted, fontSize: 13),
+                    ),
+                    const SizedBox(height: 10),
+                    Builder(
+                      builder: (context) {
+                        final spaces = widget.session.spaces
+                            .where((space) => space.id != room.id)
+                            .toList(growable: false);
+                        if (spaces.isEmpty) {
+                          return Text(
+                            s.noSpacesYet,
+                            style: TextStyle(color: tokens.muted),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            DropdownButtonFormField<String>(
+                              // ignore: deprecated_member_use — value is the controlled API here
+                              value: _spaceId,
+                              decoration: InputDecoration(
+                                labelText: s.addToSpacePlaceholder,
+                              ),
+                              items: [
+                                for (final space in spaces)
+                                  DropdownMenuItem(
+                                    value: space.id,
+                                    child: Text(
+                                      space.getLocalizedDisplayname(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _spaceId = value),
+                            ),
+                            const SizedBox(height: 10),
+                            HlButton.primary(
+                              onPressed:
+                                  _spaceId == null ? null : _addToSpace,
+                              label: Text(s.addToFolder),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                   if (_status != null) ...[
                     const SizedBox(height: 8),
                     Text(
