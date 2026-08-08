@@ -1,0 +1,65 @@
+name: Diagnose bot
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: highlife-diagnose-bot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Check deploy auth secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing environment secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ -z "${DEPLOY_SSH_KEY}" ] && [ -z "${DEPLOY_PASSWORD}" ]; then
+            echo "::error::Missing deploy auth: set DEPLOY_PASSWORD and/or DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          # Never changes sshd — interactive password login stays as you configured it.
+          test "$missing" = 0
+
+      - name: Dump bot container status and logs
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            cd /opt/highlife
+            echo '=== compose ps bot ==='
+            docker compose -f docker-compose.prod.yml ps bot || true
+            echo '=== inspect restart count / exit ==='
+            docker inspect highlife-bot-1 --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}' || true
+            echo '=== env keys (names only) ==='
+            docker compose -f docker-compose.prod.yml exec -T bot sh -c 'env | cut -d= -f1 | sort' 2>/dev/null || \
+              docker inspect highlife-bot-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort || true
+            echo '=== recent logs ==='
+            docker compose -f docker-compose.prod.yml logs --no-color --tail=200 bot || \
+              docker logs --tail=200 highlife-bot-1 || true
+            echo '=== try one-shot run ==='
+            docker compose -f docker-compose.prod.yml run --rm --no-deps bot \
+              sh -c 'node -e "console.log(\"node ok\")" && ls -la /app && ls -la /app/data || true' || true
+            echo '=== aiomatrix diagnoseSession ==='
+            docker compose -f docker-compose.prod.yml run --rm --no-deps bot \
+              node --input-type=module -e "import { diagnoseSession } from 'aiomatrix'; console.log(JSON.stringify(diagnoseSession('./data'), null, 2));" || true

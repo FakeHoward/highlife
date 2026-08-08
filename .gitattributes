@@ -1,0 +1,5 @@
+*.sh text eol=lf
+*.py text eol=lf
+server/bootstrap-bot.sh text eol=lf
+server/generate-synapse-config.sh text eol=lf
+server/render-synapse-config.py text eol=lf

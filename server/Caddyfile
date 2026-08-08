@@ -1,0 +1,142 @@
+(base_security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Rendered to Caddyfile by deploy (replace MATRIX_DOMAIN placeholders) or kept
+# in sync locally with the default domain. See docs/SECRETS.md.
+testhighlife.strangled.net {
+	import base_security_headers
+	header {
+		X-Frame-Options "SAMEORIGIN"
+		# Vite SPA may emit small inline bootstrapping; keep script-src unsafe-inline until nonces land.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+		Permissions-Policy "camera=(self \"https://call.testhighlife.strangled.net\"), microphone=(self \"https://call.testhighlife.strangled.net\"), display-capture=(self \"https://call.testhighlife.strangled.net\"), fullscreen=(self \"https://call.testhighlife.strangled.net\"), geolocation=()"
+	}
+	encode zstd gzip
+
+	handle /.well-known/matrix/server {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin "*"
+		respond `{"m.server":"testhighlife.strangled.net:443"}` 200
+	}
+
+	handle /.well-known/matrix/client {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin "*"
+		respond `{"m.homeserver":{"base_url":"https://testhighlife.strangled.net"},"org.matrix.msc4143.rtc_foci":[{"type":"livekit","livekit_service_url":"https://rtc.testhighlife.strangled.net/livekit/jwt"}]}` 200
+	}
+
+	@matrix path /_matrix/* /_synapse/client/*
+	handle @matrix {
+		reverse_proxy synapse:8008
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /flutter {
+		redir /flutter/ 308
+	}
+
+	handle_path /flutter/* {
+		root * /srv/flutter
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle /miniapp {
+		redir /miniapp/ 308
+	}
+
+	handle_path /miniapp/* {
+		root * /srv/miniapp
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle /client {
+		redir /client/ 308
+	}
+
+	handle_path /client/* {
+		root * /srv/client
+		file_server
+	}
+
+	handle_path /miniapp-api/* {
+		reverse_proxy bot:8090
+	}
+
+	handle {
+		root * /srv/react
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+call.testhighlife.strangled.net {
+	import base_security_headers
+	header {
+		-X-Frame-Options
+		Content-Security-Policy "frame-ancestors https://testhighlife.strangled.net; object-src 'none'; base-uri 'self'"
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), fullscreen=(self), geolocation=()"
+	}
+	encode zstd gzip
+	reverse_proxy element-call:8080
+}
+
+rtc.testhighlife.strangled.net {
+	import base_security_headers
+	header {
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'none'"
+		Permissions-Policy "camera=(), microphone=(), display-capture=(), fullscreen=(), geolocation=()"
+	}
+
+	handle /livekit/jwt* {
+		uri strip_prefix /livekit/jwt
+		reverse_proxy lk-jwt-service:8080
+	}
+
+	handle /livekit/sfu* {
+		uri strip_prefix /livekit/sfu
+		reverse_proxy livekit:7880
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+}
+
+# Optional Matrix Push Gateway (Sygnal). Enable with:
+#   docker compose -f docker-compose.prod.yml --profile push up -d
+# DNS: A record push.testhighlife.strangled.net -> DEPLOY_PUBLIC_IP
+# VITE_PUSH_GATEWAY_URL=https://push.testhighlife.strangled.net/_matrix/push/v1/notify
+# Raw ntfy is NOT a Matrix push gateway; do not point m.pusher at it.
+push.testhighlife.strangled.net {
+	import base_security_headers
+	header {
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'none'"
+		Permissions-Policy "camera=(), microphone=(), display-capture=(), fullscreen=(), geolocation=()"
+	}
+	encode zstd gzip
+
+	handle /_matrix/push/* {
+		reverse_proxy sygnal:5000
+	}
+
+	handle /health {
+		reverse_proxy sygnal:5000
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://highlife.example/contracts/dev.aiomatrix.commands.schema.json",
+  "title": "dev.aiomatrix.commands state content",
+  "type": "object",
+  "required": ["version", "prefixes", "commands"],
+  "properties": {
+    "version": { "const": 1 },
+    "prefixes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "aliases": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "description": { "type": "string" },
+          "args": { "type": "string" },
+          "category": { "type": "string" },
+          "scope": { "enum": ["direct", "group"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

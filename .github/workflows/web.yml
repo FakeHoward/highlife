@@ -1,0 +1,41 @@
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/ui-contracts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/ui-contracts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test / typecheck / build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Test
+        run: npm test --workspace @highlife/web -- --run
+      - name: Typecheck
+        run: npm run typecheck --workspace @highlife/web
+      - name: Build
+        run: npm run build --workspace @highlife/web
+        env:
+          VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
+          VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net

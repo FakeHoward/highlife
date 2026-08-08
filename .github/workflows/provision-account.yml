@@ -1,0 +1,59 @@
+name: Provision account
+
+on:
+  workflow_dispatch:
+    inputs:
+      localpart:
+        description: Matrix localpart to create (no @)
+        required: true
+        default: viewer
+      password:
+        description: Password for that account
+        required: true
+
+concurrency:
+  group: highlife-provision-account
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Create Matrix account on production
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            cd /opt/highlife
+            localpart='${{ inputs.localpart }}'
+            password='${{ inputs.password }}'
+            case "$localpart" in
+              *[!a-zA-Z0-9._=-]*|"")
+                echo "Invalid localpart" >&2
+                exit 1
+                ;;
+            esac
+            if output="$(docker compose -f docker-compose.prod.yml exec -T synapse \
+              register_new_matrix_user \
+              --config /data/homeserver.yaml \
+              --user "$localpart" \
+              --password "$password" \
+              --no-admin \
+              http://127.0.0.1:8008 2>&1)"; then
+              echo "Created @${localpart}:testhighlife.strangled.net"
+              exit 0
+            fi
+            if printf '%s' "$output" | grep -qiE 'already exists|M_USER_IN_USE|already taken'; then
+              echo "Account already exists; password was not changed"
+              exit 0
+            fi
+            printf '%s\n' "$output" >&2
+            exit 1

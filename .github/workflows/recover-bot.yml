@@ -1,0 +1,76 @@
+name: Recover bot
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: highlife-recover-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Check deploy auth secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing environment secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ -z "${DEPLOY_SSH_KEY}" ] && [ -z "${DEPLOY_PASSWORD}" ]; then
+            echo "::error::Missing deploy auth: set DEPLOY_PASSWORD and/or DEPLOY_SSH_KEY"
+            missing=1
+          fi
+          # Never changes sshd — interactive password login stays as you configured it.
+          test "$missing" = 0
+
+      - name: Fix bot-data permissions and restart bot
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            cd /opt/highlife
+            docker compose -f docker-compose.prod.yml stop bot || true
+            docker compose -f docker-compose.prod.yml run --rm --no-deps --user 0 \
+              --entrypoint sh bot -c '
+                mkdir -p /app/data
+                find /app/data -mindepth 1 -maxdepth 1 ! -name formspace.json ! -name crypto-passphrase.json -exec rm -rf {} +
+                chown -R 1000:1000 /app/data
+                ls -la /app/data
+              '
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate bot
+            ready=0
+            for _ in $(seq 1 45); do
+              status="$(docker inspect highlife-bot-1 --format '{{.State.Status}}' 2>/dev/null || true)"
+              if [ "$status" = "running" ] && \
+                 docker compose -f docker-compose.prod.yml logs --no-color --tail=80 bot 2>/dev/null |
+                   grep -E 'FormSpace as|HighLife showcase as' >/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 4
+            done
+            docker compose -f docker-compose.prod.yml ps bot || true
+            docker compose -f docker-compose.prod.yml logs --no-color --tail=60 bot || true
+            if [ "$ready" != 1 ]; then
+              echo "Bot failed to become ready" >&2
+              exit 1
+            fi
+            echo "Bot recovered"

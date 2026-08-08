@@ -1,0 +1,60 @@
+## HighLife Sygnal (Matrix Push Gateway)
+##
+## Started when ENABLE_PUSH=true on deploy (compose profile `push`).
+## DNS: push.<MATRIX_DOMAIN> → VPS (you already added this).
+##
+## Clients register m.pusher with:
+##   url = https://push.<domain>/_matrix/push/v1/notify
+##
+## Web + UnifiedPush both use Sygnal `webpush` pushkin (VAPID).
+## Private key is bind-mounted from ./sygnal-vapid.pem (Deploy writes it from
+## GitHub secret SYGNAL_VAPID_PRIVATE_KEY). Public half → VITE_VAPID_PUBLIC_KEY.
+
+log:
+  setup:
+    version: 1
+    formatters:
+      normal:
+        format: "%(asctime)s [%(process)d] %(levelname)-5s %(name)s %(message)s"
+    handlers:
+      stderr:
+        class: "logging.StreamHandler"
+        formatter: "normal"
+        stream: "ext://sys.stderr"
+    root:
+      handlers: ["stderr"]
+      level: "INFO"
+    disable_existing_loggers: false
+
+access:
+  x_forwarded_for: true
+
+http:
+  bind_addresses: ["0.0.0.0"]
+  port: 5000
+
+metrics:
+  prometheus:
+    enabled: false
+  opentracing:
+    enabled: false
+  sentry:
+    enabled: false
+
+apps:
+  # React web client (apps/web push.ts APP_ID)
+  im.highlife.web:
+    type: webpush
+    vapid_private_key: /sygnal/vapid_private.pem
+    ttl: 900
+    # UnifiedPush + browser endpoints; block link-local/private if needed later.
+    allowed_endpoints:
+      - "*"
+
+  # Flutter Android UnifiedPush (PushService default app_id)
+  app.highlife.android:
+    type: webpush
+    vapid_private_key: /sygnal/vapid_private.pem
+    ttl: 900
+    allowed_endpoints:
+      - "*"

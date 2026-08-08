@@ -1,0 +1,51 @@
+---
+description: Anti-AI gate for commits, PRs, README, UI copy, and marketing text
+alwaysApply: true
+---
+
+# Anti-AI ship gate
+
+Before any commit message, PR title/body, release note, README/docs edit, UI
+string, or landing/marketing copy: run the anti-slop pass. Do not ship text or
+UI that reads as generic model output.
+
+## Required skills (read and apply)
+
+Use these skills from the agent skills library when they apply:
+
+1. `anti-ui-slop` — product-specific UI; no template chrome
+2. `ui-slop-score` — score rendered UI when visuals changed
+3. `frontend-design` / `design-taste-frontend` / `high-end-visual-design` — layout, type, color
+4. `web-design-guidelines` — a11y / web interface basics when reviewing UI
+
+If a skill file is available locally under `~/.agents/skills` or
+`~/.cursor/skills-cursor`, **read it** before finishing the text/UI change.
+
+## Prose / commit / PR checks
+
+Reject and rewrite if you see:
+
+- Empty hype: "seamless", "robust", "leverage", "cutting-edge", "game-changer",
+  "revolutionize", "delightful experience", "in today's world"
+- Fake structure: "Here's the thing:", "Let's dive in", "In conclusion"
+- Symmetrical buzzword lists with no product facts
+- Purple-on-white / indigo gradient marketing voice; cream+serif+terracotta clichés
+- Emoji decoration used as substance
+- Commit subjects that only restate the diff ("Update files", "Fix stuff")
+
+Prefer: concrete nouns, what broke / what ships, one honest limitation when relevant.
+
+## UI checks
+
+- No dashboard-looking heroes for non-dashboard surfaces
+- Brand must survive "remove the nav" test on branded first viewports
+- Cards only when they hold a real interaction
+- Ship real states (empty, error, loading, permission) — not decorative filler
+
+## Finish bar
+
+Do not create the commit, open the PR, or merge README/marketing until:
+
+1. Prose passes the checks above
+2. Any UI change was reviewed with the relevant anti-slop skill(s)
+3. Claims in the text match the repo (no invented features)

@@ -1,0 +1,11 @@
+{
+  "msgtype": "dev.aiomatrix.mini_app_data",
+  "body": "Published",
+  "dev.aiomatrix.mini_app_data": {
+    "version": 1,
+    "data": "{\"action\":\"publish\",\"kind\":\"survey\"}",
+    "query_id": "query-example",
+    "app_id": "formspace.app",
+    "message_id": "$miniapp-card"
+  }
+}
