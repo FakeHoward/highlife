@@ -105,6 +105,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: tokens.muted,
                       ),
                 ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<AppLocale>(
+                    segments: [
+                      ButtonSegment(
+                        value: AppLocale.en,
+                        label: Text(s.languageEnglish),
+                      ),
+                      ButtonSegment(
+                        value: AppLocale.ru,
+                        label: Text(s.languageRussian),
+                      ),
+                    ],
+                    selected: {context.watch<HighLifeLocales>().locale},
+                    onSelectionChanged: (value) {
+                      context.read<HighLifeLocales>().setLocale(value.first);
+                    },
+                  ),
+                ),
                 const SizedBox(height: 20),
                 SegmentedButton<_AuthMode>(
                   segments: [
@@ -137,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   autofillHints: const [AutofillHints.url],
                   decoration: InputDecoration(
                     labelText: s.homeserver,
-                    hintText: 'https://matrix.example.org',
+                    hintText: s.homeserverHint,
                   ),
                   onChanged: (_) {
                     if (_hs.text.trim() != _probedHs) {
@@ -159,10 +179,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const [AutofillHints.username],
                   decoration: InputDecoration(
                     labelText: registering ? s.username : s.userId,
-                    hintText: registering
-                        ? 'alice'
-                        : '@name:matrix.example.org',
+                    hintText: registering ? s.usernameHint : s.userIdHint,
                   ),
+                  onChanged: registering
+                      ? null
+                      : (value) {
+                          final host = _serverFromMxid(value);
+                          if (host != null && _hs.text.trim().isEmpty) {
+                            _hs.text = 'https://$host';
+                            _probeHomeserver(session);
+                          }
+                        },
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -275,6 +302,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  String? _serverFromMxid(String value) {
+    final match = RegExp(r'^@?[^:]+:(.+)$').firstMatch(value.trim());
+    final host = match?.group(1)?.trim();
+    if (host == null || host.isEmpty) return null;
+    return host;
+  }
+
   Future<void> _probeHomeserver(HighLifeSession session) async {
     final hs = _hs.text.trim();
     if (hs.isEmpty) return;
@@ -326,6 +360,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit(HighLifeSession session, AppStrings s) async {
+    final host = _serverFromMxid(_user.text);
+    if (host != null && _hs.text.trim().isEmpty) {
+      _hs.text = 'https://$host';
+    }
     final validation = _validate(s);
     if (validation != null) {
       session.clearError();
@@ -333,12 +371,17 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     setState(() => _localError = null);
+    await _probeHomeserver(session);
     if (_mode == _AuthMode.register) {
       await session.register(
         homeserver: _hs.text,
         username: _user.text,
         password: _pass.text,
       );
+      return;
+    }
+    if (!session.passwordLoginAvailable && session.ssoAvailable) {
+      setState(() => _localError = s.authError(AuthErrorKeys.passwordLoginUnsupported));
       return;
     }
     await session.login(

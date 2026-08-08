@@ -46,7 +46,21 @@ describe("joinRoomErrorMessage", () => {
       },
       "#matrix-dev:matrix.org",
     );
-    expect(msg).toMatch(/blocked|banned/i);
-    expect(msg).toMatch(/another homeserver|matrix\.org/i);
+    expect(msg).toMatch(/blocked|banned|rules/i);
+    expect(msg).toMatch(/another server|matrix\.org/i);
+  });
+
+  it("localizes banned join errors in Russian", () => {
+    const msg = joinRoomErrorMessage(
+      {
+        httpStatus: 403,
+        errcode: "M_FORBIDDEN",
+        message: "MatrixError: [403] Server is banned from room",
+      },
+      "#matrix-dev:matrix.org",
+      "ru",
+    );
+    expect(msg).toMatch(/заблокирован|правилами/i);
+    expect(msg).toMatch(/matrix\.org/);
   });
 });

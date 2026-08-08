@@ -57,7 +57,7 @@ import {
   POLL_START_UNSTABLE,
 } from "./polls";
 import {
-  joinRoomErrorMessage,
+  joinRoomFailure,
   normalizeRoomIdOrAlias,
   serverFromRoomAddress,
 } from "./roomAddress";
@@ -469,7 +469,7 @@ export async function register(input: {
   const baseUrl = resolveHomeserver(input.homeserver);
   const username = input.username.trim().replace(/^@/, "").split(":")[0] ?? "";
   if (!username) {
-    throw new Error("Username is required");
+    throw Object.assign(new Error("USERNAME_REQUIRED"), { code: "USERNAME_REQUIRED" as const });
   }
   const guest = createClient({ baseUrl });
   async function attempt(sessionId: string | null) {
@@ -487,12 +487,18 @@ export async function register(input: {
   try {
     response = await attempt(null);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const errcode =
+      error && typeof error === "object" && "errcode" in error
+        ? String((error as { errcode?: string }).errcode)
+        : "";
+    if (errcode === "M_FORBIDDEN" || /registration has been disabled/i.test(message)) {
+      throw Object.assign(new Error("REGISTER_DISABLED"), { code: "REGISTER_DISABLED" as const });
+    }
     const sessionId = uiaSessionFromError(error);
     if (!sessionId) throw error;
     if (!uiaAllowsDummy(error)) {
-      throw new Error(
-        "This homeserver needs email, captcha, or SSO to register. Use Sign in with an existing account, or create one on a server with open registration.",
-      );
+      throw Object.assign(new Error("REGISTER_NEEDS_EXTRA"), { code: "REGISTER_NEEDS_EXTRA" as const });
     }
     response = await attempt(sessionId);
   }
@@ -1004,7 +1010,7 @@ export async function joinRoom(roomIdOrAlias: string): Promise<string> {
       await requiredClient().joinRoom(attempted, via ? { viaServers: [via] } : undefined)
     ).roomId;
   } catch (error) {
-    throw new Error(joinRoomErrorMessage(error, attempted));
+    throw joinRoomFailure(error, attempted);
   }
 }
 
@@ -1055,6 +1061,13 @@ export async function leaveRoom(roomId: string): Promise<void> {
   await requiredClient().leave(roomId);
 }
 
+export function getOwnDisplayName(): string {
+  const active = requiredClient();
+  const userId = active.getUserId();
+  if (!userId) return "";
+  return active.getUser(userId)?.displayName ?? "";
+}
+
 export async function updateProfile(displayName: string, avatar?: File): Promise<void> {
   const active = requiredClient();
   await active.setDisplayName(displayName);
@@ -1063,6 +1076,26 @@ export async function updateProfile(displayName: string, avatar?: File): Promise
     await active.setAvatarUrl(result.content_uri);
   }
   publish();
+}
+
+/** Whether classic SSO / CAS appears in login flows for this homeserver. */
+export async function probeSsoAvailable(homeserverInput: string): Promise<boolean> {
+  const baseUrl = resolveHomeserver(homeserverInput);
+  if (!baseUrl) return false;
+  try {
+    const guest = createClient({ baseUrl });
+    const flows = await guest.loginFlows();
+    return Boolean(
+      flows.flows?.some(
+        (flow) =>
+          flow.type === "m.login.sso" ||
+          flow.type === "m.login.cas" ||
+          flow.type === "m.login.token",
+      ),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function searchMessages(term: string, roomId?: string): Promise<SearchHit[]> {
@@ -1293,7 +1326,7 @@ export async function listOwnDevices(): Promise<EncryptionDevice[]> {
     const status = await crypto.getDeviceVerificationStatus(userId, device.deviceId);
     return {
       deviceId: device.deviceId,
-      displayName: device.displayName ?? "Unnamed device",
+      displayName: device.displayName ?? "",
       fingerprint: device.getFingerprint() ?? null,
       current: device.deviceId === active.getDeviceId(),
       verified: status?.isVerified() ?? false,

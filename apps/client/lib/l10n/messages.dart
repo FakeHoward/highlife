@@ -56,7 +56,11 @@ class AppStrings {
   // Login
   String get loginTagline => _('loginTagline');
   String get homeserver => _('homeserver');
+  String get homeserverHint => _('homeserverHint');
   String get userId => _('userId');
+  String get userIdHint => _('userIdHint');
+  String get usernameHint => _('usernameHint');
+  String get roomAliasHint => _('roomAliasHint');
   String get password => _('password');
   String get showPassword => _('showPassword');
   String get hidePassword => _('hidePassword');
@@ -326,10 +330,26 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'deviceId': {AppLocale.en: 'Device ID', AppLocale.ru: 'ID устройства'},
   'retry': {AppLocale.en: 'Retry', AppLocale.ru: 'Повторить'},
   'loginTagline': {
-    AppLocale.en: 'Sign in to any Matrix homeserver.',
-    AppLocale.ru: 'Вход на любой Matrix homeserver.',
+    AppLocale.en: 'Sign in to any Matrix server.',
+    AppLocale.ru: 'Войдите на любой сервер Matrix.',
   },
   'homeserver': {AppLocale.en: 'Homeserver', AppLocale.ru: 'Сервер'},
+  'homeserverHint': {
+    AppLocale.en: 'https://matrix.example.org',
+    AppLocale.ru: 'https://matrix.example.org',
+  },
+  'userIdHint': {
+    AppLocale.en: '@name:matrix.example.org',
+    AppLocale.ru: '@name:matrix.example.org',
+  },
+  'usernameHint': {
+    AppLocale.en: 'alice',
+    AppLocale.ru: 'alice',
+  },
+  'roomAliasHint': {
+    AppLocale.en: '#alias:server',
+    AppLocale.ru: '#alias:server',
+  },
   'userId': {AppLocale.en: 'User ID', AppLocale.ru: 'Идентификатор'},
   'password': {AppLocale.en: 'Password', AppLocale.ru: 'Пароль'},
   'showPassword': {
@@ -371,9 +391,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'loginSessionNote': {
     AppLocale.en:
-        'Session stays on this device. Rooms that block this homeserver need an account on another server.',
+        'Session stays on this device. Rooms that block this server need an account on another one.',
     AppLocale.ru:
-        'Сессия на этом устройстве. Если комнаты банят ваш homeserver — войдите с другого.',
+        'Сессия на этом устройстве. Если комната блокирует этот сервер — войдите с другого.',
   },
   'continueWithSso': {
     AppLocale.en: 'Continue with SSO',
@@ -543,7 +563,7 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'ID или псевдоним комнаты',
   },
   'create': {AppLocale.en: 'Create', AppLocale.ru: 'Создать'},
-  'join': {AppLocale.en: 'Join', AppLocale.ru: 'Войти'},
+  'join': {AppLocale.en: 'Join', AppLocale.ru: 'Присоединиться'},
   'noMessagesYet': {
     AppLocale.en: 'No messages yet',
     AppLocale.ru: 'Сообщений пока нет',
@@ -566,9 +586,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'joinServerBanned': {
     AppLocale.en:
-        'Your homeserver is blocked from this room (server ACL). Sign in on another homeserver (for example matrix.org) to join.',
+        'Your server is blocked from this room by that room’s rules. Sign in on another server (for example matrix.org) to join.',
     AppLocale.ru:
-        'Ваш homeserver заблокирован в этой комнате (server ACL). Войдите с другого сервера (например matrix.org).',
+        'Ваш сервер заблокирован в этой комнате её правилами. Чтобы вступить, войдите с другого сервера (например matrix.org).',
   },
   'joinFailed': {
     AppLocale.en: 'Could not join room',
@@ -841,7 +861,7 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.en: 'Call in progress',
     AppLocale.ru: 'Идёт звонок',
   },
-  'joinCall': {AppLocale.en: 'Join', AppLocale.ru: 'Войти'},
+  'joinCall': {AppLocale.en: 'Join', AppLocale.ru: 'Присоединиться'},
   'createPoll': {AppLocale.en: 'Create poll', AppLocale.ru: 'Создать опрос'},
   'pollQuestion': {AppLocale.en: 'Question', AppLocale.ru: 'Вопрос'},
   'pollOption': {

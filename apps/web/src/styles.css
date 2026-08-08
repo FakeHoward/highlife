@@ -145,19 +145,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .login-intro .brand-symbol { background: white; color: #112c54; }
 .login-intro h1 { font-family: var(--display); font-size: clamp(42px, 5vw, 70px); letter-spacing: -.055em; line-height: .99; margin: 70px 0 24px; max-width: 650px; }
 .login-intro > p { color: #c7d8ef; font-size: 17px; line-height: 1.6; max-width: 500px; }
-.login-signal { bottom: 9%; display: flex; gap: 9px; position: absolute; right: 8%; transform: rotate(-12deg); }
-.login-signal i { background: #4f91f1; display: block; height: 6px; width: 44px; }
-.login-signal i:nth-child(2) { width: 78px; }.login-signal i:nth-child(3) { width: 28px; }.login-signal i:nth-child(4) { width: 94px; }.login-signal i:nth-child(5) { width: 18px; }.login-signal i:nth-child(6) { width: 56px; }
 .login-form { align-content: center; display: grid; gap: 18px; justify-self: center; max-width: 420px; padding: 48px; width: 100%; }
 .login-form h2 { font-family: var(--display); font-size: 30px; letter-spacing: -.03em; margin: 0; }
 .login-form > div > .muted { margin: 7px 0 0; }
+.login-form-top { display: grid; gap: 12px; }
+.login-locale { justify-self: start; }
 .login-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 4px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
 }
 .login-mode button {
   appearance: none;
@@ -760,7 +759,6 @@ audio { display: block; margin-top: 7px; max-width: 100%; }
   .login-intro { align-content: start; min-height: 300px; padding: 36px 26px; }
   .login-intro h1 { font-size: 42px; margin: 45px 0 16px; }
   .login-intro > p { font-size: 14px; }
-  .login-signal { display: none; }
   .login-form { min-height: 440px; padding: 34px 24px; }
   .workspace { display: block; }
   .sidebar, .chat-panel { height: 100%; }
@@ -768,7 +766,6 @@ audio { display: block; margin-top: 7px; max-width: 100%; }
   .workspace:not(.room-open) .chat-panel { display: none; }
   .mobile-back { display: inline-flex; }
   .chat-head { padding-left: 7px; }
-  .chat-head .head-actions .icon-button:nth-child(3) { display: none; }
   .timeline { padding: 14px 10px; }
   .message { max-width: 100%; width: 100%; }
   .composer-wrap { padding-left: 8px; padding-right: 8px; }

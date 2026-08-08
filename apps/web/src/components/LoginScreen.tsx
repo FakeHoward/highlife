@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../i18n";
 import { beginOidcOrSsoLogin } from "../matrix/oidc";
-import { login, register } from "../matrix/service";
+import { login, probeSsoAvailable, register } from "../matrix/service";
 import { IconEye, IconEyeOff } from "./Icons";
 
 type Mode = "login" | "register";
@@ -10,8 +10,14 @@ function defaultHomeserver(): string {
   return (import.meta.env.VITE_DEFAULT_HOMESERVER as string | undefined)?.trim() || "";
 }
 
+function serverFromMxid(value: string): string | null {
+  const match = value.trim().match(/^@?[^:]+:(.+)$/);
+  const host = match?.[1]?.trim();
+  return host || null;
+}
+
 export function LoginScreen({ initialError }: { initialError: string | null }) {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [homeserver, setHomeserver] = useState(defaultHomeserver);
   const [userId, setUserId] = useState("");
@@ -20,6 +26,45 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
+  const [ssoAvailable, setSsoAvailable] = useState(false);
+
+  useEffect(() => {
+    const hs = homeserver.trim();
+    if (!hs || mode !== "login") {
+      setSsoAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void probeSsoAvailable(hs).then((available) => {
+        if (!cancelled) setSsoAvailable(available);
+      });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [homeserver, mode]);
+
+  function applyMxidHomeserver(value: string) {
+    const host = serverFromMxid(value);
+    if (!host) return;
+    if (!homeserver.trim()) {
+      setHomeserver(`https://${host}`);
+    }
+  }
+
+  function mapAuthError(reason: unknown, forRegister: boolean): string {
+    const code =
+      reason && typeof reason === "object" && "code" in reason
+        ? String((reason as { code?: string }).code)
+        : "";
+    if (code === "USERNAME_REQUIRED") return t("login.usernameRequired");
+    if (code === "REGISTER_DISABLED") return t("login.registerDisabled");
+    if (code === "REGISTER_NEEDS_EXTRA") return t("login.registerNeedsExtra");
+    if (reason instanceof Error && reason.message) return reason.message;
+    return forRegister ? t("login.registerFailed") : t("login.failed");
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -36,13 +81,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
         await login({ homeserver, userId, password });
       }
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : mode === "register"
-            ? t("login.registerFailed")
-            : t("login.failed"),
-      );
+      setError(mapAuthError(reason, mode === "register"));
     } finally {
       setBusy(false);
     }
@@ -74,12 +113,29 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
         <p>{t("login.blurb")}</p>
       </section>
       <form className="login-form" onSubmit={submit}>
-        <div>
-          <p className="eyebrow">{t("login.eyebrow")}</p>
-          <h2>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h2>
-          <p className="muted">
-            {mode === "register" ? t("login.registerHint") : t("login.hint")}
-          </p>
+        <div className="login-form-top">
+          <div>
+            <h2>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h2>
+            <p className="muted">
+              {mode === "register" ? t("login.registerHint") : t("login.hint")}
+            </p>
+          </div>
+          <div className="segmented login-locale" role="group" aria-label={t("login.language")}>
+            <button
+              type="button"
+              className={locale === "en" ? "active" : ""}
+              onClick={() => setLocale("en")}
+            >
+              {t("settings.languageEn")}
+            </button>
+            <button
+              type="button"
+              className={locale === "ru" ? "active" : ""}
+              onClick={() => setLocale("ru")}
+            >
+              {t("settings.languageRu")}
+            </button>
+          </div>
         </div>
         <div className="login-mode" role="tablist" aria-label={t("login.mode")}>
           <button
@@ -122,7 +178,11 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
             <span>{t("login.userId")}</span>
             <input
               value={userId}
-              onChange={(event) => setUserId(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setUserId(next);
+                applyMxidHomeserver(next);
+              }}
               placeholder={t("login.userIdPlaceholder")}
               autoComplete="username"
               required
@@ -169,7 +229,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
               ? t("login.createAccount")
               : t("login.continue")}
         </button>
-        {mode === "login" && (
+        {mode === "login" && ssoAvailable && (
           <button
             type="button"
             className="button"

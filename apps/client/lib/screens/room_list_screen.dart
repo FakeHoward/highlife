@@ -233,7 +233,9 @@ class _RoomListScreenState extends State<RoomListScreen> {
                   labelText: isDm
                       ? s.matrixUserId
                       : (isCreate ? s.roomName : s.roomIdOrAlias),
-                  hintText: isDm ? '@user:server' : null,
+                  hintText: isDm
+                      ? s.userIdHint
+                      : (isCreate ? null : s.roomAliasHint),
                 ),
                 onSubmitted: (value) => Navigator.pop(context, value),
               ),
@@ -300,7 +302,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
           actions: [
             HlButton.text(
               onPressed: () => Navigator.pop(context),
-              label: Text(s.cancel),
+              label: Text(s.done),
             ),
           ],
         ),

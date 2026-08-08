@@ -265,11 +265,12 @@ class _ChatScreenState extends State<ChatScreen> {
             },
             icon: const Icon(Icons.search),
           ),
-          IconButton(
-            tooltip: session.rtcAvailable ? s.startCall : s.callsUnavailable,
-            onPressed: () => _startCall(session),
-            icon: const Icon(Icons.call_outlined),
-          ),
+          if (session.rtcAvailable)
+            IconButton(
+              tooltip: s.startCall,
+              onPressed: () => _startCall(session),
+              icon: const Icon(Icons.call_outlined),
+            ),
           PopupMenuButton<String>(
             onSelected: (action) => _roomAction(session, s, action),
             itemBuilder: (_) => [
@@ -1192,7 +1193,7 @@ class _MessageTile extends StatelessWidget {
           child: Text(strings.replyInThread),
         ),
         for (final emoji in const ['👍', '❤️', '😂', '🎉', '👀'])
-          PopupMenuItem(value: 'react:$emoji', child: Text('$emoji ${strings.react}')),
+          PopupMenuItem(value: 'react:$emoji', child: Text(emoji)),
         if (onEdit != null)
           PopupMenuItem(value: 'edit', child: Text(strings.edit)),
         if (onRedact != null)

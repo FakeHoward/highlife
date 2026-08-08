@@ -29,9 +29,11 @@ Aiomatrix surfaces and FormSpace flows: [`docs/FORMSPACE.md`](./docs/FORMSPACE.m
 
 ## Accounts and federation
 
-HighLife is a normal Matrix client: sign in to **any** homeserver URL. Joining rooms on other servers (for example `#matrix-dev:matrix.org`) requires that your homeserver is allowed by that room’s server ACL. A `403 Server is banned from room` means the room blocks your HS — use an account on another server (such as matrix.org), not a different client.
+HighLife is a normal Matrix client: sign in to **any** homeserver URL.
 
-Registration in the apps is **open/dummy auth only**. Many public homeservers need email, captcha, or SSO; for those, create the account in their own flow and use Sign in here.
+Some rooms ban whole servers via Matrix `m.room.server_acl` (spam control by room mods). A `403 Server is banned from room` is that ACL, not a client bug. Your account on `testhighlife.strangled.net` cannot join a room that lists that server as banned; use an account on an allowed server (for example matrix.org). Enabling signup on your Synapse does not change another room’s ACL.
+
+Public registration on the demo Synapse is controlled by `SYNAPSE_ENABLE_REGISTRATION` (see [`server/README.md`](./server/README.md)). The apps only support open/dummy registration; servers that need email, captcha, or SSO need account creation in their own flow, then Sign in here.
 
 ## Develop
 

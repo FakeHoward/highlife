@@ -67,7 +67,8 @@ function deliveryMark(status: TimelineItem["deliveryStatus"], labels: {
     return { text: "!", title: labels.failed };
   }
   if (status === "read") return { text: "✓✓", title: labels.read };
-  if (status === "delivered" || status === "sent") return { text: "✓", title: labels.sent };
+  if (status === "delivered") return { text: "✓", title: labels.delivered };
+  if (status === "sent") return { text: "✓", title: labels.sent };
   return { text: "✓", title: labels.sent };
 }
 
@@ -244,7 +245,7 @@ export function MessageTimeline({
                 {item.media && <Media item={item} />}
                 {bot.miniApp && (
                   <button className="mini-card" onClick={() => onMiniApp(bot.miniApp!, item)}>
-                    <span className="mini-mark">APP</span>
+                    <span className="mini-mark">{t("timeline.miniAppBadge")}</span>
                     <span><strong>{bot.miniApp.title}</strong><small>{bot.miniApp.description ?? t("timeline.openMiniApp")}</small></span>
                     <span aria-hidden="true">↗</span>
                   </button>

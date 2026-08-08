@@ -261,7 +261,12 @@ export function Workspace() {
                     <IconCall />
                   </button>
                 )}
-                <button className="icon-button" type="button" onClick={() => setSurface("details")} aria-label={t("chat.details")}>
+                <button
+                  className="icon-button head-details"
+                  type="button"
+                  onClick={() => setSurface("details")}
+                  aria-label={t("chat.details")}
+                >
                   <IconMore />
                 </button>
               </div>

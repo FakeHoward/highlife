@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useI18n, type MessageKey, type MessageParams } from "../i18n";
 import { buildElementCallUrl, callWidgetId } from "../matrix/callUrl";
 import { attachElementCallWidgetHost } from "../matrix/widgetHost";
+import { JoinRoomFailure } from "../matrix/roomAddress";
 import {
   createRoom,
   deleteServerKeyBackup,
@@ -12,6 +13,7 @@ import {
   getIncomingVerification,
   getJoinedMembers,
   getKeyBackupDetails,
+  getOwnDisplayName,
   getSessionIdentity,
   invite,
   joinRoom,
@@ -138,6 +140,24 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
       onOpen(roomId);
       onClose();
     } catch (reason) {
+      if (reason instanceof JoinRoomFailure) {
+        const key =
+          reason.kind === "banned"
+            ? "rooms.joinBanned"
+            : reason.kind === "forbidden"
+              ? "rooms.joinForbidden"
+              : reason.kind === "not_found"
+                ? "rooms.joinNotFound"
+                : reason.kind === "bad_request"
+                  ? "rooms.joinBadRequest"
+                  : "rooms.requestFailed";
+        setError(
+          reason.kind === "unknown"
+            ? reason.message || t("rooms.requestFailed")
+            : t(key, { room: reason.attempted }),
+        );
+        return;
+      }
       setError(reason instanceof Error ? reason.message : t("rooms.requestFailed"));
     }
   }
@@ -212,7 +232,7 @@ function backupLabel(details: KeyBackupDetails, t: Translate): string {
 export function Settings({ onClose }: { onClose: () => void }) {
   const { t, locale, setLocale } = useI18n();
   const [theme, setTheme] = useState(localStorage.getItem("highlife.theme") ?? "system");
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(() => getOwnDisplayName());
   const [backup, setBackup] = useState<KeyBackupDetails | null>(null);
   const [devices, setDevices] = useState<EncryptionDevice[]>([]);
   const [verification, setVerification] = useState<string | null>(null);
@@ -234,7 +254,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
     void listOwnDevices().then(setDevices).catch(() => setDevices([]));
   }, []);
 
-  useEffect(() => { refreshCrypto(); }, [refreshCrypto]);
+  useEffect(() => {
+    setDisplayName(getOwnDisplayName());
+    refreshCrypto();
+  }, [refreshCrypto]);
 
   function changeTheme(value: string) {
     setTheme(value);
@@ -248,7 +271,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
     void requestDeviceVerification(deviceId, setSas, setVerification)
       .then((request) => setVerification(t("settings.verificationWaiting", {
         id: request.transactionId ?? "sent",
-        device: request.otherDeviceId ?? "another device",
+        device: request.otherDeviceId ?? t("settings.anotherDevice"),
       })))
       .catch((error: Error) => setVerification(error.message));
   }
@@ -345,7 +368,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <button className="button" type="button" disabled={!recoveryKeyInput.trim() || cryptoBusy} onClick={() => {
           try {
             rememberRecoveryKey(recoveryKeyInput);
-            setCryptoMessage(t("settings.useRecoveryKey"));
+            setCryptoMessage(t("settings.recoveryKeySaved"));
           } catch (error) {
             setCryptoMessage(error instanceof Error ? error.message : t("settings.genericError"));
           }
@@ -383,7 +406,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             devices.map((device) => (
               <article key={device.deviceId}>
                 <div>
-                  <strong>{device.displayName}{device.current ? ` · ${t("settings.thisDevice")}` : ""}</strong>
+                  <strong>{(device.displayName || t("settings.unnamedDevice"))}{device.current ? ` · ${t("settings.thisDevice")}` : ""}</strong>
                   <small>{device.deviceId} · {device.fingerprint?.slice(0, 20) ?? t("settings.noFingerprint")}</small>
                 </div>
                 <span>{device.verified ? t("settings.verified") : device.dehydrated ? t("settings.dehydrated") : t("settings.unverified")}</span>

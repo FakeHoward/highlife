@@ -185,7 +185,7 @@ export function Composer({
               rows={4}
               value={pollAnswers}
               onChange={(event) => setPollAnswers(event.target.value)}
-              placeholder={"Option A\nOption B"}
+              placeholder={t("composer.pollAnswersPlaceholder")}
               required
             />
           </label>
