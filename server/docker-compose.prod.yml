@@ -214,7 +214,7 @@ services:
           - testhighlife.strangled.net
 
   bot:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fakehoward}/highlife-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fakehoward}/highlife-formspace-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
     restart: unless-stopped
     expose:
       - "8090"

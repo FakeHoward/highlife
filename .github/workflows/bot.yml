@@ -60,5 +60,5 @@ jobs:
           context: bot
           push: true
           tags: |
-            ghcr.io/${{ steps.img.outputs.owner }}/highlife-bot:latest
-            ghcr.io/${{ steps.img.outputs.owner }}/highlife-bot:${{ steps.img.outputs.bot_tag }}
+            ghcr.io/${{ steps.img.outputs.owner }}/highlife-formspace-bot:latest
+            ghcr.io/${{ steps.img.outputs.owner }}/highlife-formspace-bot:${{ steps.img.outputs.bot_tag }}

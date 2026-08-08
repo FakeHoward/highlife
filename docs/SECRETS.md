@@ -169,7 +169,7 @@ records. Wait for public resolution before deploy so Caddy can complete
 ACME validation and obtain certificates.
 
 Before the first HighLife deploy, let the `Bot` workflow finish successfully
-so GHCR contains `highlife-bot:<last-bot-source-commit>`. Deploy pins that
+so GHCR contains `highlife-formspace-bot:<last-bot-source-commit>`. Deploy pins that
 content tag rather than using `latest`.
 
 ## Firewall actions

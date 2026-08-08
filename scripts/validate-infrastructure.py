@@ -55,7 +55,7 @@ def validate_compose(path: Path, production: bool) -> None:
         require(any("50000-50100" in str(port) and "udp" in str(port) for port in ports), "LiveKit UDP range missing")
         require(any("3478" in str(port) and "udp" in str(port) for port in services["coturn"].get("ports", [])), "TURN UDP port missing")
         bot = services["bot"]
-        require("/highlife-bot:" in bot.get("image", ""), "production bot image must use highlife-bot")
+        require("/highlife-formspace-bot:" in bot.get("image", ""), "production bot image must use highlife-formspace-bot")
         bot_environment = bot.get("environment", {})
         require("highlifebot" in bot_environment.get("MATRIX_USER_ID", ""), "production bot MXID must use highlifebot")
         require(bot_environment.get("MATRIX_CRYPTO") == "true", "production bot crypto must be enabled")
@@ -207,7 +207,7 @@ def validate_static_config() -> None:
     )
 
     bot_workflow = (ROOT / ".github" / "workflows" / "bot.yml").read_text(encoding="utf-8")
-    for fragment in ("npm test", "npm run typecheck", "/highlife-bot:"):
+    for fragment in ("npm test", "npm run typecheck", "/highlife-formspace-bot:"):
         require(fragment in bot_workflow, f"bot workflow is missing {fragment}")
 
     client_workflow = (ROOT / ".github" / "workflows" / "client.yml").read_text(encoding="utf-8")

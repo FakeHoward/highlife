@@ -1,8 +1,8 @@
 # HighLife
 
-**Matrix clients that speak [Aiomatrix](https://www.npmjs.com/package/aiomatrix) natively.**
+**[Aiomatrix](https://www.npmjs.com/package/aiomatrix)-native Matrix clients** — not a generic chat shell with a bot bolted on.
 
-Inline keyboards, signed callbacks, host toasts, Mini Apps, and FormSpace — in ordinary encrypted rooms. React + Flutter hosts, reference bot, and a Synapse deploy you can run yourself.
+Inline keyboards, signed callbacks, host toasts, Mini Apps, and FormSpace in ordinary encrypted rooms. React + Flutter hosts, reference bot, Synapse deploy.
 
 [![CI — Web](https://github.com/FakeHoward/highlife/actions/workflows/web.yml/badge.svg)](https://github.com/FakeHoward/highlife/actions/workflows/web.yml)
 [![CI — Client](https://github.com/FakeHoward/highlife/actions/workflows/client.yml/badge.svg)](https://github.com/FakeHoward/highlife/actions/workflows/client.yml)
@@ -92,7 +92,7 @@ Homeserver / Deploy: [`server/README.md`](./server/README.md), [`docs/SECRETS.md
 |---|---|---|
 | `Web` | PR / path push | test, typecheck, build |
 | `Client` | PR / path push | Flutter matrix (android, web, linux, windows) |
-| `Bot` | PR / path push; image on `main` or `workflow_dispatch` | `ghcr.io/<owner>/highlife-bot` |
+| `Bot` | PR / path push; image on `main` or `workflow_dispatch` | `ghcr.io/<owner>/highlife-formspace-bot` |
 | `Infrastructure` | PR / path push | Compose / Caddy / deploy script checks |
 | `Deploy HighLife` | manual (`workflow_dispatch`) | production roll — needs Environment `main` secrets |
 
