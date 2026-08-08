@@ -1,6 +1,6 @@
 # HighLife protocol contracts
 
-These JSON Schemas describe the interoperable payloads emitted and consumed by `aiomatrix@0.7.0`. They are language-neutral Draft 7 schemas; filenames match the Matrix event type or content key.
+These JSON Schemas describe the interoperable payloads emitted and consumed by `aiomatrix@0.8.0`. They are language-neutral Draft 7 schemas; filenames match the Matrix event type or content key.
 
 Note: as of 0.6.0 unsigned `dev.aiomatrix.callback` payloads (forgeable `data` without a valid HMAC `token`) are rejected by the bot unless `allowUnsignedCallbacks` is explicitly enabled. Clients should prefer `token` + `message_id`.
 

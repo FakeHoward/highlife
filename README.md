@@ -9,7 +9,7 @@ Inline keyboards, signed callbacks, host toasts, Mini Apps, and FormSpace in ord
 [![CI — Bot](https://github.com/FakeHoward/highlife/actions/workflows/bot.yml/badge.svg)](https://github.com/FakeHoward/highlife/actions/workflows/bot.yml)
 [![CI — Infrastructure](https://github.com/FakeHoward/highlife/actions/workflows/infrastructure.yml/badge.svg)](https://github.com/FakeHoward/highlife/actions/workflows/infrastructure.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0B6E4F.svg)](./LICENSE)
-[![aiomatrix](https://img.shields.io/badge/aiomatrix-0.7-222222)](https://www.npmjs.com/package/aiomatrix)
+[![aiomatrix](https://img.shields.io/badge/aiomatrix-0.8-222222)](https://www.npmjs.com/package/aiomatrix)
 [![Matrix](https://img.shields.io/badge/transport-Matrix-000000?logo=matrix&logoColor=white)](https://matrix.org)
 [![Flutter](https://img.shields.io/badge/Flutter-host-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![React](https://img.shields.io/badge/React-host-61DAFB?logo=react&logoColor=black)](https://react.dev)

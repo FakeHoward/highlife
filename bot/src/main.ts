@@ -7,16 +7,20 @@ import {
   Dispatcher,
   RateLimitedError,
   autoMarkRead,
-  createRedisSharedTokenStores,
   diagnoseSession,
   logging,
+  migrateStorage,
   rateLimitBackoff,
   relocateSession,
   throttle,
   typingIndicator,
   userFacingErrors,
-  type RedisLike,
 } from "aiomatrix";
+import {
+  RedisStorage,
+  createRedisSharedTokenStores,
+  type RedisLike,
+} from "aiomatrix/redis";
 import { createClient } from "redis";
 
 import { wrapMiniAppHandler } from "./formspace/http.js";
@@ -40,21 +44,41 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Hard device/crypto mismatch only — soft auth is recovered mid-run by aiomatrix. */
+/** node-redis v4+ → {@link RedisLike} (`del` takes a rest list in the adapter). */
+function asRedisLike(client: ReturnType<typeof createClient>): RedisLike {
+  return {
+    get: (key) => client.get(key),
+    set: async (key, value, options) => {
+      const result = await client.set(key, value, options);
+      return result as "OK" | null;
+    },
+    del: (...keys) => client.del(keys),
+  };
+}
+
+/** Prefer typed DeviceMismatchError / diagnoseSession — not message scraping. */
 function needsSessionRelocation(error: unknown): boolean {
   if (error instanceof DeviceMismatchError) return true;
-  if (!error || typeof error !== "object") return false;
-  const message = "message" in error ? String(error.message) : "";
-  return message.includes("account in the store doesn't match") || message.includes("GenericFailure");
+  return diagnoseSession(dataDir).suggestedAction === "wipe_crypto_and_relogin";
 }
 
 async function recoverSession(error: unknown): Promise<void> {
-  console.error("Bot session recovery", diagnoseSession(dataDir), error);
+  const diagnosis = diagnoseSession(dataDir);
+  console.error("Bot session recovery", diagnosis, error);
+  const mismatch = error instanceof DeviceMismatchError ? error : null;
+  if (mismatch) {
+    console.error(
+      "DeviceMismatch recovery",
+      mismatch.recovery.suggested,
+      mismatch.recovery.steps,
+    );
+  }
   await relocateSession({
     storagePath: dataDir,
     homeserverUrl: homeserver,
     user: userId,
     password,
+    deviceId: mismatch?.recovery.keepDeviceId ?? undefined,
     wipeCrypto: true,
     clearExistingSession: true,
     allowInsecure: envFlag("ALLOW_INSECURE_HOMESERVER", true),
@@ -75,17 +99,9 @@ async function connectRedis(): Promise<{
   const client = createClient({ url: redisUrl });
   client.on("error", (err) => console.error("Redis error", err));
   await client.connect();
-  const redis: RedisLike = {
-    get: (key: string) => client.get(key),
-    set: async (key: string, value: string, options?: { EX?: number; NX?: boolean }) => {
-      const result = await client.set(key, value, options);
-      return result as "OK" | null;
-    },
-    del: (...keys: string[]) => client.del(keys),
-  };
   console.log("Redis connected for multi-instance MiniApp/callback token stores");
   return {
-    redis,
+    redis: asRedisLike(client),
     quit: async () => {
       await client.quit();
     },
@@ -93,6 +109,11 @@ async function connectRedis(): Promise<{
 }
 
 async function runBot(): Promise<void> {
+  const migrated = migrateStorage(dataDir);
+  if (migrated.actions.length > 0 || migrated.warnings.length > 0) {
+    console.log("aiomatrix migrateStorage", migrated);
+  }
+
   const redisConn = await connectRedis();
   const shared = redisConn.redis
     ? createRedisSharedTokenStores(redisConn.redis, { prefix: "fs:" })
@@ -108,6 +129,8 @@ async function runBot(): Promise<void> {
     // HighLife web + Flutter render structured aiomatrix fields natively.
     clientProfile: "aware",
     advertiseCapabilities: true,
+    // 0.8: durable send retry for transient HS failures.
+    outbox: true,
     crypto: envFlag("MATRIX_CRYPTO", false),
     cryptoStorePassphrase: process.env.MATRIX_CRYPTO_STORE_PASSPHRASE || undefined,
     keyBackup: envFlag("MATRIX_KEY_BACKUP", false),
@@ -160,6 +183,9 @@ async function runBot(): Promise<void> {
   const dispatcher = new Dispatcher({
     fsmStrategy: "user_in_room",
     fsmNamespace: "formspace",
+    ...(redisConn.redis
+      ? { storage: new RedisStorage(redisConn.redis, { prefix: "fs:fsm:" }) }
+      : {}),
   });
   dispatcher.use(logging());
   dispatcher.use(autoMarkRead());

@@ -22,6 +22,6 @@ Policies: `public` summary, `private` answers to creator DM, `moderators` for po
 ## Ops notes
 
 - Bot needs **power level ≥ 50** in the room to advertise `/commands` state (`dev.aiomatrix.commands`). Below that, `/start` still works and tips the operator.
-- Stack: `aiomatrix@^0.7.0`, Node **≥ 24**, optional `REDIS_URL` for multi-instance signed callback/query stores (`createRedisSharedTokenStores`).
+- Stack: `aiomatrix@^0.8.0`, Node **≥ 24**, optional `REDIS_URL` for multi-instance signed callback/query stores (`aiomatrix/redis`).
 - Prefer signed keyboard `token`s (default). Unsigned `content.data` callbacks are rejected unless the library opt-in is enabled.
 - Persist `MATRIX_CRYPTO_STORE_PASSPHRASE` (or keep `./data/crypto-passphrase.json` across volume wipes with `formspace.json`).
