@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://highlife.example/contracts/dev.aiomatrix.mini_app.schema.json",
+  "title": "m.room.message with dev.aiomatrix.mini_app",
+  "type": "object",
+  "required": ["msgtype", "body", "dev.aiomatrix.mini_app"],
+  "properties": {
+    "msgtype": { "enum": ["m.text", "m.notice", "ru.studnovsu.mini_app"] },
+    "body": { "type": "string" },
+    "format": { "type": "string" },
+    "formatted_body": { "type": "string" },
+    "url": { "type": "string", "pattern": "^https?://" },
+    "title": { "type": "string" },
+    "bot_id": { "type": "string" },
+    "dev.aiomatrix.keyboard": { "type": "object" },
+    "dev.aiomatrix.mini_app": {
+      "type": "object",
+      "required": ["version", "url"],
+      "properties": {
+        "version": { "const": 1 },
+        "url": { "type": "string", "pattern": "^https?://" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "button_text": { "type": "string" },
+        "app_id": { "type": "string" },
+        "bot_id": { "type": "string" },
+        "start_param": { "type": "string" },
+        "display": { "enum": ["sheet", "fullscreen", "inline"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

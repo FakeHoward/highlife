@@ -1,0 +1,26 @@
+{
+  "name": "formspace-bot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "dev": "tsx watch src/main.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "aiomatrix": "^0.8.0",
+    "dotenv": "^16.6.1",
+    "redis": "^5.8.2",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "ajv": "^8.20.0",
+    "typescript": "^5.7.2"
+  }
+}

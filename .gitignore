@@ -1,0 +1,43 @@
+# Dependencies / build
+node_modules/
+dist/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+coverage/
+*.iml
+.idea/
+.vscode/
+*.log
+
+# Local heavy toolchains (CI builds instead)
+tools/
+bin/
+*.exe
+
+# Secrets / runtime data
+.env
+bot/.env
+bot/data/
+server/data/
+server/www/
+server/sygnal-vapid.pem
+**/*.sqlite
+
+# Legacy local prototype (kept as migration reference)
+/src/
+/public/
+/index.html
+/vite.config.ts
+/tsconfig*.json
+/.oxlintrc.json
+/client/
+
+# Cursor local state — keep shared project rules in git
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**

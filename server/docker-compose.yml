@@ -1,0 +1,170 @@
+name: highlife-local
+
+x-synapse-environment: &synapse-environment
+  SYNAPSE_SERVER_NAME: localhost
+  SYNAPSE_DATA_DIR: /data
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-postgres-only}
+  SYNAPSE_REGISTRATION_SECRET: ${SYNAPSE_REGISTRATION_SECRET:-local-registration-only}
+  TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-local-turn-only}
+  # Local/CI keeps open registration; production defaults to false.
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_DB: synapse
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-postgres-only}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U synapse -d synapse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  synapse-config:
+    image: matrixdotorg/synapse:v1.157.2
+    user: "0:0"
+    environment: *synapse-environment
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/generate-synapse-config.sh > /tmp/generate-synapse-config.sh
+        tr -d '\r' < /config/render-synapse-config.py > /tmp/render-synapse-config.py
+        export RENDER_SYNAPSE_CONFIG=/tmp/render-synapse-config.py
+        exec /bin/sh /tmp/generate-synapse-config.sh
+    volumes:
+      - synapse-data:/data
+      - ./generate-synapse-config.sh:/config/generate-synapse-config.sh:ro
+      - ./render-synapse-config.py:/config/render-synapse-config.py:ro
+
+  synapse:
+    image: matrixdotorg/synapse:v1.157.2
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    volumes:
+      - synapse-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse-config:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, "curl", "--fail", "--silent", "http://127.0.0.1:8008/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  redis:
+    image: redis:8.8.0-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:v1.10.1
+    restart: unless-stopped
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        log_level: info
+        rtc:
+          tcp_port: 7881
+          port_range_start: 50000
+          port_range_end: 50100
+          use_external_ip: false
+          node_ip: 127.0.0.1
+        redis:
+          address: redis:6379
+        keys:
+          ${LIVEKIT_KEY:-localkeylocalkey}: ${LIVEKIT_SECRET:-local-secret-at-least-32-characters-long}
+    ports:
+      - "7880:7880"
+      - "7881:7881/tcp"
+      - "50000-50100:50000-50100/udp"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:7880/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  lk-jwt-service:
+    image: ghcr.io/element-hq/lk-jwt-service:0.5.0
+    restart: unless-stopped
+    environment:
+      LIVEKIT_JWT_BIND: ":8080"
+      LIVEKIT_URL: ws://localhost:7880
+      LIVEKIT_KEY: ${LIVEKIT_KEY:-localkeylocalkey}
+      LIVEKIT_SECRET: ${LIVEKIT_SECRET:-local-secret-at-least-32-characters-long}
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: localhost
+      LIVEKIT_INSECURE_SKIP_VERIFY_TLS: YES_I_KNOW_WHAT_I_AM_DOING
+    ports:
+      - "8082:8080"
+    depends_on:
+      livekit:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, "/lk-jwt-service-healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  element-call:
+    image: ghcr.io/element-hq/element-call:v0.22.0
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./element-call-config.local.json:/app/config.json:ro
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  coturn:
+    image: coturn/coturn:4.16.0-r0
+    restart: unless-stopped
+    command:
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET:-local-turn-only}
+      - --realm=localhost
+      - --external-ip=127.0.0.1
+      - --min-port=49160
+      - --max-port=49200
+      - --no-multicast-peers
+      - --no-loopback-peers
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    healthcheck:
+      test: [CMD-SHELL, "pidof turnserver >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  synapse-data:
+  redis-data:

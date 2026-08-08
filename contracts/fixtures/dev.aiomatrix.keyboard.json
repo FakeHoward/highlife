@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "inline": [
+    [
+      {
+        "kind": "callback",
+        "text": "RSVP Going",
+        "data": "fs:rsvp:demo:going",
+        "style": "primary"
+      },
+      {
+        "kind": "url",
+        "text": "Docs",
+        "url": "https://example.org/formspace",
+        "style": "link"
+      }
+    ],
+    [
+      {
+        "kind": "mini_app",
+        "text": "Open form",
+        "url": "https://example.org/formspace/app",
+        "startParam": "fill:demo",
+        "style": "primary"
+      },
+      {
+        "kind": "command",
+        "text": "Help",
+        "command": "/help",
+        "style": "default"
+      }
+    ]
+  ],
+  "fallback_command": "cb"
+}

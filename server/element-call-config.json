@@ -1,0 +1,15 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://testhighlife.strangled.net",
+      "server_name": "testhighlife.strangled.net"
+    }
+  },
+  "livekit": {
+    "livekit_service_url": "https://rtc.testhighlife.strangled.net/livekit/jwt"
+  },
+  "features": {
+    "feature_use_device_session_member_events": true
+  },
+  "app_prompt": false
+}

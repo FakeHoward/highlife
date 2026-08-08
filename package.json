@@ -1,0 +1,21 @@
+{
+  "name": "matrix-better-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/web",
+    "apps/miniapp",
+    "packages/ui-contracts"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @highlife/web",
+    "build": "npm run build --workspace @highlife/web && npm run build --workspace @highlife/miniapp",
+    "lint": "oxlint apps/web/src packages/ui-contracts/src && npm run typecheck --workspace @highlife/web",
+    "preview": "npm run preview --workspace @highlife/web",
+    "test": "npm run test --workspace @highlife/web"
+  },
+  "devDependencies": {
+    "oxlint": "^1.77.0"
+  }
+}

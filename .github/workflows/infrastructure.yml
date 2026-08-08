@@ -1,0 +1,108 @@
+name: Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate YAML and Compose
+        env:
+          POSTGRES_PASSWORD: validation-only
+          SYNAPSE_REGISTRATION_SECRET: validation-only
+          BOT_MATRIX_PASSWORD: validation-only
+          LIVEKIT_KEY: validation-key
+          LIVEKIT_SECRET: validation-only
+          TURN_SHARED_SECRET: validation-only
+          DEPLOY_PUBLIC_IP: 203.0.113.10
+          GITHUB_REPOSITORY_OWNER: validation
+          BOT_IMAGE_TAG: validation
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML==6.0.2
+          python scripts/validate-infrastructure.py
+          python -m py_compile scripts/validate-infrastructure.py server/render-synapse-config.py
+          shellcheck server/bootstrap-bot.sh server/generate-synapse-config.sh
+          docker run --rm --entrypoint caddy \
+            -v "$PWD/server/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.0-alpine validate --config /etc/caddy/Caddyfile
+
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start local infrastructure
+        working-directory: server
+        run: docker compose up -d
+      - name: Check Synapse, federation, registration and MatrixRTC
+        working-directory: server
+        run: |
+          ready=0
+          for _ in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:8008/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          curl --fail --silent \
+            http://127.0.0.1:8008/_matrix/client/versions >/dev/null
+          curl --fail --silent \
+            http://127.0.0.1:8008/_matrix/federation/v1/version >/dev/null
+
+          # Local compose defaults registration on (200/401). Closed HS returns 403.
+          status="$(curl --silent --output /tmp/register.json --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"ci-user-'"$(date +%s)"'","password":"ci-only-password-123","auth":{"type":"m.login.dummy"}}' \
+            http://127.0.0.1:8008/_matrix/client/v3/register || true)"
+          case "$status" in
+            200|401|403) ;;
+            *)
+              echo "Unexpected registration status: $status"
+              cat /tmp/register.json || true
+              exit 1
+              ;;
+          esac
+
+          docker compose exec -T synapse register_new_matrix_user \
+            --config /data/homeserver.yaml \
+            --user ci-demo \
+            --password ci-only-password \
+            --no-admin \
+            http://127.0.0.1:8008
+
+          curl --fail --silent http://127.0.0.1:8081/ >/dev/null
+          curl --fail --silent http://127.0.0.1:8082/healthz >/dev/null
+          docker compose ps
+      - name: Dump logs
+        if: failure()
+        working-directory: server
+        run: |
+          docker compose ps -a
+          docker compose logs --tail=200 synapse-config || true
+          docker compose logs --tail=150
+      - name: Stop local infrastructure
+        if: always()
+        working-directory: server
+        run: docker compose down -v

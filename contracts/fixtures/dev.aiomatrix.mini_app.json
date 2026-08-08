@@ -1,0 +1,33 @@
+{
+  "msgtype": "m.text",
+  "body": "FormSpace MiniApp\nBuilder, filler and results for Matrix forms\nOpen FormSpace: https://example.org/formspace/app",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "<p><strong>FormSpace MiniApp</strong></p><p>Builder, filler and results for Matrix forms</p><p><a href=\"https://example.org/formspace/app\">Open FormSpace</a></p>",
+  "title": "FormSpace MiniApp",
+  "dev.aiomatrix.mini_app": {
+    "version": 1,
+    "url": "https://example.org/formspace/app",
+    "title": "FormSpace MiniApp",
+    "description": "Builder, filler and results for Matrix forms",
+    "button_text": "Open FormSpace",
+    "app_id": "formspace.app",
+    "bot_id": "@formspace:example.org",
+    "start_param": "build:survey",
+    "display": "sheet"
+  },
+  "dev.aiomatrix.keyboard": {
+    "version": 1,
+    "inline": [
+      [
+        {
+          "kind": "mini_app",
+          "text": "Open FormSpace",
+          "url": "https://example.org/formspace/app",
+          "startParam": "build:survey"
+        }
+      ]
+    ],
+    "fallback_command": "cb"
+  },
+  "bot_id": "@formspace:example.org"
+}

@@ -1,0 +1,279 @@
+name: highlife
+
+x-synapse-environment: &synapse-environment
+  # Keep SYNAPSE_SERVER_NAME in sync with DOMAIN / MATRIX_DOMAIN in deploy.env
+  # and the rendered Caddyfile (see docs/SECRETS.md).
+  SYNAPSE_SERVER_NAME: testhighlife.strangled.net
+  SYNAPSE_DATA_DIR: /data
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  SYNAPSE_REGISTRATION_SECRET: ${SYNAPSE_REGISTRATION_SECRET:?SYNAPSE_REGISTRATION_SECRET is required}
+  TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:?TURN_SHARED_SECRET is required}
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-false}
+  # Optional OIDC — when all three are set, render-synapse-config.py emits oidc_providers.
+  OIDC_ISSUER: ${OIDC_ISSUER:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_IDP_ID: ${OIDC_IDP_ID:-}
+  OIDC_IDP_NAME: ${OIDC_IDP_NAME:-}
+  OIDC_SCOPES: ${OIDC_SCOPES:-}
+  OIDC_LOCALPART_TEMPLATE: ${OIDC_LOCALPART_TEMPLATE:-}
+  OIDC_DISPLAY_NAME_TEMPLATE: ${OIDC_DISPLAY_NAME_TEMPLATE:-}
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: synapse
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U synapse -d synapse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  synapse-config:
+    image: matrixdotorg/synapse:v1.157.2
+    user: "0:0"
+    restart: "no"
+    environment: *synapse-environment
+    # Copy+strip CRLF into a writable temp path; bind mounts are read-only.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/generate-synapse-config.sh > /tmp/generate-synapse-config.sh
+        tr -d '\r' < /config/render-synapse-config.py > /tmp/render-synapse-config.py
+        export RENDER_SYNAPSE_CONFIG=/tmp/render-synapse-config.py
+        exec /bin/sh /tmp/generate-synapse-config.sh
+    volumes:
+      - synapse-data:/data
+      - ./generate-synapse-config.sh:/config/generate-synapse-config.sh:ro
+      - ./render-synapse-config.py:/config/render-synapse-config.py:ro
+    networks: [backend]
+
+  synapse:
+    image: matrixdotorg/synapse:v1.157.2
+    restart: unless-stopped
+    volumes:
+      - synapse-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse-config:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, "curl", "--fail", "--silent", "http://127.0.0.1:8008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [backend]
+
+  redis:
+    image: redis:8.8.0-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [CMD, "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  livekit:
+    image: livekit/livekit-server:v1.10.1
+    restart: unless-stopped
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        log_level: info
+        rtc:
+          tcp_port: 7881
+          port_range_start: 50000
+          port_range_end: 50100
+          use_external_ip: true
+        redis:
+          address: redis:6379
+        keys:
+          ${LIVEKIT_KEY:?LIVEKIT_KEY is required}: ${LIVEKIT_SECRET:?LIVEKIT_SECRET is required}
+    ports:
+      - "7881:7881/tcp"
+      - "50000-50100:50000-50100/udp"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:7880/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  lk-jwt-service:
+    image: ghcr.io/element-hq/lk-jwt-service:0.5.0
+    restart: unless-stopped
+    environment:
+      LIVEKIT_JWT_BIND: ":8080"
+      # Public SFU URL embedded in client tokens (trailing slash required by some builds).
+      LIVEKIT_URL: wss://rtc.testhighlife.strangled.net/livekit/sfu/
+      LIVEKIT_KEY: ${LIVEKIT_KEY:?LIVEKIT_KEY is required}
+      LIVEKIT_SECRET: ${LIVEKIT_SECRET:?LIVEKIT_SECRET is required}
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: testhighlife.strangled.net
+    depends_on:
+      livekit:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "/lk-jwt-service-healthcheck || wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    networks: [backend]
+
+  element-call:
+    image: ghcr.io/element-hq/element-call:v0.22.0
+    restart: unless-stopped
+    volumes:
+      - ./element-call-config.json:/app/config.json:ro
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  coturn:
+    image: coturn/coturn:4.16.0-r0
+    restart: unless-stopped
+    command:
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET:?TURN_SHARED_SECRET is required}
+      - --realm=testhighlife.strangled.net
+      - --server-name=testhighlife.strangled.net
+      - --external-ip=${DEPLOY_PUBLIC_IP:?DEPLOY_PUBLIC_IP is required}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-multicast-peers
+      - --no-loopback-peers
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    healthcheck:
+      test: [CMD-SHELL, "pidof turnserver >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  caddy:
+    image: caddy:2.10.0-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./www:/srv:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      synapse:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+      lk-jwt-service:
+        condition: service_started
+      element-call:
+        condition: service_healthy
+      bot:
+        condition: service_started
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      backend:
+        aliases:
+          - testhighlife.strangled.net
+
+  bot:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fakehoward}/highlife-formspace-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
+    restart: unless-stopped
+    expose:
+      - "8090"
+    environment:
+      # Hit Synapse on the Docker network. Public HTTPS shares rc_login with
+      # browsers/CI and the bot's restart loop previously 429'd itself forever.
+      MATRIX_HOMESERVER: http://synapse:8008
+      ALLOW_INSECURE_HOMESERVER: "true"
+      MATRIX_USER_ID: "@${BOT_LOCALPART:-highlifebot}:testhighlife.strangled.net"
+      MATRIX_PASSWORD: ${BOT_MATRIX_PASSWORD:?BOT_MATRIX_PASSWORD is required}
+      MATRIX_CRYPTO_STORE_PASSPHRASE: ${BOT_CRYPTO_STORE_PASSPHRASE:?BOT_CRYPTO_STORE_PASSPHRASE is required}
+      MATRIX_CRYPTO: "true"
+      MATRIX_MINIAPP_URL: https://testhighlife.strangled.net/miniapp/
+      MATRIX_MINIAPP_SECRET: ${MATRIX_MINIAPP_SECRET:-}
+      MATRIX_MINIAPP_CORS_ORIGIN: ${MATRIX_MINIAPP_CORS_ORIGIN:-https://testhighlife.strangled.net}
+      MINIAPP_HTTP_PORT: "8090"
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - bot-data:/app/data
+    depends_on:
+      synapse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  # Optional Matrix Push Gateway. Not started by default.
+  #   docker compose -f docker-compose.prod.yml --profile push up -d
+  # Point VITE_PUSH_GATEWAY_URL at:
+  #   https://push.<MATRIX_DOMAIN>/_matrix/push/v1/notify
+  # Raw ntfy does not implement the Matrix push gateway API — do not use it for m.pusher.
+  sygnal:
+    profiles: ["push"]
+    image: matrixdotorg/sygnal:v0.15.1
+    restart: unless-stopped
+    environment:
+      SYGNAL_CONF: /sygnal/sygnal.yaml
+    volumes:
+      - ./sygnal.yaml:/sygnal/sygnal.yaml:ro
+      - ./sygnal-vapid.pem:/sygnal/vapid_private.pem:ro
+      - sygnal-data:/sygnal/data
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+
+networks:
+  backend:
+
+volumes:
+  postgres-data:
+  synapse-data:
+  redis-data:
+  bot-data:
+  caddy-data:
+  caddy-config:
+  sygnal-data:

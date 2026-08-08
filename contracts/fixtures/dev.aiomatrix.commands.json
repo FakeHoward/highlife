@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "prefixes": [
+    "/",
+    "!"
+  ],
+  "commands": [
+    {
+      "name": "start",
+      "aliases": [
+        "старт"
+      ],
+      "description": "FormSpace welcome and scenario menu",
+      "category": "general"
+    },
+    {
+      "name": "form",
+      "description": "FormSpace control: new|list|close|results|export|...",
+      "args": "<subcommand>",
+      "category": "forms"
+    },
+    {
+      "name": "media",
+      "description": "Inspect an attached media message",
+      "category": "media"
+    },
+    {
+      "name": "menu",
+      "description": "FormSpace scenario menu",
+      "category": "general"
+    }
+  ]
+}

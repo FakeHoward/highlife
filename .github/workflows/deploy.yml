@@ -1,0 +1,687 @@
+name: Deploy HighLife
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: highlife-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check required secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+          DEPLOY_PUBLIC_IP: ${{ secrets.DEPLOY_PUBLIC_IP }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SYNAPSE_REGISTRATION_SECRET: ${{ secrets.SYNAPSE_REGISTRATION_SECRET }}
+          BOT_MATRIX_PASSWORD: ${{ secrets.BOT_MATRIX_PASSWORD }}
+          BOT_CRYPTO_STORE_PASSPHRASE: ${{ secrets.BOT_CRYPTO_STORE_PASSPHRASE }}
+          DEMO_MATRIX_PASSWORD: ${{ secrets.DEMO_MATRIX_PASSWORD }}
+          LIVEKIT_KEY: ${{ secrets.LIVEKIT_KEY }}
+          LIVEKIT_SECRET: ${{ secrets.LIVEKIT_SECRET }}
+          TURN_SHARED_SECRET: ${{ secrets.TURN_SHARED_SECRET }}
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PUBLIC_IP \
+            POSTGRES_PASSWORD SYNAPSE_REGISTRATION_SECRET BOT_MATRIX_PASSWORD \
+            BOT_CRYPTO_STORE_PASSPHRASE DEMO_MATRIX_PASSWORD LIVEKIT_KEY \
+            LIVEKIT_SECRET TURN_SHARED_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing environment secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ -z "${DEPLOY_SSH_KEY}" ] && [ -z "${DEPLOY_PASSWORD}" ]; then
+            echo "::error::Missing deploy auth: set DEPLOY_SSH_KEY or DEPLOY_PASSWORD (or both)"
+            missing=1
+          fi
+          # CI may use a deploy key; this never changes sshd on the VPS.
+          # Password SSH for humans stays whatever you configured on the server.
+          if [ -n "${DEPLOY_SSH_KEY}" ] && [ -n "${DEPLOY_PASSWORD}" ]; then
+            echo "Deploy auth: SSH key for Actions (password secret also present; server login unchanged)"
+          elif [ -n "${DEPLOY_SSH_KEY}" ]; then
+            echo "Deploy auth: SSH key for Actions only"
+          else
+            echo "Deploy auth: password for Actions (your interactive SSH password login is unchanged)"
+          fi
+          test "$missing" = 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate infrastructure
+        env:
+          POSTGRES_PASSWORD: validation-only
+          SYNAPSE_REGISTRATION_SECRET: validation-only
+          BOT_MATRIX_PASSWORD: validation-only
+          BOT_CRYPTO_STORE_PASSPHRASE: validation-only
+          LIVEKIT_KEY: validation-key
+          LIVEKIT_SECRET: validation-only
+          TURN_SHARED_SECRET: validation-only
+          DEPLOY_PUBLIC_IP: 203.0.113.10
+          GITHUB_REPOSITORY_OWNER: validation
+          BOT_IMAGE_TAG: validation
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML==6.0.2
+          python scripts/validate-infrastructure.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Test and build React web + FormSpace MiniApp
+        env:
+          VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net
+          VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
+          VITE_PUSH_GATEWAY_URL: ${{ secrets.VITE_PUSH_GATEWAY_URL }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
+          ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
+          MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+        run: |
+          DOMAIN="${DOMAIN:-testhighlife.strangled.net}"
+          MATRIX_DOMAIN="${MATRIX_DOMAIN:-$DOMAIN}"
+          # Default push gateway when Sygnal is on (ENABLE_PUSH) or VAPID is set.
+          if [ -z "${VITE_PUSH_GATEWAY_URL:-}" ]; then
+            if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ] || \
+               [ -n "${VITE_VAPID_PUBLIC_KEY:-}" ]; then
+              export VITE_PUSH_GATEWAY_URL="https://push.${MATRIX_DOMAIN}/_matrix/push/v1/notify"
+            fi
+          fi
+          if { [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; } && \
+             [ -z "${VITE_VAPID_PUBLIC_KEY:-}" ]; then
+            echo "::warning::ENABLE_PUSH=true but VITE_VAPID_PUBLIC_KEY is empty — web push stays off until the secret is set"
+          fi
+          npm ci
+          npm test --workspace @highlife/web -- --run
+          npm run typecheck --workspace @highlife/web
+          npm run build --workspace @highlife/web
+          npm run build --workspace @highlife/miniapp
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+
+      - name: Build Flutter web
+        id: flutter_web
+        working-directory: apps/client
+        continue-on-error: true
+        run: |
+          flutter create . --project-name highlife_client --org app.highlife --platforms=web
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter build web --release --base-href /flutter/
+
+      - name: Pack deployment bundle
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DEPLOY_PUBLIC_IP: ${{ secrets.DEPLOY_PUBLIC_IP }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SYNAPSE_REGISTRATION_SECRET: ${{ secrets.SYNAPSE_REGISTRATION_SECRET }}
+          BOT_MATRIX_PASSWORD: ${{ secrets.BOT_MATRIX_PASSWORD }}
+          BOT_CRYPTO_STORE_PASSPHRASE: ${{ secrets.BOT_CRYPTO_STORE_PASSPHRASE }}
+          DEMO_MATRIX_PASSWORD: ${{ secrets.DEMO_MATRIX_PASSWORD }}
+          LIVEKIT_KEY: ${{ secrets.LIVEKIT_KEY }}
+          LIVEKIT_SECRET: ${{ secrets.LIVEKIT_SECRET }}
+          TURN_SHARED_SECRET: ${{ secrets.TURN_SHARED_SECRET }}
+          MATRIX_MINIAPP_SECRET: ${{ secrets.MATRIX_MINIAPP_SECRET }}
+          MATRIX_MINIAPP_CORS_ORIGIN: ${{ vars.MATRIX_MINIAPP_CORS_ORIGIN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
+          OIDC_ISSUER: ${{ secrets.OIDC_ISSUER }}
+          OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
+          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
+          OIDC_IDP_ID: ${{ secrets.OIDC_IDP_ID }}
+          OIDC_IDP_NAME: ${{ secrets.OIDC_IDP_NAME }}
+          ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
+          SYGNAL_VAPID_PRIVATE_KEY: ${{ secrets.SYGNAL_VAPID_PRIVATE_KEY }}
+          SYNAPSE_ENABLE_REGISTRATION: ${{ secrets.SYNAPSE_ENABLE_REGISTRATION }}
+        run: |
+          # Public Matrix domain: Caddyfile is rendered from Caddyfile.template.
+          # Compose service host pins (Synapse server_name, LiveKit JWT, bot MXID)
+          # still default to testhighlife.strangled.net — retarget those together.
+          DOMAIN="${DOMAIN:-testhighlife.strangled.net}"
+          MATRIX_DOMAIN="${MATRIX_DOMAIN:-$DOMAIN}"
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          bot_tag="$(git log -1 --format=%H -- bot)"
+          test -n "$bot_tag"
+          mkdir -p out/www/react out/www/flutter out/www/miniapp out/www/client
+          cp -R apps/web/dist/. out/www/react/
+          cp -R apps/miniapp/dist/. out/www/miniapp/
+          if [ -f apps/client/build/web/flutter_bootstrap.js ] || [ -f apps/client/build/web/main.dart.js ]; then
+            cp -R apps/client/build/web/. out/www/flutter/
+          else
+            echo "Flutter web build unavailable; shipping React-only static tree"
+            printf '%s\n' \
+              '<!doctype html><meta charset="utf-8"><title>HighLife Flutter</title>' \
+              '<p>Flutter web build is unavailable on this deploy. Use the React client at /.</p>' \
+              > out/www/flutter/index.html
+          fi
+          # latest.json only in the SCP/tar path — never ship the ~70MB APK over
+          # password SCP (that alone stalled deploys for 40+ minutes). The host
+          # pulls the APK from GitHub Releases only when the build number changes.
+          export MATRIX_DOMAIN
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+
+          out = Path("out/www/client")
+          out.mkdir(parents=True, exist_ok=True)
+          latest_path = out / "latest.json"
+          token = os.environ.get("GITHUB_TOKEN") or ""
+          repo = os.environ["GITHUB_REPOSITORY"]
+          domain = os.environ.get("MATRIX_DOMAIN") or "testhighlife.strangled.net"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "highlife-deploy",
+          }
+
+          def fetch(url: str, accept: str) -> bytes:
+              req = urllib.request.Request(url, headers={**headers, "Accept": accept})
+              with urllib.request.urlopen(req) as resp:
+                  return resp.read()
+
+          try:
+              release = json.loads(
+                  fetch(
+                      f"https://api.github.com/repos/{repo}/releases/latest",
+                      "application/vnd.github+json",
+                  ).decode()
+              )
+              assets = {a["name"]: a for a in release.get("assets", [])}
+              meta = assets.get("latest.json")
+              if not meta:
+                  raise RuntimeError("latest.json missing from release")
+              data = json.loads(fetch(meta["url"], "application/octet-stream").decode())
+              apk_meta = (
+                  assets.get("highlife-android.apk")
+                  or assets.get("highlife.apk")
+                  or assets.get("app-release.apk")
+              )
+              data.setdefault("assets", {})["android"] = (
+                  f"https://{domain}/client/highlife.apk"
+              )
+              if apk_meta:
+                  data["_apk_api_url"] = apk_meta["url"]
+                  data["_apk_name"] = apk_meta["name"]
+              latest_path.write_text(json.dumps(data, indent=2) + "\n")
+              print(
+                  "packed updater metadata",
+                  data.get("version"),
+                  data.get("build"),
+                  "(APK fetched on host if needed)",
+              )
+          except Exception as err:
+              print("updater mirror fallback:", err)
+              latest_path.write_text(
+                  json.dumps(
+                      {"version": "0.0.0", "build": 0, "notes": "no release yet", "assets": {}},
+                      indent=2,
+                  )
+                  + "\n"
+              )
+          PY
+          grep -R -F "https://call.${MATRIX_DOMAIN}" out/www/react >/dev/null || \
+            grep -R -F 'https://call.testhighlife.strangled.net' out/www/react >/dev/null
+          cp server/docker-compose.prod.yml out/
+          # Render Caddy hostnames from template (keeps local Caddyfile in sync via default domain).
+          sed "s/__MATRIX_DOMAIN__/${MATRIX_DOMAIN}/g" server/Caddyfile.template > out/Caddyfile
+          grep -F "default-src 'self'" out/Caddyfile >/dev/null
+          grep -F "push.${MATRIX_DOMAIN}" out/Caddyfile >/dev/null
+          cp server/sygnal.yaml out/
+          # VAPID private key for Sygnal (webpush). Required when ENABLE_PUSH=true.
+          if [ -n "${SYGNAL_VAPID_PRIVATE_KEY:-}" ]; then
+            printf '%s\n' "$SYGNAL_VAPID_PRIVATE_KEY" > out/sygnal-vapid.pem
+            # Secrets sometimes store literal \n — normalize to real newlines.
+            python3 -c 'from pathlib import Path; p=Path("out/sygnal-vapid.pem"); t=p.read_text(); p.write_text(t.replace("\\n","\n") if (("BEGIN" not in t) or t.count(chr(10)) < 3) and ("\\n" in t) else t)'
+            chmod 600 out/sygnal-vapid.pem
+          elif [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then
+            echo "::error::ENABLE_PUSH=true requires GitHub secret SYGNAL_VAPID_PRIVATE_KEY (PEM)"
+            exit 1
+          else
+            # Bind mount must exist even when the push profile is idle.
+            printf '%s\n' '-----BEGIN PRIVATE KEY-----' 'DISABLED' '-----END PRIVATE KEY-----' > out/sygnal-vapid.pem
+            chmod 600 out/sygnal-vapid.pem
+          fi
+          cp server/bootstrap-bot.sh out/
+          cp server/generate-synapse-config.sh out/
+          cp server/render-synapse-config.py out/
+          cp server/element-call-config.json out/
+          chmod +x out/bootstrap-bot.sh out/generate-synapse-config.sh
+          # Shell scripts must be LF for the remote Linux host.
+          sed -i 's/\r$//' out/bootstrap-bot.sh out/generate-synapse-config.sh
+
+          {
+            printf 'DEPLOY_PUBLIC_IP=%s\n' "$DEPLOY_PUBLIC_IP"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'SYNAPSE_REGISTRATION_SECRET=%s\n' "$SYNAPSE_REGISTRATION_SECRET"
+            printf 'BOT_MATRIX_PASSWORD=%s\n' "$BOT_MATRIX_PASSWORD"
+            printf 'BOT_CRYPTO_STORE_PASSPHRASE=%s\n' "$BOT_CRYPTO_STORE_PASSPHRASE"
+            printf 'DEMO_MATRIX_PASSWORD=%s\n' "$DEMO_MATRIX_PASSWORD"
+            printf 'LIVEKIT_KEY=%s\n' "$LIVEKIT_KEY"
+            printf 'LIVEKIT_SECRET=%s\n' "$LIVEKIT_SECRET"
+            printf 'TURN_SHARED_SECRET=%s\n' "$TURN_SHARED_SECRET"
+            printf 'GITHUB_REPOSITORY_OWNER=%s\n' "$owner"
+            printf 'BOT_LOCALPART=highlifebot\n'
+            printf 'DEMO_LOCALPART=demo\n'
+            printf 'BOT_IMAGE_TAG=%s\n' "$bot_tag"
+            printf 'GITHUB_REPOSITORY=%s\n' "${{ github.repository }}"
+            printf 'DOMAIN=%s\n' "$DOMAIN"
+            printf 'MATRIX_DOMAIN=%s\n' "$MATRIX_DOMAIN"
+            # Closed by default for release; set true in .env only for open signup.
+            printf 'SYNAPSE_ENABLE_REGISTRATION=%s\n' "${SYNAPSE_ENABLE_REGISTRATION:-false}"
+            printf 'ENABLE_PUSH=%s\n' "${ENABLE_PUSH:-false}"
+            printf 'MATRIX_MINIAPP_CORS_ORIGIN=%s\n' \
+              "${MATRIX_MINIAPP_CORS_ORIGIN:-https://${DOMAIN}}"
+            if [ -n "${MATRIX_MINIAPP_SECRET:-}" ]; then
+              printf 'MATRIX_MINIAPP_SECRET=%s\n' "$MATRIX_MINIAPP_SECRET"
+            fi
+            if [ -n "${OIDC_ISSUER:-}" ] && [ -n "${OIDC_CLIENT_ID:-}" ] && [ -n "${OIDC_CLIENT_SECRET:-}" ]; then
+              printf 'OIDC_ISSUER=%s\n' "$OIDC_ISSUER"
+              printf 'OIDC_CLIENT_ID=%s\n' "$OIDC_CLIENT_ID"
+              printf 'OIDC_CLIENT_SECRET=%s\n' "$OIDC_CLIENT_SECRET"
+              if [ -n "${OIDC_IDP_ID:-}" ]; then
+                printf 'OIDC_IDP_ID=%s\n' "$OIDC_IDP_ID"
+              fi
+              if [ -n "${OIDC_IDP_NAME:-}" ]; then
+                printf 'OIDC_IDP_NAME=%s\n' "$OIDC_IDP_NAME"
+              fi
+            fi
+          } > out/deploy.env
+          # Keep world-unreadable locally but readable by the SCP action container.
+          chmod 644 out/deploy.env
+
+          # One compressed stream beats thousands of SCP file round-trips (Flutter web).
+          tar -C out -czf out/deploy-bundle.tgz \
+            www \
+            docker-compose.prod.yml \
+            Caddyfile \
+            sygnal.yaml \
+            sygnal-vapid.pem \
+            bootstrap-bot.sh \
+            generate-synapse-config.sh \
+            render-synapse-config.py \
+            element-call-config.json \
+            deploy.env
+          ls -lh out/deploy-bundle.tgz
+
+      - name: Upload deployment bundle
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          # Pass both; appleboy uses key when present, otherwise password.
+          # Never modifies sshd — interactive password login on the VPS is untouched.
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          source: "out/deploy-bundle.tgz"
+          target: /opt/highlife
+          strip_components: 1
+          overwrite: true
+          rm: false
+
+      - name: Start fresh Synapse stack
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          envs: GHCR_TOKEN,GHCR_USER
+          script: |
+            set -eu
+            sudo mkdir -p /opt/highlife
+            sudo chown -R "$(id -u):$(id -g)" /opt/highlife
+            cd /opt/highlife
+            test -f deploy-bundle.tgz
+            # Keep the mirrored APK across www replace when the build is unchanged.
+            rm -f /tmp/highlife-apk.prev /tmp/highlife-apk.prev-build
+            if [ -f www/client/highlife.apk ] && [ -f www/client/latest.json ]; then
+              cp -f www/client/highlife.apk /tmp/highlife-apk.prev
+              python3 -c 'import json; print(json.load(open("www/client/latest.json")).get("build",""))' \
+                >/tmp/highlife-apk.prev-build 2>/dev/null || true
+            fi
+            tar -xzf deploy-bundle.tgz
+            rm -f deploy-bundle.tgz
+            mv deploy.env .env
+            chmod 600 .env
+            set -a
+            . ./.env
+            set +a
+
+            # Host pulls APK from GitHub only when missing or build number changed.
+            python3 - <<'PY'
+            import json, os, shutil, urllib.request
+            from pathlib import Path
+
+            client = Path("www/client")
+            client.mkdir(parents=True, exist_ok=True)
+            latest_path = client / "latest.json"
+            apk_path = client / "highlife.apk"
+            if not latest_path.is_file():
+                raise SystemExit(0)
+
+            data = json.loads(latest_path.read_text())
+            build = str(data.get("build", ""))
+            api_url = data.pop("_apk_api_url", None)
+            data.pop("_apk_name", None)
+            domain = os.environ.get("MATRIX_DOMAIN") or os.environ.get("DOMAIN") or \
+                "testhighlife.strangled.net"
+            data.setdefault("assets", {})["android"] = (
+                f"https://{domain}/client/highlife.apk"
+            )
+            latest_path.write_text(json.dumps(data, indent=2) + "\n")
+
+            prev = Path("/tmp/highlife-apk.prev")
+            prev_build = ""
+            prev_build_path = Path("/tmp/highlife-apk.prev-build")
+            if prev_build_path.is_file():
+                prev_build = prev_build_path.read_text().strip()
+
+            def restore_prev() -> bool:
+                # /tmp and /opt may be different filesystems — copy, don't rename.
+                if not (prev.is_file() and prev.stat().st_size > 1_000_000):
+                    return False
+                shutil.copy2(prev, apk_path)
+                return True
+
+            if prev_build == build and restore_prev():
+                print("APK unchanged (build %s); kept previous mirror" % build)
+                raise SystemExit(0)
+
+            token = os.environ.get("GHCR_TOKEN") or ""
+            if not api_url or not token:
+                if restore_prev():
+                    print("APK asset URL/token missing; restored previous mirror")
+                else:
+                    print("APK not mirrored (missing asset URL or token)")
+                raise SystemExit(0)
+
+            print("fetching APK from GitHub Releases (build %s)" % build)
+            req = urllib.request.Request(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/octet-stream",
+                    "User-Agent": "highlife-deploy",
+                },
+            )
+            with urllib.request.urlopen(req) as resp:
+                apk_path.write_bytes(resp.read())
+            print("APK mirrored", apk_path.stat().st_size, "bytes")
+            PY
+
+            if [ -n "${GHCR_TOKEN:-}" ]; then
+              printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            fi
+
+            # One-time Conduit/Relay cutover: free host ports and remove legacy
+            # compose projects. Their volumes are retained and never attached
+            # to Synapse.
+            for project in relay conduit matrix; do
+              legacy="$(docker ps -aq --filter "label=com.docker.compose.project=${project}")"
+              if [ -n "$legacy" ]; then
+                docker rm -f $legacy || true
+              fi
+            done
+            # Stop any non-HighLife container still bound to ACME/HTTPS ports.
+            for port in 80 443; do
+              holders="$(docker ps --format '{{.ID}} {{.Names}}' | while read -r id name; do
+                if docker port "$id" 2>/dev/null | grep -E ":${port}->|0.0.0.0:${port}" >/dev/null; then
+                  case "$name" in
+                    highlife-*) ;;
+                    *) echo "$id" ;;
+                  esac
+                fi
+              done)"
+              if [ -n "$holders" ]; then
+                echo "Freeing host port ${port} from: ${holders}"
+                docker rm -f $holders || true
+              fi
+            done
+
+            docker compose -f docker-compose.prod.yml config --quiet
+            docker compose -f docker-compose.prod.yml pull
+            sed -i 's/\r$//' generate-synapse-config.sh bootstrap-bot.sh render-synapse-config.py || true
+
+            if ! docker compose -f docker-compose.prod.yml run --rm --no-deps synapse-config; then
+              echo "::error::synapse-config failed"
+              docker compose -f docker-compose.prod.yml logs --tail=200 synapse-config || true
+              exit 1
+            fi
+
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate caddy
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # Optional Matrix push gateway (Sygnal). Set ENABLE_PUSH=true in deploy.env
+            # and create DNS A record for push.<domain>. Does not affect SSH auth.
+            if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then
+              echo "Starting Sygnal (compose profile push)"
+              test -f sygnal-vapid.pem
+              grep -q 'BEGIN' sygnal-vapid.pem
+              docker compose -f docker-compose.prod.yml --profile push up -d --remove-orphans sygnal
+              for _ in $(seq 1 30); do
+                st="$(docker compose -f docker-compose.prod.yml --profile push ps --status running --services 2>/dev/null | grep -F sygnal || true)"
+                if [ -n "$st" ]; then break; fi
+                sleep 2
+              done
+            fi
+            # Keep the bot down until smoke finishes. Logging in as highlifebot
+            # and then immediately starting the bot burned the account rc_login
+            # bucket and left the container in a 429 restart loop.
+            docker compose -f docker-compose.prod.yml stop bot || true
+
+            MATRIX_DOMAIN="${MATRIX_DOMAIN:-${DOMAIN:-testhighlife.strangled.net}}"
+            PRIMARY="https://${MATRIX_DOMAIN}"
+            CALL_HOST="call.${MATRIX_DOMAIN}"
+            RTC_HOST="rtc.${MATRIX_DOMAIN}"
+
+            ready=0
+            for _ in $(seq 1 90); do
+              if curl --fail --silent --show-error \
+                "${PRIMARY}/_matrix/client/versions" >/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" != 1 ]; then
+              docker compose -f docker-compose.prod.yml ps
+              docker compose -f docker-compose.prod.yml logs --tail=160 \
+                synapse caddy synapse-config lk-jwt-service livekit
+              exit 1
+            fi
+
+            COMPOSE_FILE=docker-compose.prod.yml sh ./bootstrap-bot.sh
+
+            docker compose -f docker-compose.prod.yml restart synapse
+            for _ in $(seq 1 60); do
+              if docker compose -f docker-compose.prod.yml exec -T synapse \
+                curl --fail --silent http://127.0.0.1:8008/_matrix/client/versions >/dev/null; then
+                break
+              fi
+              sleep 2
+            done
+            sleep 20
+
+            curl_ok() {
+              url="$1"
+              shift
+              attempt=1
+              while [ "$attempt" -le 8 ]; do
+                code="$(curl --silent --output /tmp/highlife-curl.out --write-out '%{http_code}' \
+                  "$@" "$url" || true)"
+                if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+                  return 0
+                fi
+                echo "probe ${url} -> HTTP ${code} (attempt ${attempt}/8)"
+                if [ "$code" = "429" ] || [ "$code" = "000" ]; then
+                  sleep $((attempt * 8))
+                else
+                  sleep 3
+                fi
+                attempt=$((attempt + 1))
+              done
+              echo "::error::Probe failed for ${url} (last HTTP ${code})"
+              sed -n '1,40p' /tmp/highlife-curl.out || true
+              return 1
+            }
+
+            login_account() {
+              localpart="$1"
+              password="$2"
+              attempt=1
+              while [ "$attempt" -le 6 ]; do
+                # Hit Synapse loopback so public-IP rc_login buckets stay cool.
+                if docker compose -f docker-compose.prod.yml exec -T synapse \
+                  curl --fail --silent --show-error \
+                  -H 'Content-Type: application/json' \
+                  --data "{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"${localpart}\"},\"password\":\"${password}\"}" \
+                  http://127.0.0.1:8008/_matrix/client/v3/login |
+                  grep -F '"access_token"' >/dev/null; then
+                  echo "login ${localpart} ok"
+                  return 0
+                fi
+                echo "login ${localpart} failed (attempt ${attempt}/6)"
+                sleep $((attempt * 5))
+                attempt=$((attempt + 1))
+              done
+              echo "::error::Login probe failed for ${localpart}"
+              return 1
+            }
+            # Probe demo only. Bot password is exercised by the running container
+            # below; a second highlifebot login here races the bot's own login.
+            login_account "$DEMO_LOCALPART" "$DEMO_MATRIX_PASSWORD"
+            # Named volume may be root-owned from an earlier rootful run; the
+            # image runs as uid 1000 (node) and must write .session.json / crypto.
+            # Preserve the crypto store across deploys. If session/device id
+            # diverges from OlmMachine, wipe via Recover bot (recover-bot.yml).
+            docker compose -f docker-compose.prod.yml run --rm --no-deps --user 0 \
+              --entrypoint sh bot -c '
+                mkdir -p /app/data
+                # Intentionally not wiping crypto/session on every deploy:
+                # find /app/data -mindepth 1 -maxdepth 1 ! -name formspace.json ! -name crypto-passphrase.json -exec rm -rf {} +
+                chown -R 1000:1000 /app/data
+              '
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate bot
+            bot_ready=0
+            for _ in $(seq 1 45); do
+              status="$(docker inspect highlife-bot-1 --format '{{.State.Status}}' 2>/dev/null || true)"
+              if [ "$status" = "running" ] && \
+                 docker compose -f docker-compose.prod.yml logs --no-color --tail=80 bot 2>/dev/null |
+                   grep -E 'FormSpace as|HighLife showcase as' >/dev/null; then
+                bot_ready=1
+                break
+              fi
+              if [ "$status" = "restarting" ]; then
+                echo "bot still restarting; recent logs:"
+                docker compose -f docker-compose.prod.yml logs --no-color --tail=40 bot || true
+              fi
+              sleep 4
+            done
+            if [ "$bot_ready" != 1 ]; then
+              echo "::error::Bot failed to stay up after deploy"
+              docker compose -f docker-compose.prod.yml ps bot || true
+              docker compose -f docker-compose.prod.yml logs --no-color --tail=120 bot || true
+              exit 1
+            fi
+            echo "bot showcase online"
+
+            # Release default closes public registration (403). Open signup still
+            # returns 200 or UIA 401 when SYNAPSE_ENABLE_REGISTRATION=true.
+            registration_status="$(curl --silent --output /tmp/highlife-register.json --write-out '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              --data '{"username":"public-probe-'"$(date +%s)"'","password":"probe-not-for-login-123","auth":{"type":"m.login.dummy"}}' \
+              "${PRIMARY}/_matrix/client/v3/register" || true)"
+            case "$registration_status" in
+              200|401|403) ;;
+              *)
+                echo "::error::Unexpected registration status: ${registration_status}"
+                sed -n '1,40p' /tmp/highlife-register.json || true
+                exit 1
+                ;;
+            esac
+            echo "registration probe HTTP ${registration_status} (closed=403, open=200/401)"
+
+            curl_ok "${PRIMARY}/_matrix/federation/v1/version"
+            curl_ok "${PRIMARY}/.well-known/matrix/server"
+            grep -F "\"m.server\":\"${MATRIX_DOMAIN}:443\"" /tmp/highlife-curl.out >/dev/null
+            curl_ok "${PRIMARY}/.well-known/matrix/client"
+            grep -F 'org.matrix.msc4143.rtc_foci' /tmp/highlife-curl.out >/dev/null
+            curl_ok "${PRIMARY}/"
+            curl_ok "${PRIMARY}/flutter/flutter_bootstrap.js"
+
+            main_headers="$(curl --fail --silent --show-error --head \
+              "${PRIMARY}/" | tr -d '\r')"
+            printf '%s\n' "$main_headers" |
+              grep -Fi 'content-security-policy:' |
+              grep -F 'default-src' >/dev/null
+            printf '%s\n' "$main_headers" |
+              grep -Fi 'permissions-policy:' |
+              grep -F "https://${CALL_HOST}" >/dev/null
+
+            PUSH_HOST="push.${MATRIX_DOMAIN}"
+            dns_missing=0
+            dns_hosts="${CALL_HOST} ${RTC_HOST}"
+            if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then
+              dns_hosts="${dns_hosts} ${PUSH_HOST}"
+            fi
+            for host in $dns_hosts; do
+              if getent hosts "$host" >/dev/null 2>&1 || \
+                 dig +short "$host" @1.1.1.1 >/dev/null 2>&1; then
+                :
+              else
+                echo "::error::Missing DNS A record: ${host} -> ${DEPLOY_PUBLIC_IP} (see docs/SECRETS.md)"
+                dns_missing=1
+              fi
+            done
+            if [ "$dns_missing" = 1 ]; then
+              docker compose -f docker-compose.prod.yml ps
+              echo "Homeserver smoke passed; MatrixRTC hostnames still need DNS before calls work"
+              exit 1
+            fi
+
+            # Give Caddy time to finish ACME for newly published hostnames.
+            sleep 20
+            curl_ok "https://${CALL_HOST}/"
+            curl_ok "https://${RTC_HOST}/livekit/jwt/healthz"
+            if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then
+              curl_ok "https://${PUSH_HOST}/health"
+            fi
+
+            call_headers="$(curl --fail --silent --show-error --head \
+              "https://${CALL_HOST}/" | tr -d '\r')"
+            printf '%s\n' "$call_headers" |
+              grep -Fi "content-security-policy: frame-ancestors https://${MATRIX_DOMAIN}" >/dev/null
+            if printf '%s\n' "$call_headers" | grep -qi '^x-frame-options:'; then
+              echo "Element Call must not emit X-Frame-Options" >&2
+              exit 1
+            fi
+
+            docker compose -f docker-compose.prod.yml ps
+            echo "HighLife deployment and federation smoke checks passed"
