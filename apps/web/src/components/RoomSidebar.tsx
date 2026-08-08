@@ -1,6 +1,6 @@
 import type { RoomListItem, SpaceSummary } from "@highlife/ui-contracts";
 import { useI18n } from "../i18n";
-import { IconLock, IconPlus, IconSearch, IconSettings } from "./Icons";
+import { IconFolderPlus, IconLock, IconPlus, IconSearch, IconSettings } from "./Icons";
 
 interface Props {
   rooms: RoomListItem[];
@@ -9,6 +9,7 @@ interface Props {
   onQuery: (value: string) => void;
   onSelect: (roomId: string) => void;
   onNew: () => void;
+  onNewSpace: () => void;
   onSettings: () => void;
   spaces?: SpaceSummary[];
   selectedSpaceId?: string | null;
@@ -22,6 +23,7 @@ export function RoomSidebar({
   onQuery,
   onSelect,
   onNew,
+  onNewSpace,
   onSettings,
   spaces = [],
   selectedSpaceId = null,
@@ -36,7 +38,7 @@ export function RoomSidebar({
           <strong>HighLife</strong>
         </div>
         <div className="head-actions">
-          <button className="icon-button" type="button" onClick={onNew} aria-label={t("sidebar.createOrJoin")}>
+          <button className="icon-button" type="button" onClick={onNew} aria-label={t("sidebar.createOrJoin")} title={t("sidebar.createOrJoin")}>
             <IconPlus />
           </button>
           <button className="icon-button" type="button" onClick={onSettings} aria-label={t("sidebar.settings")}>
@@ -53,16 +55,30 @@ export function RoomSidebar({
           aria-label={t("sidebar.search")}
         />
       </label>
-      {spaces.length > 0 && onSelectSpace && (
+      {onSelectSpace && (
         <section className="spaces-section" aria-label={t("sidebar.spaces")}>
-          <p className="eyebrow">{t("sidebar.spaces")}</p>
+          <div className="spaces-head">
+            <div>
+              <p className="eyebrow">{t("sidebar.spaces")}</p>
+              <p className="muted small spaces-hint">{t("spaces.hint")}</p>
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={onNewSpace}
+              aria-label={t("spaces.createTitle")}
+              title={t("spaces.createTitle")}
+            >
+              <IconFolderPlus />
+            </button>
+          </div>
           <div className="space-list">
             <button
               type="button"
               className={`space-row ${selectedSpaceId === null ? "active" : ""}`}
               onClick={() => onSelectSpace(null)}
             >
-              {t("sidebar.rooms")}
+              {t("sidebar.allRooms")}
             </button>
             {spaces.map((space) => (
               <button
@@ -81,6 +97,9 @@ export function RoomSidebar({
                 <span>{space.name}</span>
               </button>
             ))}
+            {spaces.length === 0 && (
+              <p className="muted small spaces-empty">{t("spaces.empty")}</p>
+            )}
           </div>
         </section>
       )}
@@ -108,10 +127,7 @@ export function RoomSidebar({
             )}
             <span className="room-copy">
               <span className="room-title">
-                <strong>
-                  {room.isSpace ? `${t("rooms.space")}: ` : ""}
-                  {room.name}
-                </strong>
+                <strong>{room.name}</strong>
                 <time>{room.lastActive ? new Date(room.lastActive).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</time>
               </span>
               <span className="room-preview">

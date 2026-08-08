@@ -17,7 +17,6 @@ const en = {
   "login.headline": "Sign in to Matrix",
   "login.blurb":
     "Sign in to any Matrix server. Some rooms only accept accounts from servers they allow.",
-  "login.eyebrow": "Matrix",
   "login.title": "Sign in",
   "login.registerTitle": "Create account",
   "login.hint": "Server URL and your account on that server.",
@@ -51,7 +50,8 @@ const en = {
 
   // Rooms sidebar
   "sidebar.rooms": "Rooms",
-  "sidebar.createOrJoin": "Create or join room",
+  "sidebar.allRooms": "All chats",
+  "sidebar.createOrJoin": "Create or join chat",
   "sidebar.settings": "Open settings",
   "sidebar.search": "Search rooms",
   "sidebar.emptyTitle": "No rooms found",
@@ -60,6 +60,18 @@ const en = {
   "sidebar.noMessages": "No messages yet",
   "sidebar.encrypted": "Encrypted",
   "sidebar.spaces": "Spaces",
+
+  // Spaces (= chat folders)
+  "spaces.hint": "Like Telegram folders — group chats in the sidebar.",
+  "spaces.empty": "No spaces yet. Use the folder button to add one.",
+  "spaces.createTitle": "New space",
+  "spaces.blurb":
+    "A space is a folder for chats: pick it in the sidebar to show only those rooms. It is not a chat itself.",
+  "spaces.name": "Space name",
+  "spaces.namePlaceholder": "Work, Friends, …",
+  "spaces.topicOptional": "Description (optional)",
+  "spaces.topicPlaceholder": "What this folder is for",
+  "spaces.createAction": "Create space",
 
   // Workspace / chat
   "chat.offline": "Offline — messages will resume when your connection returns",
@@ -226,12 +238,11 @@ const en = {
   "rooms.title": "Rooms",
   "rooms.join": "Join",
   "rooms.create": "Create",
-  "rooms.dm": "Direct message",
+  "rooms.dm": "DM",
   "rooms.startDm": "Start DM",
   "rooms.userIdPlaceholder": "@person:matrix.example.org",
-  "rooms.createSpace": "Create space",
   "rooms.space": "Space",
-  "rooms.directMessage": "Direct message",
+  "rooms.directMessage": "User ID",
   "rooms.address": "Room address",
   "rooms.name": "Room name",
   "rooms.addressPlaceholder": "#community:matrix.example.org",
@@ -314,7 +325,6 @@ const ru: Record<MessageKey, string> = {
   "login.headline": "Вход в Matrix",
   "login.blurb":
     "Войдите на любой сервер Matrix. В некоторые комнаты пускают только с серверов, которые они разрешают.",
-  "login.eyebrow": "Matrix",
   "login.title": "Вход",
   "login.registerTitle": "Регистрация",
   "login.hint": "Адрес сервера и ваш аккаунт на нём.",
@@ -348,7 +358,8 @@ const ru: Record<MessageKey, string> = {
   "login.language": "Язык",
 
   "sidebar.rooms": "Комнаты",
-  "sidebar.createOrJoin": "Создать или присоединиться",
+  "sidebar.allRooms": "Все чаты",
+  "sidebar.createOrJoin": "Создать или вступить в чат",
   "sidebar.settings": "Открыть настройки",
   "sidebar.search": "Поиск комнат",
   "sidebar.emptyTitle": "Комнаты не найдены",
@@ -357,6 +368,17 @@ const ru: Record<MessageKey, string> = {
   "sidebar.noMessages": "Пока нет сообщений",
   "sidebar.encrypted": "Зашифровано",
   "sidebar.spaces": "Пространства",
+
+  "spaces.hint": "Как папки в Telegram — группируют чаты в списке слева.",
+  "spaces.empty": "Пока нет пространств. Кнопка с папкой создаёт новое.",
+  "spaces.createTitle": "Новое пространство",
+  "spaces.blurb":
+    "Пространство — это папка для чатов: выберите его слева, чтобы видеть только нужные комнаты. Само по себе это не переписка.",
+  "spaces.name": "Название",
+  "spaces.namePlaceholder": "Работа, Друзья, …",
+  "spaces.topicOptional": "Описание (необязательно)",
+  "spaces.topicPlaceholder": "Для чего эта папка",
+  "spaces.createAction": "Создать пространство",
 
   "chat.offline": "Нет сети — сообщения продолжатся после восстановления связи",
   "chat.syncStopped": "Синхронизация остановлена",
@@ -515,14 +537,13 @@ const ru: Record<MessageKey, string> = {
   "settings.genericError": "Что-то пошло не так",
 
   "rooms.title": "Комнаты",
-  "rooms.join": "Присоединиться",
+  "rooms.join": "Вступить",
   "rooms.create": "Создать",
-  "rooms.dm": "Личные сообщения",
+  "rooms.dm": "ЛС",
   "rooms.startDm": "Начать ЛС",
   "rooms.userIdPlaceholder": "@person:matrix.example.org",
-  "rooms.createSpace": "Создать пространство",
   "rooms.space": "Пространство",
-  "rooms.directMessage": "Личное сообщение",
+  "rooms.directMessage": "ID пользователя",
   "rooms.address": "Адрес комнаты",
   "rooms.name": "Название комнаты",
   "rooms.addressPlaceholder": "#community:matrix.example.org",

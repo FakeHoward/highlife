@@ -100,7 +100,7 @@ export function Modal({ title, onClose, children, wide = false }: {
 
 export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: (roomId: string) => void }) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"join" | "create" | "dm" | "space">("join");
+  const [tab, setTab] = useState<"join" | "create" | "dm">("join");
   const [value, setValue] = useState("");
   const [topic, setTopic] = useState("");
   const [encrypted, setEncrypted] = useState(true);
@@ -123,13 +123,6 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
         roomId = await joinRoom(value.trim());
       } else if (tab === "dm") {
         roomId = await startDirectMessage(value.trim(), encrypted);
-      } else if (tab === "space") {
-        roomId = await createRoom({
-          name: value.trim(),
-          topic: topic.trim() || undefined,
-          encrypted: false,
-          isSpace: true,
-        });
       } else {
         roomId = await createRoom({
           name: value.trim(),
@@ -166,17 +159,14 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
     ? t("rooms.joinRoom")
     : tab === "dm"
       ? t("rooms.startDm")
-      : tab === "space"
-        ? t("rooms.createSpace")
-        : t("rooms.createRoom");
+      : t("rooms.createRoom");
 
   return (
     <Modal title={t("rooms.title")} onClose={onClose}>
-      <div className="tabs">
-        <button className={tab === "join" ? "active" : ""} onClick={() => switchTab("join")}>{t("rooms.join")}</button>
-        <button className={tab === "create" ? "active" : ""} onClick={() => switchTab("create")}>{t("rooms.create")}</button>
-        <button className={tab === "dm" ? "active" : ""} onClick={() => switchTab("dm")}>{t("rooms.dm")}</button>
-        <button className={tab === "space" ? "active" : ""} onClick={() => switchTab("space")}>{t("rooms.space")}</button>
+      <div className="tabs tabs-3" role="tablist" aria-label={t("rooms.title")}>
+        <button type="button" role="tab" aria-selected={tab === "join"} className={tab === "join" ? "active" : ""} onClick={() => switchTab("join")}>{t("rooms.join")}</button>
+        <button type="button" role="tab" aria-selected={tab === "create"} className={tab === "create" ? "active" : ""} onClick={() => switchTab("create")}>{t("rooms.create")}</button>
+        <button type="button" role="tab" aria-selected={tab === "dm"} className={tab === "dm" ? "active" : ""} onClick={() => switchTab("dm")}>{t("rooms.dm")}</button>
       </div>
       <form className="stack-form" onSubmit={submit}>
         <label>
@@ -201,13 +191,19 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
           />
         </label>
         {tab === "join" && <p className="muted small">{t("rooms.joinHint")}</p>}
-        {(tab === "create" || tab === "space") && (
-          <label>
-            <span>{t("rooms.topic")}</span>
-            <input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("rooms.topicPlaceholder")} />
-          </label>
+        {tab === "create" && (
+          <>
+            <label>
+              <span>{t("rooms.topic")}</span>
+              <input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("rooms.topicPlaceholder")} />
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={encrypted} onChange={(event) => setEncrypted(event.target.checked)} />
+              {" "}{t("rooms.enableE2ee")}
+            </label>
+          </>
         )}
-        {(tab === "create" || tab === "dm") && (
+        {tab === "dm" && (
           <label className="check">
             <input type="checkbox" checked={encrypted} onChange={(event) => setEncrypted(event.target.checked)} />
             {" "}{t("rooms.enableE2ee")}
@@ -215,6 +211,70 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
         )}
         {error && <p className="error" role="alert">{error}</p>}
         <button className="button primary">{submitLabel}</button>
+      </form>
+    </Modal>
+  );
+}
+
+/** Dedicated Space (= folder) creation — not mixed with chat create/join. */
+export function CreateSpace({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (spaceId: string) => void;
+}) {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const [topic, setTopic] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const spaceId = await createRoom({
+        name: name.trim(),
+        topic: topic.trim() || undefined,
+        encrypted: false,
+        isSpace: true,
+      });
+      onCreated(spaceId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("rooms.requestFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={t("spaces.createTitle")} onClose={onClose}>
+      <p className="muted">{t("spaces.blurb")}</p>
+      <form className="stack-form" onSubmit={submit}>
+        <label>
+          <span>{t("spaces.name")}</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t("spaces.namePlaceholder")}
+            required
+            autoFocus
+          />
+        </label>
+        <label>
+          <span>{t("spaces.topicOptional")}</span>
+          <input
+            value={topic}
+            onChange={(event) => setTopic(event.target.value)}
+            placeholder={t("spaces.topicPlaceholder")}
+          />
+        </label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button className="button primary" disabled={busy || !name.trim()}>
+          {busy ? t("login.connecting") : t("spaces.createAction")}
+        </button>
       </form>
     </Modal>
   );

@@ -41,6 +41,16 @@ export function IconPlus(props: IconProps) {
   );
 }
 
+export function IconFolderPlus(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 19H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2" />
+      <path d="M14 16h6" />
+      <path d="M17 13v6" />
+    </Icon>
+  );
+}
+
 export function IconSettings(props: IconProps) {
   return (
     <Icon {...props}>

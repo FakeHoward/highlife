@@ -113,6 +113,7 @@ describe("responsive room navigation", () => {
         onQuery={vi.fn()}
         onSelect={select}
         onNew={vi.fn()}
+        onNewSpace={vi.fn()}
         onSettings={vi.fn()}
       />,
     );

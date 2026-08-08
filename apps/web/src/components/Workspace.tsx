@@ -24,6 +24,7 @@ import { MessageTimeline } from "./MessageTimeline";
 import { RoomSidebar } from "./RoomSidebar";
 import {
   CallSurface,
+  CreateSpace,
   MiniAppSurface,
   RoomActions,
   RoomDetails,
@@ -34,6 +35,7 @@ import {
 
 type Surface =
   | "rooms"
+  | "createSpace"
   | "settings"
   | "details"
   | "search"
@@ -133,6 +135,7 @@ export function Workspace() {
         onQuery={setQuery}
         onSelect={openRoom}
         onNew={() => setSurface("rooms")}
+        onNewSpace={() => setSurface("createSpace")}
         onSettings={() => setSurface("settings")}
         spaces={spaces}
         selectedSpaceId={selectedSpaceId}
@@ -312,6 +315,15 @@ export function Workspace() {
         )}
       </main>
       {surface === "rooms" && <RoomActions onClose={() => setSurface(null)} onOpen={openRoom} />}
+      {surface === "createSpace" && (
+        <CreateSpace
+          onClose={() => setSurface(null)}
+          onCreated={(spaceId) => {
+            setSelectedSpaceId(spaceId);
+            setSurface(null);
+          }}
+        />
+      )}
       {surface === "settings" && <Settings onClose={() => setSurface(null)} />}
       {surface === "details" && activeRoom && <RoomDetails room={activeRoom} onClose={() => setSurface(null)} onLeft={() => { setSurface(null); setActiveId(null); }} />}
       {surface === "search" && activeId && (
