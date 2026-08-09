@@ -33,11 +33,76 @@ const _defaultCapabilities = [
   'org.matrix.msc2762.receive.to_device',
 ];
 
+const _sendEventPrefix = 'org.matrix.msc2762.send.event:';
+const _sendStateEventPrefix = 'org.matrix.msc2762.send.state_event:';
+const _receiveEventPrefix = 'org.matrix.msc2762.receive.event:';
+const _receiveStateEventPrefix = 'org.matrix.msc2762.receive.state_event:';
+
+/// Event types Element Call may need beyond the static defaults.
+bool _isAllowedCallEventType(String type) {
+  if (type == 'm.room.message') return true;
+  if (type == 'org.matrix.msc4075.rtc.notification') return true;
+  if (type == 'org.matrix.rageshake.request') return true;
+  if (type == 'org.matrix.msc3401.call' ||
+      type == 'org.matrix.msc3401.call.member') {
+    return true;
+  }
+  if (type.startsWith('m.call.')) return true;
+  if (type.startsWith('org.matrix.msc3401.call')) return true;
+  return false;
+}
+
+/// Whether a capability string may be granted to the Element Call widget.
+@visibleForTesting
+bool isGrantableWidgetCapability(String capability) {
+  if (_defaultCapabilities.contains(capability)) return true;
+  if (capability == 'm.always_on_screen') return true;
+  if (capability.startsWith('org.matrix.msc2762.timeline')) return true;
+  if (capability == 'org.matrix.msc2762.send.to_device' ||
+      capability == 'org.matrix.msc2762.receive.to_device') {
+    return true;
+  }
+
+  final String? eventType;
+  if (capability.startsWith(_sendEventPrefix)) {
+    eventType = capability.substring(_sendEventPrefix.length);
+  } else if (capability.startsWith(_receiveEventPrefix)) {
+    eventType = capability.substring(_receiveEventPrefix.length);
+  } else if (capability.startsWith(_sendStateEventPrefix)) {
+    eventType = capability.substring(_sendStateEventPrefix.length);
+  } else if (capability.startsWith(_receiveStateEventPrefix)) {
+    eventType = capability.substring(_receiveStateEventPrefix.length);
+  } else {
+    return false;
+  }
+
+  // Never grant unrestricted wildcards.
+  if (eventType == '*' || eventType.isEmpty) return false;
+  return _isAllowedCallEventType(eventType);
+}
+
+/// Whether [approved] includes a send capability covering [type].
+@visibleForTesting
+bool hasSendEventCapability(
+  Set<String> approved,
+  String type, {
+  required bool isState,
+}) {
+  if (type.isEmpty) return false;
+  final exact = isState
+      ? '$_sendStateEventPrefix$type'
+      : '$_sendEventPrefix$type';
+  final wildcard =
+      isState ? '${_sendStateEventPrefix}*' : '${_sendEventPrefix}*';
+  return approved.contains(exact) || approved.contains(wildcard);
+}
+
 class ElementCallWidgetHost {
   ElementCallWidgetHost({
     required this.widgetId,
     required this.roomId,
     required this.controller,
+    required this.targetOrigin,
     this.sendEvent,
     this.onCapabilityChange,
   });
@@ -45,6 +110,8 @@ class ElementCallWidgetHost {
   final String widgetId;
   final String roomId;
   final WebViewController controller;
+  /// Origin of the embedded call widget URI; used for postMessage target.
+  final String targetOrigin;
   final WidgetSendEventFn? sendEvent;
   final VoidCallback? onCapabilityChange;
 
@@ -89,7 +156,11 @@ class ElementCallWidgetHost {
       final requested = data is Map && data['capabilities'] is List
           ? (data['capabilities'] as List).whereType<String>()
           : _defaultCapabilities;
-      _approved.addAll(requested);
+      for (final capability in requested) {
+        if (isGrantableWidgetCapability(capability)) {
+          _approved.add(capability);
+        }
+      }
       await _reply(request, {'capabilities': _approved.toList()});
       await _notifyCapabilities();
       onCapabilityChange?.call();
@@ -115,7 +186,9 @@ class ElementCallWidgetHost {
           ? Map<String, dynamic>.from(data['content'] as Map)
           : <String, dynamic>{};
       final stateKey = data['state_key'] as String?;
-      final roomId = data['room_id'] as String? ?? this.roomId;
+      final isState = data.containsKey('state_key');
+      // Always send into the call room; ignore widget-supplied room_id.
+      final roomId = this.roomId;
       final send = sendEvent;
       if (send == null || type.isEmpty) {
         await _reply(request, {
@@ -123,6 +196,16 @@ class ElementCallWidgetHost {
             'message': 'send_event is not available',
             'url': '',
             'http_status': 400,
+          },
+        });
+        return;
+      }
+      if (!hasSendEventCapability(_approved, type, isState: isState)) {
+        await _reply(request, {
+          'error': {
+            'message': 'send_event capability not approved for $type',
+            'url': '',
+            'http_status': 403,
           },
         });
         return;
@@ -136,7 +219,8 @@ class ElementCallWidgetHost {
         );
         await _reply(request, {
           'room_id': roomId,
-          'event_id': result['event_id'] ?? 'local_${DateTime.now().millisecondsSinceEpoch}',
+          'event_id': result['event_id'] ??
+              'local_${DateTime.now().millisecondsSinceEpoch}',
         });
       } catch (error) {
         await _reply(request, {
@@ -170,7 +254,8 @@ class ElementCallWidgetHost {
         'requested': _approved.toList(),
       },
     });
-    await controller.runJavaScript('window.postMessage($payload, "*");');
+    final origin = jsonEncode(targetOrigin);
+    await controller.runJavaScript('window.postMessage($payload, $origin);');
   }
 
   Future<void> _reply(
@@ -182,6 +267,7 @@ class ElementCallWidgetHost {
       'api': 'toWidget',
       'response': response,
     });
-    await controller.runJavaScript('window.postMessage($payload, "*");');
+    final origin = jsonEncode(targetOrigin);
+    await controller.runJavaScript('window.postMessage($payload, $origin);');
   }
 }

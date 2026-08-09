@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -35,10 +37,25 @@ class _CallWebViewIoState extends State<CallWebView> {
   ElementCallWidgetHost? _host;
   var _failed = false;
 
+  String get _allowedOrigin => widget.uri.origin;
+
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  NavigationDecision _onNavigationRequest(NavigationRequest request) {
+    final requested = Uri.tryParse(request.url);
+    if (requested == null) return NavigationDecision.prevent;
+    try {
+      if (requested.origin == _allowedOrigin) {
+        return NavigationDecision.navigate;
+      }
+    } catch (_) {
+      // Non-http(s) URLs have no origin; block them.
+    }
+    return NavigationDecision.prevent;
   }
 
   Future<void> _init() async {
@@ -57,6 +74,7 @@ class _CallWebViewIoState extends State<CallWebView> {
       );
       await controller.setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: _onNavigationRequest,
           onPageFinished: (_) => _injectBridge(controller),
         ),
       );
@@ -66,6 +84,7 @@ class _CallWebViewIoState extends State<CallWebView> {
         widgetId: widget.widgetId,
         roomId: widget.roomId,
         controller: controller,
+        targetOrigin: _allowedOrigin,
         sendEvent: widget.sendEvent,
         onCapabilityChange: widget.onReady,
       );
@@ -78,12 +97,15 @@ class _CallWebViewIoState extends State<CallWebView> {
   }
 
   Future<void> _injectBridge(WebViewController controller) async {
+    final allowedOrigin = jsonEncode(_allowedOrigin);
     await controller.runJavaScript('''
 (function() {
   if (window.__highlifeBridge) return;
   window.__highlifeBridge = true;
+  var allowedOrigin = $allowedOrigin;
   window.addEventListener('message', function(event) {
     try {
+      if (event.origin !== allowedOrigin) return;
       var data = event.data;
       var payload = (typeof data === 'string') ? data : JSON.stringify(data);
       HighLifeBridge.postMessage(payload);

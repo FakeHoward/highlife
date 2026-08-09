@@ -7,6 +7,8 @@ import {
   extractMiniAppInitData,
   formatMessagePreview,
   humanizeStructuredPayload,
+  isAllowedMiniAppUrl,
+  miniAppAllowedOrigins,
   parseAiomatrixPayload,
   stripKeyboardFallbackHtml,
   stripKeyboardFallbackText,
@@ -14,6 +16,40 @@ import {
 } from "./aiomatrix";
 
 describe("aiomatrix protocol", () => {
+  it("allowlists MiniApp iframe origins from homeserver and env", () => {
+    expect(
+      miniAppAllowedOrigins({
+        homeserver: "https://testhighlife.strangled.net",
+        allowedOrigins: "https://forms.example.org, example.net",
+        dev: false,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        "https://forms.example.org",
+        "https://example.net",
+        "https://testhighlife.strangled.net",
+      ]),
+    );
+    expect(
+      isAllowedMiniAppUrl("https://testhighlife.strangled.net/miniapp/", {
+        homeserver: "https://testhighlife.strangled.net",
+        dev: false,
+      }),
+    ).toBe(true);
+    expect(
+      isAllowedMiniAppUrl("https://evil.example/app", {
+        homeserver: "https://testhighlife.strangled.net",
+        dev: false,
+      }),
+    ).toBe(false);
+    expect(
+      isAllowedMiniAppUrl("http://localhost:4173/", {
+        homeserver: "https://testhighlife.strangled.net",
+        dev: true,
+      }),
+    ).toBe(true);
+  });
+
   it("rejects unsafe keyboard URLs while preserving callback buttons", () => {
     const parsed = parseAiomatrixPayload({
       "ru.studnovsu.inline_keyboard": [

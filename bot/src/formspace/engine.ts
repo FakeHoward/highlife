@@ -1,5 +1,5 @@
 import type { FormDefinition, FormField, FormResponse, RsvpChoice } from "./types.js";
-import type { FormSpaceStore } from "./store.js";
+import { MAX_FIELDS_PER_FORM, type FormSpaceStore } from "./store.js";
 
 export function validateAnswers(
   form: FormDefinition,
@@ -158,7 +158,34 @@ export function canViewRawAnswers(
   return !form.anonymous || powerLevel >= 50;
 }
 
+/** Room-level create / publish / save_draft (same as /form new). */
+export function canPublishForms(powerLevel: number): boolean {
+  return powerLevel >= 50;
+}
+
+/** Mutate an existing form: creator or moderator (PL ≥ 50). */
+export function canManageForm(
+  form: Pick<FormDefinition, "creatorId">,
+  senderId: string,
+  powerLevel: number,
+): boolean {
+  return senderId === form.creatorId || powerLevel >= 50;
+}
+
+/** Form must belong to the acting room (cross-room id smuggling). */
+export function isFormInRoom<T extends Pick<FormDefinition, "roomId">>(
+  form: T | null | undefined,
+  roomId: string,
+): form is T {
+  return !!form && form.roomId === roomId;
+}
+
 export function normalizeBuilderFields(fields: FormField[]): FormField[] {
+  if (fields.length > MAX_FIELDS_PER_FORM) {
+    throw new Error(
+      `formspace storage limit exceeded (max ${MAX_FIELDS_PER_FORM} fields per form)`,
+    );
+  }
   return fields.map((field, index) => ({
     id: field.id || `f_${index + 1}`,
     type: field.type,

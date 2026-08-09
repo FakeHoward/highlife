@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 
 import {
@@ -177,7 +178,16 @@ async function runBot(): Promise<void> {
     },
   });
 
-  const store = new FormSpaceStore(dataDir);
+  const anonymitySalt = process.env.FORMSPACE_ANONYMITY_SALT?.trim();
+  if (!anonymitySalt) {
+    console.warn(
+      "FORMSPACE_ANONYMITY_SALT unset; using ephemeral salt — anonymous identity hashes will not survive restart",
+    );
+  }
+  const store = new FormSpaceStore(
+    dataDir,
+    anonymitySalt || randomBytes(32).toString("hex"),
+  );
   const router = createFormSpaceRouter({ bot, store, miniAppUrl });
 
   const dispatcher = new Dispatcher({

@@ -16,9 +16,12 @@ import {
   mainMenuKeyboard,
 } from "./cards.js";
 import {
+  canManageForm,
+  canPublishForms,
   canViewRawAnswers,
   exportCsv,
   formatPrivateAnswers,
+  isFormInRoom,
   normalizeBuilderFields,
   publicSummary,
   rsvpAnswers,
@@ -234,7 +237,7 @@ export function createFormSpaceRouter(input: {
 
       if (sub === "new") {
         const kind = isKind(rest[0] ?? "survey") ? (rest[0] as FormKind) : "survey";
-        if (ctx.powerLevelOf() < 50) {
+        if (!canPublishForms(ctx.powerLevelOf())) {
           await ctx.reply("Need power level ≥ 50 to create forms.");
           return;
         }
@@ -258,11 +261,11 @@ export function createFormSpaceRouter(input: {
 
       if (sub === "close") {
         const form = store.getForm(arg);
-        if (!form || form.roomId !== ctx.roomId) {
+        if (!isFormInRoom(form, ctx.roomId)) {
           await ctx.reply("Unknown form id.");
           return;
         }
-        if (ctx.senderId !== form.creatorId && ctx.powerLevelOf() < 50) {
+        if (!canManageForm(form, ctx.senderId, ctx.powerLevelOf())) {
           await ctx.reply("Only the creator or a moderator can close this form.");
           return;
         }
@@ -316,8 +319,12 @@ export function createFormSpaceRouter(input: {
       if (sub === "policy") {
         const [formId, policy] = rest;
         const form = store.getForm(formId ?? "");
-        if (!form || form.roomId !== ctx.roomId) {
+        if (!isFormInRoom(form, ctx.roomId)) {
           await ctx.reply("Usage: /form policy <id> public|private|moderators");
+          return;
+        }
+        if (!canManageForm(form, ctx.senderId, ctx.powerLevelOf())) {
+          await ctx.reply("Only the creator or a moderator can change policy.");
           return;
         }
         if (policy !== "public" && policy !== "private" && policy !== "moderators") {
@@ -332,8 +339,12 @@ export function createFormSpaceRouter(input: {
       if (sub === "anonymous") {
         const [formId, flag] = rest;
         const form = store.getForm(formId ?? "");
-        if (!form || form.roomId !== ctx.roomId) {
+        if (!isFormInRoom(form, ctx.roomId)) {
           await ctx.reply("Usage: /form anonymous <id> on|off");
+          return;
+        }
+        if (!canManageForm(form, ctx.senderId, ctx.powerLevelOf())) {
+          await ctx.reply("Only the creator or a moderator can change anonymity.");
           return;
         }
         store.setAnonymous(form.id, (flag ?? "").toLowerCase() === "on");
@@ -345,8 +356,12 @@ export function createFormSpaceRouter(input: {
         const [formId, ...deadlineParts] = rest;
         const form = store.getForm(formId ?? "");
         const deadlineMs = parseRelativeDeadline(deadlineParts.join(" "));
-        if (!form || form.roomId !== ctx.roomId || deadlineMs == null) {
+        if (!isFormInRoom(form, ctx.roomId) || deadlineMs == null) {
           await ctx.reply("Usage: /form deadline <id> <ISO|15m|2h|1d>");
+          return;
+        }
+        if (!canManageForm(form, ctx.senderId, ctx.powerLevelOf())) {
+          await ctx.reply("Only the creator or a moderator can set a deadline.");
           return;
         }
         const remindAtMs = Math.max(Date.now() + 5_000, deadlineMs - 60_000);
@@ -375,7 +390,7 @@ export function createFormSpaceRouter(input: {
       }
 
       if (sub === "target") {
-        if (ctx.powerLevelOf() < 50) {
+        if (!canPublishForms(ctx.powerLevelOf())) {
           await ctx.reply("Need power level ≥ 50.");
           return;
         }
@@ -389,6 +404,10 @@ export function createFormSpaceRouter(input: {
       }
 
       if (sub === "onboard" && rest[0] === "auto") {
+        if (!canPublishForms(ctx.powerLevelOf())) {
+          await ctx.reply("Need power level ≥ 50.");
+          return;
+        }
         const enabled = (rest[1] ?? "").toLowerCase() === "on";
         store.setOnboardAuto(ctx.roomId, enabled);
         await ctx.reply(`Onboarding auto → ${enabled ? "on" : "off"}`);
@@ -455,7 +474,7 @@ export function createFormSpaceRouter(input: {
       answers?: Record<string, unknown>;
     }>();
     const form = store.getForm(data.formId ?? "");
-    if (!form || form.status !== "open") {
+    if (!form || form.status !== "open" || !isFormInRoom(form, ctx.roomId)) {
       await ctx.state.clear();
       await ctx.reply("Form is no longer open.");
       return;
@@ -505,7 +524,7 @@ export function createFormSpaceRouter(input: {
     const action = parts[1];
 
     if (action === "new" && parts[2] && isKind(parts[2])) {
-      if (ctx.powerLevelOf() < 50) {
+      if (!canPublishForms(ctx.powerLevelOf())) {
         await ctx.answerCallback({ text: "Need moderator power", alert: true });
         return;
       }
@@ -515,6 +534,10 @@ export function createFormSpaceRouter(input: {
     }
 
     if (action === "template" && parts[2] && isKind(parts[2])) {
+      if (!canPublishForms(ctx.powerLevelOf())) {
+        await ctx.answerCallback({ text: "Need moderator power", alert: true });
+        return;
+      }
       await ctx.answerCallback({ text: "Publishing template" });
       await publishFromTemplate(ctx, parts[2]);
       return;
@@ -523,7 +546,7 @@ export function createFormSpaceRouter(input: {
     if (action === "chat" && parts[2]) {
       await ctx.answerCallback({ text: "Chat mode" });
       const form = store.getForm(parts[2]);
-      if (!form || form.status !== "open") {
+      if (!form || form.status !== "open" || !isFormInRoom(form, ctx.roomId)) {
         await ctx.reply("Form is closed.");
         return;
       }
@@ -537,7 +560,7 @@ export function createFormSpaceRouter(input: {
 
     if (action === "results" && parts[2]) {
       const form = store.getForm(parts[2]);
-      if (!form) {
+      if (!isFormInRoom(form, ctx.roomId)) {
         await ctx.answerCallback({ text: "Missing form", alert: true });
         return;
       }
@@ -549,7 +572,7 @@ export function createFormSpaceRouter(input: {
     if (action === "rsvp" && parts[2] && parts[3]) {
       const form = store.getForm(parts[2]);
       const choice = parts[3] as RsvpChoice;
-      if (!form || form.status !== "open" || form.kind !== "rsvp") {
+      if (!form || form.status !== "open" || form.kind !== "rsvp" || !isFormInRoom(form, ctx.roomId)) {
         await ctx.answerCallback({ text: "RSVP closed", alert: true });
         return;
       }
@@ -579,7 +602,7 @@ export function createFormSpaceRouter(input: {
         await ctx.answerCallback({ text: "Missing form", alert: true });
         return;
       }
-      if (ctx.powerLevelOf() < 50 && ctx.senderId !== form.creatorId) {
+      if (!canManageForm(form, ctx.senderId, ctx.powerLevelOf())) {
         await ctx.answerCallback({ text: "Moderators only", alert: true });
         return;
       }
@@ -629,6 +652,10 @@ export function createFormSpaceRouter(input: {
     }
 
     if (payload.action === "publish" || payload.action === "save_draft") {
+      if (!canPublishForms(ctx.powerLevelOf())) {
+        await ctx.answerMiniAppQuery("Need power level ≥ 50 to create forms.");
+        return;
+      }
       const draft = payload as BuilderDraft;
       if (!isKind(draft.kind)) {
         await ctx.answerMiniAppQuery("Invalid form kind");
@@ -670,7 +697,7 @@ export function createFormSpaceRouter(input: {
     if (payload.action === "submit" || payload.action === "rsvp") {
       const body = payload as FillerPayload;
       const form = store.getForm(body.formId);
-      if (!form || form.status !== "open") {
+      if (!form || form.status !== "open" || !isFormInRoom(form, ctx.roomId)) {
         await ctx.answerMiniAppQuery("Form is closed");
         return;
       }

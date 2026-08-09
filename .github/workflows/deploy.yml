@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: main
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -61,7 +61,7 @@ jobs:
           fi
           test "$missing" = 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
 
@@ -81,7 +81,7 @@ jobs:
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python scripts/validate-infrastructure.py
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: npm
@@ -90,6 +90,7 @@ jobs:
         env:
           VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net
           VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
+          VITE_MINIAPP_ALLOWED_ORIGINS: https://testhighlife.strangled.net
           VITE_PUSH_GATEWAY_URL: ${{ secrets.VITE_PUSH_GATEWAY_URL }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
@@ -115,7 +116,7 @@ jobs:
           npm run build --workspace @highlife/web
           npm run build --workspace @highlife/miniapp
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: "3.41.4"
           channel: stable
@@ -327,7 +328,7 @@ jobs:
           ls -lh out/deploy-bundle.tgz
 
       - name: Upload deployment bundle
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -343,7 +344,7 @@ jobs:
           rm: false
 
       - name: Start fresh Synapse stack
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}

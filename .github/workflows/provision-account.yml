@@ -24,17 +24,21 @@ jobs:
     environment: main
     steps:
       - name: Create Matrix account on production
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          LOCALPART: ${{ inputs.localpart }}
+          PASSWORD: ${{ inputs.password }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           password: ${{ secrets.DEPLOY_PASSWORD }}
           port: 22
+          envs: LOCALPART,PASSWORD
           script: |
             set -eu
             cd /opt/highlife
-            localpart='${{ inputs.localpart }}'
-            password='${{ inputs.password }}'
+            localpart="${LOCALPART}"
+            password="${PASSWORD}"
             case "$localpart" in
               *[!a-zA-Z0-9._=-]*|"")
                 echo "Invalid localpart" >&2
