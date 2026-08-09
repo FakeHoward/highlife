@@ -3,10 +3,25 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { MiniAppAuthError, type MiniAppServer } from "aiomatrix";
 import { assertMiniAppPowerLive } from "aiomatrix/miniapp";
 
-import { canViewRawAnswers, countRsvp, publicSummary } from "./engine.js";
+import { canViewRawAnswers, countRsvp, isFormInRoom, publicSummary } from "./engine.js";
 import type { FormSpaceStore } from "./store.js";
 
 const DEFAULT_CORS_ORIGIN = "https://testhighlife.strangled.net";
+
+const HTTP_RATE_LIMIT = 60;
+const HTTP_RATE_WINDOW_MS = 60_000;
+const HTTP_PUBLIC_GET_LIMIT = 30;
+const HTTP_PUBLIC_GET_WINDOW_MS = 60_000;
+
+export type MiniAppRateLimitOptions = {
+  limit?: number;
+  windowMs?: number;
+  publicGetLimit?: number;
+  publicGetWindowMs?: number;
+  now?: () => number;
+};
+
+type RateBucket = { count: number; windowStart: number };
 
 function readUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://localhost");
@@ -50,6 +65,50 @@ function sendJson(
   res.end(payload);
 }
 
+function clientIp(req: IncomingMessage): string {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.trim()) {
+    return xff.split(",")[0]!.trim();
+  }
+  if (Array.isArray(xff) && xff[0]) {
+    return xff[0].split(",")[0]!.trim();
+  }
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+function rateLimitKey(req: IncomingMessage, includeAuthPrefix: boolean): string {
+  const ip = clientIp(req);
+  if (!includeAuthPrefix) return ip;
+  const auth = req.headers.authorization;
+  if (typeof auth === "string" && auth.length > 0) {
+    return `${ip}|${auth.slice(0, 24)}`;
+  }
+  return ip;
+}
+
+function isPublicFormSchemaGet(req: IncomingMessage, url: URL): boolean {
+  if (req.method !== "GET") return false;
+  const parts = url.pathname.split("/").filter(Boolean);
+  return parts.length === 2 && parts[0] === "forms";
+}
+
+function takeToken(
+  buckets: Map<string, RateBucket>,
+  key: string,
+  limit: number,
+  windowMs: number,
+  nowMs: number,
+): boolean {
+  let bucket = buckets.get(key);
+  if (!bucket || nowMs - bucket.windowStart >= windowMs) {
+    bucket = { count: 0, windowStart: nowMs };
+    buckets.set(key, bucket);
+  }
+  if (bucket.count >= limit) return false;
+  bucket.count += 1;
+  return true;
+}
+
 export function wrapMiniAppHandler(
   miniServer: MiniAppServer,
   store: FormSpaceStore,
@@ -60,10 +119,39 @@ export function wrapMiniAppHandler(
     | { membership: string | null; powerLevel: number | null }
     | Promise<{ membership: string | null; powerLevel: number | null } | null>
     | null,
+  rateLimit?: MiniAppRateLimitOptions,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   const inner = miniServer.nodeHandler();
+  const buckets = new Map<string, RateBucket>();
+  const limit = rateLimit?.limit ?? HTTP_RATE_LIMIT;
+  const windowMs = rateLimit?.windowMs ?? HTTP_RATE_WINDOW_MS;
+  const publicGetLimit = rateLimit?.publicGetLimit ?? HTTP_PUBLIC_GET_LIMIT;
+  const publicGetWindowMs = rateLimit?.publicGetWindowMs ?? HTTP_PUBLIC_GET_WINDOW_MS;
+  const nowFn = rateLimit?.now ?? Date.now;
+
   return (req, res) => {
     const url = readUrl(req);
+    const publicSchema = isPublicFormSchemaGet(req, url);
+    const allowed = publicSchema
+      ? takeToken(
+          buckets,
+          `pub:${rateLimitKey(req, false)}`,
+          publicGetLimit,
+          publicGetWindowMs,
+          nowFn(),
+        )
+      : takeToken(
+          buckets,
+          `all:${rateLimitKey(req, true)}`,
+          limit,
+          windowMs,
+          nowFn(),
+        );
+    if (!allowed) {
+      sendJson(res, 429, { error: "rate_limited" }, req);
+      return;
+    }
+
     if (req.method === "OPTIONS") {
       sendJson(res, 204, {}, req);
       return;
@@ -82,6 +170,10 @@ export function wrapMiniAppHandler(
         void (async () => {
           try {
             const session = miniServer.verify(req.headers.authorization);
+            if (!session.roomId || !isFormInRoom(form, session.roomId)) {
+              sendJson(res, 403, { error: "forbidden" }, req);
+              return;
+            }
             let power =
               typeof session.powerLevel === "number" ? session.powerLevel : 0;
             if (session.userId !== form.creatorId && form.policy !== "public") {

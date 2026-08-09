@@ -39,6 +39,66 @@ export function isSafeWebUrl(value: string, allowHttp = false): boolean {
   }
 }
 
+/**
+ * Origins allowed for MiniApp iframes. Isolation for scripts+same-origin sandbox
+ * relies on this allowlist (see MiniAppSurface). Sources:
+ * - `VITE_MINIAPP_ALLOWED_ORIGINS` (comma-separated URLs or origins)
+ * - origin of `VITE_DEFAULT_HOMESERVER` (prod miniapp is same-host under /miniapp/)
+ * - localhost MiniApp vite port in DEV
+ */
+export function miniAppAllowedOrigins(env: {
+  allowedOrigins?: string;
+  homeserver?: string;
+  dev?: boolean;
+} = {}): string[] {
+  const configured = env.allowedOrigins
+    ?? (import.meta.env.VITE_MINIAPP_ALLOWED_ORIGINS as string | undefined);
+  const homeserver = env.homeserver
+    ?? (import.meta.env.VITE_DEFAULT_HOMESERVER as string | undefined);
+  const dev = env.dev ?? Boolean(import.meta.env.DEV);
+  const origins = new Set<string>();
+
+  function add(raw: string | undefined) {
+    const value = raw?.trim();
+    if (!value) return;
+    for (const part of value.split(",")) {
+      const item = part.trim();
+      if (!item) continue;
+      try {
+        const withScheme = item.includes("://") ? item : `https://${item}`;
+        origins.add(new URL(withScheme).origin);
+      } catch {
+        // ignore malformed entries
+      }
+    }
+  }
+
+  add(configured);
+  add(homeserver);
+  if (dev) {
+    add("http://localhost:4173");
+    add("http://127.0.0.1:4173");
+  }
+  return [...origins];
+}
+
+/** True when `url` is https (or http in DEV) and its origin is on the MiniApp allowlist. */
+export function isAllowedMiniAppUrl(
+  url: string,
+  env?: Parameters<typeof miniAppAllowedOrigins>[0],
+): boolean {
+  const allowHttp = env?.dev ?? Boolean(import.meta.env.DEV);
+  if (!isSafeWebUrl(url, allowHttp)) return false;
+  try {
+    const origin = new URL(url).origin;
+    const allowed = miniAppAllowedOrigins(env);
+    if (allowed.length === 0) return false;
+    return allowed.includes(origin);
+  } catch {
+    return false;
+  }
+}
+
 /** Pull signed MiniApp initData from a launch URL fragment when present. */
 export function extractMiniAppInitData(url: string): string | null {
   try {

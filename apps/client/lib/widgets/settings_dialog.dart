@@ -326,6 +326,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
     final latest = result.latest!;
     final download = latest.assetForPlatform();
+    final trustedDownload = download != null &&
+            isTrustedReleaseAssetUrl(
+              download,
+              latestJsonUrl: kDefaultLatestJsonUrl,
+            )
+        ? download
+        : null;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -345,16 +352,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
             onPressed: () => Navigator.pop(context),
             label: Text(s.updateLater),
           ),
-          if (download != null)
+          if (trustedDownload != null)
             HlButton.primary(
               onPressed: () async {
                 await launchUrl(
-                  Uri.parse(download),
+                  Uri.parse(trustedDownload),
                   mode: LaunchMode.externalApplication,
                 );
                 if (context.mounted) Navigator.pop(context);
               },
-              label: Text(s.downloadUpdate),            ),
+              label: Text(s.downloadUpdate),
+            ),
         ],
       ),
     );

@@ -148,6 +148,22 @@ let cachedSecretStorageKey: { keyId: string; privateKey: Uint8Array<ArrayBuffer>
 let pendingIncomingVerification: VerificationRequest | null = null;
 const verificationListeners = new Set<() => void>();
 
+/**
+ * Zero and drop in-memory secret-storage / recovery key material.
+ * Keys are never written to sessionStorage/localStorage; they live only in
+ * these module-scoped buffers for the tab lifetime until logout or explicit clear.
+ */
+export function clearRecoveryKeyCache(): void {
+  if (cachedSecretStorageKey) {
+    cachedSecretStorageKey.privateKey.fill(0);
+    cachedSecretStorageKey = null;
+  }
+  for (const key of secretStorageKeys.values()) {
+    key.fill(0);
+  }
+  secretStorageKeys.clear();
+}
+
 function publishVerification(): void {
   verificationListeners.forEach((listener) => listener());
 }
@@ -516,8 +532,7 @@ export async function logout(): Promise<void> {
   }
   client = null;
   pendingIncomingVerification = null;
-  cachedSecretStorageKey = null;
-  secretStorageKeys.clear();
+  clearRecoveryKeyCache();
   await clearSession();
   if (userId && deviceId) {
     await clearCryptoDatabases(userId, deviceId);
@@ -1155,12 +1170,19 @@ export async function getKeyBackupDetails(): Promise<KeyBackupDetails> {
   return { serverInfo, activeVersion, secretStorageReady, status };
 }
 
+/**
+ * Decode a recovery key into tab-lifetime memory only (Map + cachedSecretStorageKey).
+ * Does not persist to sessionStorage/localStorage. The caller's plaintext string is
+ * not stored; prefer clearing any UI paste buffer after a successful call.
+ */
 export function rememberRecoveryKey(recoveryKey: string): string {
-  const privateKey = decodeRecoveryKey(recoveryKey.trim());
+  const trimmed = recoveryKey.trim();
+  const privateKey = decodeRecoveryKey(trimmed);
   const key = privateKey as Uint8Array<ArrayBuffer>;
   cachedSecretStorageKey = { keyId: "recovery", privateKey: key };
   secretStorageKeys.set("recovery", key);
-  return encodeRecoveryKey(privateKey) ?? recoveryKey.trim();
+  // Re-encode so callers can drop the original paste string from React state.
+  return encodeRecoveryKey(privateKey) ?? trimmed;
 }
 
 export async function setupRecoveryAndKeyBackup(): Promise<{ recoveryKey: string }> {

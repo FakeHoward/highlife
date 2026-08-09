@@ -23,8 +23,8 @@ jobs:
     name: Test / typecheck / build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -38,4 +38,5 @@ jobs:
         run: npm run build --workspace @highlife/web
         env:
           VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
+          VITE_MINIAPP_ALLOWED_ORIGINS: https://testhighlife.strangled.net
           VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net

@@ -51,6 +51,54 @@ test("store enforces one response identity and join queue", () => {
   }
 });
 
+test("store rejects responses over maxResponsesPerForm", () => {
+  const dir = mkdtempSync(join(tmpdir(), "formspace-cap-"));
+  try {
+    const store = new FormSpaceStore(dir, "test-salt", { maxResponsesPerForm: 2 });
+    const form = store.upsertForm({
+      roomId: "!room:example.org",
+      creatorId: "@mod:example.org",
+      kind: "survey",
+      title: "Cap",
+      description: "",
+      fields: seedFields("survey"),
+      policy: "public",
+      anonymous: false,
+      oneResponse: true,
+      status: "open",
+      deadlineMs: null,
+      remindAtMs: null,
+      targetRoomId: null,
+      cardEventId: null,
+    });
+    store.saveResponse({
+      formId: form.id,
+      userId: "@a:example.org",
+      answers: { [form.fields[0]!.id]: "one" },
+      anonymous: false,
+    });
+    store.saveResponse({
+      formId: form.id,
+      userId: "@b:example.org",
+      answers: { [form.fields[0]!.id]: "two" },
+      anonymous: false,
+    });
+    assert.throws(
+      () =>
+        store.saveResponse({
+          formId: form.id,
+          userId: "@c:example.org",
+          answers: { [form.fields[0]!.id]: "three" },
+          anonymous: false,
+        }),
+      /max 2 responses per form/,
+    );
+    assert.equal(store.responsesFor(form.id).length, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("engine validates fields and exports csv", () => {
   const fields = seedFields("survey");
   const form = {
