@@ -44,7 +44,11 @@ import {
   type RoomMemberInfo,
   type SasChallenge,
 } from "../matrix/service";
-import { extractMiniAppInitData, type MiniAppCard } from "../protocol/aiomatrix";
+import {
+  extractMiniAppInitData,
+  isAllowedMiniAppUrl,
+  type MiniAppCard,
+} from "../protocol/aiomatrix";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -429,6 +433,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <button className="button" type="button" disabled={!recoveryKeyInput.trim() || cryptoBusy} onClick={() => {
           void runCrypto(async () => {
             rememberRecoveryKey(recoveryKeyInput);
+            setRecoveryKeyInput("");
             try {
               const result = await restoreFromKeyBackup();
               setCryptoMessage(t("settings.restored", result));
@@ -442,6 +447,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             <strong>{t("settings.newRecoveryKey")}</strong>
             <code>{newRecoveryKey}</code>
             <button className="button" type="button" onClick={() => void navigator.clipboard.writeText(newRecoveryKey)}>{t("settings.copyKey")}</button>
+            <button className="button" type="button" onClick={() => setNewRecoveryKey(null)}>{t("settings.dismissRecoveryKey")}</button>
           </div>
         )}
         {cryptoMessage && <p className="muted small" role="status">{cryptoMessage}</p>}
@@ -796,10 +802,16 @@ export function ThreadSurface({ roomId, root, onClose }: {
 export function MiniAppSurface({ card, item, onClose }: { card: MiniAppCard; item: TimelineItem; onClose: () => void }) {
   const { t } = useI18n();
   const frame = useRef<HTMLIFrameElement>(null);
-  const targetOrigin = useMemo(() => new URL(card.url).origin, [card.url]);
+  const trusted = useMemo(() => isAllowedMiniAppUrl(card.url), [card.url]);
+  const targetOrigin = useMemo(() => {
+    if (!trusted) return null;
+    try { return new URL(card.url).origin; } catch { return null; }
+  }, [card.url, trusted]);
   useEffect(() => {
+    const origin = targetOrigin;
+    if (!origin) return;
     function receive(event: MessageEvent) {
-      if (event.source !== frame.current?.contentWindow || event.origin !== targetOrigin || typeof event.data !== "object" || !event.data) return;
+      if (event.source !== frame.current?.contentWindow || event.origin !== origin || typeof event.data !== "object" || !event.data) return;
       const data = event.data as { type?: string; payload?: { data?: string } };
       if (data.type === "close") onClose();
       if (data.type === "sendData" && typeof data.payload?.data === "string") {
@@ -820,7 +832,7 @@ export function MiniAppSurface({ card, item, onClose }: { card: MiniAppCard; ite
               startParam: card.startParam,
             },
           },
-        }, targetOrigin);
+        }, origin);
       }
     }
     window.addEventListener("message", receive);
@@ -835,14 +847,24 @@ export function MiniAppSurface({ card, item, onClose }: { card: MiniAppCard; ite
           <button className="icon-button" onClick={onClose} aria-label={t("common.close")}>×</button>
         </header>
         <div className="modal-body">
-          <iframe
-            ref={frame}
-            className="mini-frame"
-            src={card.url}
-            title={card.title}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            allow="clipboard-write; fullscreen"
-          />
+          {!trusted || !targetOrigin ? (
+            <div className="capability-error">
+              <strong>{t("timeline.miniAppBlockedTitle")}</strong>
+              <p>{t("timeline.miniAppBlockedBody")}</p>
+            </div>
+          ) : (
+            // scripts+same-origin is required for the local MiniApp bridge (postMessage
+            // + same-origin storage). That combination weakens iframe sandbox isolation;
+            // trust instead comes from isAllowedMiniAppUrl (homeserver / VITE_MINIAPP_ALLOWED_ORIGINS).
+            <iframe
+              ref={frame}
+              className="mini-frame"
+              src={card.url}
+              title={card.title}
+              sandbox="allow-scripts allow-same-origin allow-forms"
+              allow="clipboard-write; fullscreen"
+            />
+          )}
         </div>
       </section>
     </div>
