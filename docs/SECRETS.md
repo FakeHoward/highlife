@@ -36,9 +36,13 @@ off the test domain.
     you out of password SSH.
 - `DEPLOY_PUBLIC_IP`: public IPv4 address advertised by coturn.
 - `POSTGRES_PASSWORD`: password for the `synapse` PostgreSQL role.
-- `SYNAPSE_REGISTRATION_SECRET`: Synapse shared registration secret used only
-  by the private account bootstrap helper (bot/demo). Public signup is **off**
-  by default (`SYNAPSE_ENABLE_REGISTRATION=false`).
+- `SYNAPSE_REGISTRATION_SECRET`: retained Synapse shared-secret field (legacy
+  helper; account creation is owned by MAS after cutover).
+- `MAS_POSTGRES_PASSWORD`: password for the dedicated PostgreSQL role/database
+  `mas` used by Matrix Authentication Service.
+- `MAS_MATRIX_SECRET`: high-entropy shared secret between Synapse and MAS
+  (`matrix.secret` / `matrix_authentication_service.secret`). Generate with
+  `openssl rand -hex 64`. Do not rotate without planning a MAS/Synapse re-pair.
 - `BOT_MATRIX_PASSWORD`: password for
   `@highlifebot:testhighlife.strangled.net`.
 - `BOT_CRYPTO_STORE_PASSPHRASE`: stable random passphrase encrypting the bot's
@@ -50,10 +54,11 @@ off the test domain.
 - `TURN_SHARED_SECRET`: shared by Synapse and coturn for expiring TURN
   credentials.
 
-Required set: host, user, public IP, the eleven stack secrets above, plus
-**either** `DEPLOY_PASSWORD` or `DEPLOY_SSH_KEY` (or both). Password SSH for
-humans on the VPS is never disabled by these workflows.
-`GITHUB_TOKEN` is supplied by Actions and is not a manually configured secret.
+Required set: host, user, public IP, the stack secrets above (including
+`MAS_POSTGRES_PASSWORD` and `MAS_MATRIX_SECRET`), plus **either**
+`DEPLOY_PASSWORD` or `DEPLOY_SSH_KEY` (or both). Password SSH for humans on
+the VPS is never disabled by these workflows. `GITHUB_TOKEN` is supplied by
+Actions and is not a manually configured secret.
 
 ## Optional secrets / env
 
@@ -66,24 +71,18 @@ humans on the VPS is never disabled by these workflows.
   `https://testhighlife.strangled.net`): comma-separated allowlist for FormSpace
   HTTP `Access-Control-Allow-Origin`. Request `Origin` is reflected only when it
   matches this list.
-- `SYNAPSE_ENABLE_REGISTRATION` (optional; default `false` in production): set
-  to `true` only when intentionally opening public signup on the HS.
-- **Synapse OIDC** (optional; all three required together). Deploy writes them
-  into `/opt/highlife/.env`; `render-synapse-config.py` emits `oidc_providers`
-  when present:
-  - `OIDC_ISSUER` — IdP issuer URL (may end with `/`)
-  - `OIDC_CLIENT_ID`
-  - `OIDC_CLIENT_SECRET`
-  - Optional: `OIDC_IDP_ID` (default `oidc`), `OIDC_IDP_NAME` (default `OIDC`),
-    `OIDC_SCOPES` (space-separated; default `openid profile email`),
-    `OIDC_LOCALPART_TEMPLATE`, `OIDC_DISPLAY_NAME_TEMPLATE`
-  Register the IdP redirect URI as
-  `https://<MATRIX_DOMAIN>/_synapse/client/oidc/callback`.
-  - `ENABLE_PUSH` (optional; `true`/`1`): start Compose profile `push` (Sygnal)
-    on deploy and expect DNS `push.<MATRIX_DOMAIN>`. Deploy auto-sets
-    `VITE_PUSH_GATEWAY_URL=https://push.<domain>/_matrix/push/v1/notify` when
-    this is true (unless you override the secret).
-  - **Web Push / Matrix push gateway** (pair with `ENABLE_PUSH`):
+- `SYNAPSE_ENABLE_REGISTRATION` (optional; default `true` after MAS cutover):
+  toggles MAS password self-registration (no email required on this demo). Set
+  `false` to close public signup.
+- **Upstream SSO** belongs in Matrix Authentication Service, not Synapse
+  `oidc_providers`. Edit the generated MAS config / add an `upstream_oauth2`
+  overlay if you need an external IdP; register the IdP redirect against
+  `https://auth.<MATRIX_DOMAIN>/...` per MAS docs.
+- `ENABLE_PUSH` (optional; `true`/`1`): start Compose profile `push` (Sygnal)
+  on deploy and expect DNS `push.<MATRIX_DOMAIN>`. Deploy auto-sets
+  `VITE_PUSH_GATEWAY_URL=https://push.<domain>/_matrix/push/v1/notify` when
+  this is true (unless you override the secret).
+- **Web Push / Matrix push gateway** (pair with `ENABLE_PUSH`):
   - `SYGNAL_VAPID_PRIVATE_KEY` — PKCS#8 PEM private key for Sygnal webpush
     (`server/sygnal-vapid.pem` on the host). Required when `ENABLE_PUSH=true`.
   - `VITE_VAPID_PUBLIC_KEY` — matching uncompressed P-256 public key, base64url
@@ -118,6 +117,7 @@ Generate independent values locally; never paste the examples into GitHub:
 ```bash
 openssl rand -base64 36 | tr -d '\n'
 openssl rand -hex 32
+openssl rand -hex 64   # MAS_MATRIX_SECRET
 # VAPID for Sygnal + web push (Node):
 node -e "const c=require('crypto'),fs=require('fs');const {privateKey,publicKey}=c.generateKeyPairSync('ec',{namedCurve:'prime256v1'});const pem=privateKey.export({type:'pkcs8',format:'pem'});const u=publicKey.export({type:'spki',format:'der'}).subarray(-65);fs.writeFileSync('sygnal-vapid.pem',pem);console.log(u.toString('base64url'));"
 # Put PEM into SYGNAL_VAPID_PRIVATE_KEY; printed line into VITE_VAPID_PUBLIC_KEY.
@@ -155,13 +155,16 @@ Before the first deploy, create DNS `A` records pointing to
 `DEPLOY_PUBLIC_IP` (currently `178.215.236.95`):
 
 - `testhighlife.strangled.net` — present
+- `auth.testhighlife.strangled.net` — **required** for Matrix Authentication
+  Service / Element X (`A` → `178.215.236.95`)
 - `call.testhighlife.strangled.net` — **live** (`A` → `178.215.236.95`)
 - `rtc.testhighlife.strangled.net` — **live** (`A` → `178.215.236.95`)
 - `push.testhighlife.strangled.net` — **optional** (only when enabling Compose
   profile `push` for on-host Sygnal)
 
-`call` / `rtc` DNS is live. Re-run `Deploy HighLife` after stack changes so
-Caddy refreshes certs; then smoke two-client MatrixRTC and federation tester.
+`auth` / `call` / `rtc` DNS must resolve before deploy so Caddy can finish
+ACME. Re-run `Deploy HighLife` after stack changes; then smoke Element X
+login/signup, two-client MatrixRTC, and the federation tester.
 
 Only publish `AAAA` records if the VPS, Docker port publishing, firewall, and
 LiveKit media paths are all working over that IPv6 address. Remove stale
@@ -184,36 +187,40 @@ Allow inbound traffic to the VPS:
 - UDP `50000-50100` for LiveKit media.
 - UDP `49160-49200` for coturn relayed media.
 
-Do not expose PostgreSQL `5432`, Redis `6379`, Synapse `8008`, LiveKit
-signalling `7880`, JWT service `8080`, or Sygnal `5000`; those stay on the
-Compose network. Allow normal outbound DNS, HTTPS/federation TCP `443`,
-STUN/UDP, and NTP.
+Do not expose PostgreSQL `5432`, Redis `6379`, Synapse `8008`, MAS `8080`,
+LiveKit signalling `7880`, JWT service `8080`, or Sygnal `5000`; those stay
+on the Compose network (public MAS traffic terminates on Caddy `:443`).
+Allow normal outbound DNS, HTTPS/federation TCP `443`, STUN/UDP, and NTP.
 
 ## Post-deploy checks
 
 1. Confirm all services are running with
    `docker compose -f /opt/highlife/docker-compose.prod.yml ps`.
-2. Confirm valid certificates for all three hostnames (plus `push.` if enabled).
+2. Confirm valid certificates for `auth.` / `call.` / `rtc.` (plus `push.` if
+   enabled).
 3. Fetch Matrix client versions and federation version endpoints.
-4. Verify both well-known documents and the
-   `org.matrix.msc4143.rtc_foci` entry.
-5. Load the React client at `/` and Flutter at `/flutter/`; confirm React can
+4. Verify both well-known documents, `org.matrix.msc4143.rtc_foci`, and
+   `org.matrix.msc2965.authentication` pointing at
+   `https://auth.testhighlife.strangled.net/`.
+5. Confirm `https://auth…/.well-known/openid-configuration` and homeserver
+   `auth_metadata` advertise that issuer.
+6. Load the React client at `/` and Flutter at `/flutter/`; confirm React can
    embed `https://call.testhighlife.strangled.net`.
-6. Confirm the primary response sends a real CSP (`default-src 'self'`, etc.)
+7. Confirm the primary response sends a real CSP (`default-src 'self'`, etc.)
    and delegates camera/microphone only to the trusted call origin; the call
    response has matching `frame-ancestors` and no `X-Frame-Options`. Deploy
    smoke asserts primary CSP contains `default-src`.
-7. Confirm public registration is closed by default (`/register` → `403`),
-   unless you intentionally set `SYNAPSE_ENABLE_REGISTRATION=true` (then
-   expect `200` or UIA `401`). Confirm `highlifebot` / `demo` can log in.
-8. Run the Matrix.org Federation Tester for
+8. Confirm MAS registration/login (Element X or compat `/register` → `200` /
+   UIA `401` when open; `403` when `SYNAPSE_ENABLE_REGISTRATION=false`).
+   Confirm `highlifebot` / `demo` can log in through the public HS URL.
+9. Run the Matrix.org Federation Tester for
    `testhighlife.strangled.net`.
-9. Make an Element Call between separate networks and verify UDP media,
+10. Make an Element Call between separate networks and verify UDP media,
    then test a restricted network for TCP/TURN fallback.
-10. Back up PostgreSQL, Synapse media, and bot volumes with
+11. Back up PostgreSQL, Synapse media, MAS, and bot volumes with
    `scripts/backup-highlife.sh` (cron on the VPS). Retain the old Conduit
    volume during the acceptance period; it is not migrated or deleted by the
    workflow.
-11. Verify the HighLife bot joins and decrypts an encrypted room after a
+12. Verify the HighLife bot joins and decrypts an encrypted room after a
    **routine redeploy** (crypto store preserved) and after a deliberate
    `Recover bot` wipe when needed.

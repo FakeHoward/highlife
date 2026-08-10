@@ -29,6 +29,8 @@ jobs:
         env:
           POSTGRES_PASSWORD: validation-only
           SYNAPSE_REGISTRATION_SECRET: validation-only
+          MAS_POSTGRES_PASSWORD: validation-only
+          MAS_MATRIX_SECRET: validation-only-mas-matrix-secret-32b
           BOT_MATRIX_PASSWORD: validation-only
           LIVEKIT_KEY: validation-key
           LIVEKIT_SECRET: validation-only
@@ -39,26 +41,30 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python scripts/validate-infrastructure.py
-          python -m py_compile scripts/validate-infrastructure.py server/render-synapse-config.py
-          shellcheck server/bootstrap-bot.sh server/generate-synapse-config.sh
+          python -m py_compile scripts/validate-infrastructure.py \
+            server/render-synapse-config.py server/render-mas-config.py
+          shellcheck server/bootstrap-bot.sh server/generate-synapse-config.sh \
+            server/generate-mas-config.sh server/init-mas-db.sh server/migrate-syn2mas.sh
           docker run --rm --entrypoint caddy \
             -v "$PWD/server/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0-alpine validate --config /etc/caddy/Caddyfile
 
   health:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Start local infrastructure
         working-directory: server
         run: docker compose up -d
-      - name: Check Synapse, federation, registration and MatrixRTC
+      - name: Check Synapse, MAS, registration and MatrixRTC
         working-directory: server
         run: |
           ready=0
-          for _ in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:8008/health >/dev/null; then
+          for _ in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:8008/health >/dev/null \
+               && docker compose exec -T mas \
+                    --config /data/config.yaml config check >/dev/null 2>&1; then
               ready=1
               break
             fi
@@ -70,27 +76,26 @@ jobs:
             http://127.0.0.1:8008/_matrix/client/versions >/dev/null
           curl --fail --silent \
             http://127.0.0.1:8008/_matrix/federation/v1/version >/dev/null
+          curl --fail --silent \
+            http://127.0.0.1:8083/.well-known/openid-configuration >/dev/null
 
-          # Local compose defaults registration on (200/401). Closed HS returns 403.
-          status="$(curl --silent --output /tmp/register.json --write-out '%{http_code}' \
-            -H 'Content-Type: application/json' \
-            -d '{"username":"ci-user-'"$(date +%s)"'","password":"ci-only-password-123","auth":{"type":"m.login.dummy"}}' \
-            http://127.0.0.1:8008/_matrix/client/v3/register || true)"
-          case "$status" in
-            200|401|403) ;;
-            *)
-              echo "Unexpected registration status: $status"
-              cat /tmp/register.json || true
-              exit 1
-              ;;
-          esac
+          # Compat login discovery is served by MAS on :8083 (local has no Caddy).
+          curl --fail --silent http://127.0.0.1:8083/_matrix/client/v3/login |
+            grep -F 'm.login.password' >/dev/null
 
-          docker compose exec -T synapse register_new_matrix_user \
-            --config /data/homeserver.yaml \
-            --user ci-demo \
+          docker compose exec -T mas \
+            --config /data/config.yaml manage register-user \
+            --yes \
+            --username ci-demo \
             --password ci-only-password \
             --no-admin \
-            http://127.0.0.1:8008
+            --ignore-password-complexity
+
+          curl --fail --silent \
+            -H 'Content-Type: application/json' \
+            --data '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"ci-demo"},"password":"ci-only-password"}' \
+            http://127.0.0.1:8083/_matrix/client/v3/login |
+            grep -F '"access_token"' >/dev/null
 
           curl --fail --silent http://127.0.0.1:8081/ >/dev/null
           curl --fail --silent http://127.0.0.1:8082/healthz >/dev/null
@@ -100,7 +105,7 @@ jobs:
         working-directory: server
         run: |
           docker compose ps -a
-          docker compose logs --tail=200 synapse-config || true
+          docker compose logs --tail=200 synapse-config mas-config mas-config-generate || true
           docker compose logs --tail=150
       - name: Stop local infrastructure
         if: always()

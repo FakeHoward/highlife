@@ -31,6 +31,7 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           password: ${{ secrets.DEPLOY_PASSWORD }}
           port: 22
           envs: LOCALPART,PASSWORD
@@ -45,17 +46,18 @@ jobs:
                 exit 1
                 ;;
             esac
-            if output="$(docker compose -f docker-compose.prod.yml exec -T synapse \
-              register_new_matrix_user \
-              --config /data/homeserver.yaml \
-              --user "$localpart" \
+            # Image ENTRYPOINT is mas-cli; accounts are owned by Matrix Auth Service.
+            if output="$(docker compose -f docker-compose.prod.yml exec -T mas \
+              --config /data/config.yaml manage register-user \
+              --yes \
+              --username "$localpart" \
               --password "$password" \
               --no-admin \
-              http://127.0.0.1:8008 2>&1)"; then
+              --ignore-password-complexity 2>&1)"; then
               echo "Created @${localpart}:testhighlife.strangled.net"
               exit 0
             fi
-            if printf '%s' "$output" | grep -qiE 'already exists|M_USER_IN_USE|already taken'; then
+            if printf '%s' "$output" | grep -qiE 'already exists|already taken|M_USER_IN_USE|Username already taken|user already exists'; then
               echo "Account already exists; password was not changed"
               exit 0
             fi

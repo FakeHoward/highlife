@@ -39,7 +39,12 @@ HighLife is a normal Matrix client: sign in to **any** homeserver URL.
 
 Some rooms ban whole servers via Matrix `m.room.server_acl` (spam control by room mods). A `403 Server is banned from room` is that ACL, not a client bug. Your account on `testhighlife.strangled.net` cannot join a room that lists that server as banned; use an account on an allowed server (for example matrix.org). Enabling signup on your Synapse does not change another room’s ACL.
 
-Public registration on the demo Synapse is controlled by `SYNAPSE_ENABLE_REGISTRATION` (see [`server/README.md`](./server/README.md)). The apps only support open/dummy registration; servers that need email, captcha, or SSO need account creation in their own flow, then Sign in here.
+The demo homeserver runs **Matrix Authentication Service** for Element X and
+other OIDC-native clients (`auth.testhighlife.strangled.net`). Public password
+registration is controlled by `SYNAPSE_ENABLE_REGISTRATION` (see
+[`server/README.md`](./server/README.md)). HighLife still speaks ordinary Matrix
+password login via the MAS compatibility layer; servers that need captcha or
+external SSO need that configured on their own auth stack.
 
 ## Develop
 

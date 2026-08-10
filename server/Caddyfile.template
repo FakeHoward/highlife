@@ -29,7 +29,13 @@ __MATRIX_DOMAIN__ {
 	handle /.well-known/matrix/client {
 		header Content-Type application/json
 		header Access-Control-Allow-Origin "*"
-		respond `{"m.homeserver":{"base_url":"https://__MATRIX_DOMAIN__"},"org.matrix.msc4143.rtc_foci":[{"type":"livekit","livekit_service_url":"https://rtc.__MATRIX_DOMAIN__/livekit/jwt"}]}` 200
+		respond `{"m.homeserver":{"base_url":"https://__MATRIX_DOMAIN__"},"org.matrix.msc2965.authentication":{"issuer":"https://auth.__MATRIX_DOMAIN__/","account":"https://auth.__MATRIX_DOMAIN__/account/"},"org.matrix.msc4143.rtc_foci":[{"type":"livekit","livekit_service_url":"https://rtc.__MATRIX_DOMAIN__/livekit/jwt"}]}` 200
+	}
+
+	# Legacy Matrix login/logout/refresh compatibility layer (MAS).
+	@mas_compat path_regexp mas_compat ^/_matrix/client/(.*)/(login|logout|refresh)$
+	handle @mas_compat {
+		reverse_proxy mas:8080
 	}
 
 	@matrix path /_matrix/* /_synapse/client/*
@@ -79,6 +85,17 @@ __MATRIX_DOMAIN__ {
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+auth.__MATRIX_DOMAIN__ {
+	import base_security_headers
+	header {
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+		Permissions-Policy "camera=(), microphone=(), display-capture=(), fullscreen=(), geolocation=()"
+	}
+	encode zstd gzip
+	reverse_proxy mas:8080
 }
 
 call.__MATRIX_DOMAIN__ {

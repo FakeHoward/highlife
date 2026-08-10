@@ -32,6 +32,11 @@ turn_host = os.environ.get("SYNAPSE_TURN_HOST", "").strip()
 if not turn_host:
     turn_host = "127.0.0.1" if server_name in {"localhost", "127.0.0.1"} else f"rtc.{server_name}"
 
+mas_secret = required("MAS_MATRIX_SECRET")
+mas_endpoint = os.environ.get("MAS_ENDPOINT", "http://mas:8080/").strip()
+if not mas_endpoint.endswith("/"):
+    mas_endpoint += "/"
+
 config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
 config.update(
     {
@@ -61,17 +66,11 @@ config.update(
                 "resources": [{"names": ["client", "federation", "openid"], "compress": False}],
             }
         ],
-        # Release default is closed registration. Local compose sets
-        # SYNAPSE_ENABLE_REGISTRATION=true; shared-secret bootstrap still
-        # creates bot/demo accounts when public signup is off.
-        "enable_registration": os.environ.get(
-            "SYNAPSE_ENABLE_REGISTRATION", "false"
-        ).lower()
-        in {"1", "true", "yes", "on"},
-        "enable_registration_without_verification": os.environ.get(
-            "SYNAPSE_ENABLE_REGISTRATION", "false"
-        ).lower()
-        in {"1", "true", "yes", "on"},
+        # Auth/registration are owned by Matrix Authentication Service. Keep
+        # Synapse registration closed; MAS account.password_registration_*
+        # is controlled by SYNAPSE_ENABLE_REGISTRATION in render-mas-config.py.
+        "enable_registration": False,
+        "enable_registration_without_verification": False,
         "registration_shared_secret": required("SYNAPSE_REGISTRATION_SECRET"),
         "allow_public_rooms_without_auth": False,
         "allow_public_rooms_over_federation": True,
@@ -84,10 +83,16 @@ config.update(
         "turn_shared_secret": required("TURN_SHARED_SECRET"),
         "turn_user_lifetime": 86_400_000,
         "turn_allow_guests": False,
+        "matrix_authentication_service": {
+            "enabled": True,
+            "endpoint": mas_endpoint,
+            "secret": mas_secret,
+        },
         "experimental_features": {
             "msc3266_enabled": True,
             "msc4140_enabled": True,
             "msc4222_enabled": True,
+            "msc4108_enabled": True,
         },
         "report_stats": False,
         "media_store_path": str(DATA / "media_store"),
@@ -101,47 +106,9 @@ config.update(
     }
 )
 
-oidc_issuer = os.environ.get("OIDC_ISSUER", "").strip()
-oidc_client_id = os.environ.get("OIDC_CLIENT_ID", "").strip()
-oidc_client_secret = os.environ.get("OIDC_CLIENT_SECRET", "").strip()
-if oidc_issuer and oidc_client_id and oidc_client_secret:
-    idp_id = os.environ.get("OIDC_IDP_ID", "").strip() or "oidc"
-    idp_name = os.environ.get("OIDC_IDP_NAME", "").strip() or "OIDC"
-    scopes_raw = os.environ.get("OIDC_SCOPES", "").strip()
-    scopes = [s for s in scopes_raw.split() if s] if scopes_raw else [
-        "openid",
-        "profile",
-        "email",
-    ]
-    localpart_template = (
-        os.environ.get("OIDC_LOCALPART_TEMPLATE", "").strip()
-        or "{{ user.preferred_username }}"
-    )
-    display_name_template = (
-        os.environ.get("OIDC_DISPLAY_NAME_TEMPLATE", "").strip()
-        or "{{ user.name }}"
-    )
-    config["oidc_providers"] = [
-        {
-            "idp_id": idp_id,
-            "idp_name": idp_name,
-            "issuer": oidc_issuer,
-            "client_id": oidc_client_id,
-            "client_secret": oidc_client_secret,
-            "scopes": scopes,
-            "user_mapping_provider": {
-                "config": {
-                    "localpart_template": localpart_template,
-                    "display_name_template": display_name_template,
-                }
-            },
-        }
-    ]
-elif any([oidc_issuer, oidc_client_id, oidc_client_secret]):
-    raise RuntimeError(
-        "OIDC is partially configured: set OIDC_ISSUER, OIDC_CLIENT_ID, and "
-        "OIDC_CLIENT_SECRET together (or leave all unset)"
-    )
+# Synapse-native OIDC is incompatible with delegated MAS auth. Configure
+# upstream IdPs in Matrix Authentication Service instead.
+config.pop("oidc_providers", None)
 
 CONFIG.write_text(
     "# Generated locally/deployed at runtime; never commit this file.\n"

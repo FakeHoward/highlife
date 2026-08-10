@@ -1,13 +1,15 @@
 # HighLife Matrix infrastructure
 
-The production stack is a fresh federated Synapse deployment for
-`testhighlife.strangled.net`. It includes PostgreSQL, Caddy TLS, Redis,
-LiveKit, the MatrixRTC JWT service, Element Call, coturn, and the HighLife bot.
-Public registration is **disabled by default** in production
-(`SYNAPSE_ENABLE_REGISTRATION=false`). Set it to `true` in `/opt/highlife/.env`
-only when intentionally opening signup. Local `docker-compose.yml` defaults
-registration to on for development/CI. Bot/demo accounts are still created with
-Synapse's shared-secret registration helper.
+The production stack is a federated Synapse deployment for
+`testhighlife.strangled.net` with **Matrix Authentication Service (MAS)** for
+OIDC-native clients (Element X and others). It also includes PostgreSQL, Caddy
+TLS, Redis, LiveKit, the MatrixRTC JWT service, Element Call, coturn, and the
+HighLife bot.
+
+Public registration is controlled by `SYNAPSE_ENABLE_REGISTRATION` (default
+**true** after the MAS cutover). It toggles MAS
+`account.password_registration_enabled` (no email required on this demo host).
+Bot/demo accounts are created with `mas-cli manage register-user`.
 
 Caddy hostnames come from `Caddyfile.template` (`__MATRIX_DOMAIN__`). Deploy
 renders them from the `MATRIX_DOMAIN` / `DOMAIN` secret (default
@@ -16,8 +18,8 @@ renders them from the `MATRIX_DOMAIN` / `DOMAIN` secret (default
 ## Local development
 
 Docker Desktop is required. The helper generates random secrets in the
-gitignored `server/.env`, starts Synapse and MatrixRTC, waits for health, and
-creates `alice`, `bob`, and `bot`:
+gitignored `server/.env`, starts Synapse, MAS, and MatrixRTC, waits for health,
+and creates `alice`, `bob`, and `bot`:
 
 ```powershell
 .\scripts\stack.ps1
@@ -26,6 +28,7 @@ creates `alice`, `bob`, and `bot`:
 Local endpoints:
 
 - Synapse: `http://localhost:8008`
+- MAS (OIDC + login/register compat): `http://localhost:8083`
 - Element Call: `http://localhost:8081`
 - LiveKit JWT service: `http://localhost:8082`
 - LiveKit signalling: `ws://localhost:7880`
@@ -53,6 +56,8 @@ local development data.
 - `https://testhighlife.strangled.net/`: primary React client, Matrix client
   API, federation API, and Matrix well-known discovery
 - `https://testhighlife.strangled.net/flutter/`: Flutter web client
+- `https://auth.testhighlife.strangled.net`: Matrix Authentication Service
+  (OIDC issuer + account UI)
 - `https://call.testhighlife.strangled.net`: Element Call
 - `https://rtc.testhighlife.strangled.net/livekit/jwt`: MatrixRTC
   authorization
@@ -61,18 +66,34 @@ local development data.
 - `https://push.testhighlife.strangled.net/_matrix/push/v1/notify`: optional
   Matrix Push Gateway (Sygnal) when Compose profile `push` is enabled
 
-Caddy obtains and renews public certificates automatically. Synapse listens
-only on the internal Compose network in production. Federation is exposed
-through Caddy on port 443, and `.well-known/matrix/server` delegates to that
-port. The client well-known document publishes the MatrixRTC focus.
+Caddy obtains and renews public certificates automatically. Synapse and MAS
+listen only on the internal Compose network in production. Federation is
+exposed through Caddy on port 443, and `.well-known/matrix/server` delegates to
+that port. The client well-known document publishes the MatrixRTC focus and
+`org.matrix.msc2965.authentication` (MAS issuer).
 
-### Optional OIDC
+Legacy password login/register for older clients is proxied from the homeserver
+host (`/_matrix/client/*/login|logout|refresh`) to MAS. OIDC-native clients
+discover MAS via well-known / `auth_metadata` and use `auth.` directly.
 
-When `/opt/highlife/.env` sets `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and
-`OIDC_CLIENT_SECRET` together, `render-synapse-config.py` writes an
-`oidc_providers` block into Synapse's homeserver config. Register the IdP
-callback as `https://<domain>/_synapse/client/oidc/callback`. See
-`docs/SECRETS.md`.
+### Matrix Authentication Service
+
+First deploy runs `migrate-syn2mas.sh` once (marker in the `mas-data` volume) to
+import existing Synapse users/sessions into MAS. Later deploys skip migration.
+
+Register a user on the host:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T mas \
+  --config /data/config.yaml manage register-user \
+  --yes --username alice --password '...' --no-admin \
+  --ignore-password-complexity
+```
+
+Or use the GitHub Actions workflow **Provision account**.
+
+Upstream SSO IdPs belong in MAS (`upstream_oauth2`), not in Synapse
+`oidc_providers`. Synapse-native OIDC is disabled when MAS is enabled.
 
 ### Optional push gateway (Sygnal)
 
@@ -132,6 +153,7 @@ curl -fsS https://testhighlife.strangled.net/_matrix/client/versions
 curl -fsS https://testhighlife.strangled.net/_matrix/federation/v1/version
 curl -fsS https://testhighlife.strangled.net/.well-known/matrix/server
 curl -fsS https://testhighlife.strangled.net/.well-known/matrix/client
+curl -fsS https://auth.testhighlife.strangled.net/.well-known/openid-configuration
 curl -fsS https://testhighlife.strangled.net/
 curl -fsS https://testhighlife.strangled.net/flutter/
 curl -fsS https://call.testhighlife.strangled.net/
