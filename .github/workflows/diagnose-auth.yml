@@ -1,0 +1,45 @@
+name: Diagnose auth
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: highlife-diagnose-auth
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Dump Caddy/MAS auth status
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: 22
+          script: |
+            set -eu
+            cd /opt/highlife
+            echo '=== compose ps mas caddy ==='
+            docker compose -f docker-compose.prod.yml ps mas caddy || true
+            echo '=== Caddyfile auth block ==='
+            grep -n 'auth\.\|mas:8080\|openid\|msc2965' Caddyfile || true
+            echo '=== DNS from host ==='
+            getent hosts auth.testhighlife.strangled.net || true
+            dig +short auth.testhighlife.strangled.net @1.1.1.1 || true
+            echo '=== local curl auth via caddy network ==='
+            docker compose -f docker-compose.prod.yml exec -T caddy \
+              wget -S -O - http://mas:8080/.well-known/openid-configuration 2>&1 | head -n 40 || true
+            echo '=== public https from host ==='
+            curl -vk --max-time 20 \
+              https://auth.testhighlife.strangled.net/.well-known/openid-configuration 2>&1 | head -n 60 || true
+            echo '=== caddy logs ==='
+            docker compose -f docker-compose.prod.yml logs --no-color --tail=120 caddy || true
+            echo '=== mas logs ==='
+            docker compose -f docker-compose.prod.yml logs --no-color --tail=40 mas || true
