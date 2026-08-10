@@ -8,9 +8,9 @@ $ErrorActionPreference = "Stop"
 $adminFlag = if ($Admin) { "--admin" } else { "--no-admin" }
 
 Write-Host "Ensuring @$Username`:localhost exists via MAS..."
-# Image ENTRYPOINT is mas-cli.
+# docker compose exec does not use the image ENTRYPOINT.
 docker compose exec -T mas `
-  --config /data/config.yaml manage register-user `
+  /usr/local/bin/mas-cli --config /data/config.yaml manage register-user `
   --yes `
   --username $Username `
   --password $Password `

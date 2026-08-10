@@ -64,7 +64,8 @@ jobs:
           for _ in $(seq 1 120); do
             if curl --fail --silent http://127.0.0.1:8008/health >/dev/null \
                && docker compose exec -T mas \
-                    --config /data/config.yaml config check >/dev/null 2>&1; then
+                    /usr/local/bin/mas-cli --config /data/config.yaml config check \
+                    >/dev/null 2>&1; then
               ready=1
               break
             fi
@@ -84,7 +85,7 @@ jobs:
             grep -F 'm.login.password' >/dev/null
 
           docker compose exec -T mas \
-            --config /data/config.yaml manage register-user \
+            /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
             --yes \
             --username ci-demo \
             --password ci-only-password \
