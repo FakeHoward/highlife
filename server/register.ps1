@@ -12,10 +12,10 @@ Write-Host "Ensuring @$Username`:localhost exists via MAS..."
 docker compose exec -T mas `
   /usr/local/bin/mas-cli --config /data/config.yaml manage register-user `
   --yes `
-  --username $Username `
   --password $Password `
   $adminFlag `
-  --ignore-password-complexity
+  --ignore-password-complexity `
+  $Username
 
 if ($LASTEXITCODE -ne 0) {
   throw "Registration failed (the account may already exist)."

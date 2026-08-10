@@ -87,10 +87,10 @@ jobs:
           docker compose exec -T mas \
             /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
             --yes \
-            --username ci-demo \
             --password ci-only-password \
             --no-admin \
-            --ignore-password-complexity
+            --ignore-password-complexity \
+            ci-demo
 
           curl --fail --silent \
             -H 'Content-Type: application/json' \
