@@ -676,10 +676,28 @@ jobs:
               exit 1
             fi
 
-            # Give Caddy time to finish ACME for newly published hostnames.
-            sleep 20
-            curl_ok "https://${AUTH_HOST}/.well-known/openid-configuration"
-            grep -F "https://${AUTH_HOST}" /tmp/highlife-curl.out >/dev/null
+            # Kick ACME for newly published hostnames (auth.) after DNS is confirmed.
+            docker compose -f docker-compose.prod.yml restart caddy
+            auth_ready=0
+            for _ in $(seq 1 36); do
+              code="$(curl --silent --output /tmp/highlife-auth-oidc.out --write-out '%{http_code}' \
+                --max-time 15 "https://${AUTH_HOST}/.well-known/openid-configuration" || true)"
+              if [ "$code" = "200" ] && \
+                 grep -F "https://${AUTH_HOST}" /tmp/highlife-auth-oidc.out >/dev/null; then
+                auth_ready=1
+                break
+              fi
+              echo "auth ACME/OIDC probe -> HTTP ${code}; waiting"
+              sleep 5
+            done
+            if [ "$auth_ready" != 1 ]; then
+              echo "::error::auth hostname not serving OIDC discovery yet"
+              docker compose -f docker-compose.prod.yml logs --no-color --tail=120 caddy || true
+              docker compose -f docker-compose.prod.yml exec -T caddy \
+                wget -q -O - http://mas:8080/.well-known/openid-configuration | head -c 400 || true
+              exit 1
+            fi
+            cp /tmp/highlife-auth-oidc.out /tmp/highlife-curl.out
             # Synapse advertises MAS metadata for OIDC-native clients (Element X).
             auth_meta_ok=0
             for path in \

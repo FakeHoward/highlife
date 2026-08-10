@@ -63,3 +63,10 @@ jobs:
             echo '=== aiomatrix diagnoseSession ==='
             docker compose -f docker-compose.prod.yml run --rm --no-deps bot \
               node --input-type=module -e "import { diagnoseSession } from 'aiomatrix'; console.log(JSON.stringify(diagnoseSession('./data'), null, 2));" || true
+            echo '=== auth/MAS TLS probe ==='
+            getent hosts auth.testhighlife.strangled.net || true
+            curl -vk --max-time 20 \
+              https://auth.testhighlife.strangled.net/.well-known/openid-configuration 2>&1 | head -n 50 || true
+            docker compose -f docker-compose.prod.yml exec -T caddy \
+              wget -q -O - http://mas:8080/.well-known/openid-configuration 2>&1 | head -c 400 || true
+            docker compose -f docker-compose.prod.yml logs --no-color --tail=80 caddy || true
