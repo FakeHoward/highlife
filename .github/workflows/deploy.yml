@@ -29,6 +29,8 @@ jobs:
           DEPLOY_PUBLIC_IP: ${{ secrets.DEPLOY_PUBLIC_IP }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SYNAPSE_REGISTRATION_SECRET: ${{ secrets.SYNAPSE_REGISTRATION_SECRET }}
+          MAS_POSTGRES_PASSWORD: ${{ secrets.MAS_POSTGRES_PASSWORD }}
+          MAS_MATRIX_SECRET: ${{ secrets.MAS_MATRIX_SECRET }}
           BOT_MATRIX_PASSWORD: ${{ secrets.BOT_MATRIX_PASSWORD }}
           BOT_CRYPTO_STORE_PASSPHRASE: ${{ secrets.BOT_CRYPTO_STORE_PASSPHRASE }}
           DEMO_MATRIX_PASSWORD: ${{ secrets.DEMO_MATRIX_PASSWORD }}
@@ -38,7 +40,8 @@ jobs:
         run: |
           missing=0
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PUBLIC_IP \
-            POSTGRES_PASSWORD SYNAPSE_REGISTRATION_SECRET BOT_MATRIX_PASSWORD \
+            POSTGRES_PASSWORD SYNAPSE_REGISTRATION_SECRET \
+            MAS_POSTGRES_PASSWORD MAS_MATRIX_SECRET BOT_MATRIX_PASSWORD \
             BOT_CRYPTO_STORE_PASSPHRASE DEMO_MATRIX_PASSWORD LIVEKIT_KEY \
             LIVEKIT_SECRET TURN_SHARED_SECRET; do
             if [ -z "${!name}" ]; then
@@ -69,6 +72,8 @@ jobs:
         env:
           POSTGRES_PASSWORD: validation-only
           SYNAPSE_REGISTRATION_SECRET: validation-only
+          MAS_POSTGRES_PASSWORD: validation-only
+          MAS_MATRIX_SECRET: validation-only-mas-matrix-secret-32b
           BOT_MATRIX_PASSWORD: validation-only
           BOT_CRYPTO_STORE_PASSPHRASE: validation-only
           LIVEKIT_KEY: validation-key
@@ -139,6 +144,8 @@ jobs:
           DEPLOY_PUBLIC_IP: ${{ secrets.DEPLOY_PUBLIC_IP }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SYNAPSE_REGISTRATION_SECRET: ${{ secrets.SYNAPSE_REGISTRATION_SECRET }}
+          MAS_POSTGRES_PASSWORD: ${{ secrets.MAS_POSTGRES_PASSWORD }}
+          MAS_MATRIX_SECRET: ${{ secrets.MAS_MATRIX_SECRET }}
           BOT_MATRIX_PASSWORD: ${{ secrets.BOT_MATRIX_PASSWORD }}
           BOT_CRYPTO_STORE_PASSPHRASE: ${{ secrets.BOT_CRYPTO_STORE_PASSPHRASE }}
           DEMO_MATRIX_PASSWORD: ${{ secrets.DEMO_MATRIX_PASSWORD }}
@@ -149,11 +156,6 @@ jobs:
           MATRIX_MINIAPP_CORS_ORIGIN: ${{ vars.MATRIX_MINIAPP_CORS_ORIGIN }}
           DOMAIN: ${{ secrets.DOMAIN }}
           MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
-          OIDC_ISSUER: ${{ secrets.OIDC_ISSUER }}
-          OIDC_CLIENT_ID: ${{ secrets.OIDC_CLIENT_ID }}
-          OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET }}
-          OIDC_IDP_ID: ${{ secrets.OIDC_IDP_ID }}
-          OIDC_IDP_NAME: ${{ secrets.OIDC_IDP_NAME }}
           ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
           SYGNAL_VAPID_PRIVATE_KEY: ${{ secrets.SYGNAL_VAPID_PRIVATE_KEY }}
           SYNAPSE_ENABLE_REGISTRATION: ${{ secrets.SYNAPSE_ENABLE_REGISTRATION }}
@@ -266,17 +268,25 @@ jobs:
             chmod 600 out/sygnal-vapid.pem
           fi
           cp server/bootstrap-bot.sh out/
+          cp server/migrate-syn2mas.sh out/
           cp server/generate-synapse-config.sh out/
+          cp server/generate-mas-config.sh out/
+          cp server/init-mas-db.sh out/
           cp server/render-synapse-config.py out/
+          cp server/render-mas-config.py out/
           cp server/element-call-config.json out/
-          chmod +x out/bootstrap-bot.sh out/generate-synapse-config.sh
+          chmod +x out/bootstrap-bot.sh out/migrate-syn2mas.sh \
+            out/generate-synapse-config.sh out/generate-mas-config.sh out/init-mas-db.sh
           # Shell scripts must be LF for the remote Linux host.
-          sed -i 's/\r$//' out/bootstrap-bot.sh out/generate-synapse-config.sh
+          sed -i 's/\r$//' out/bootstrap-bot.sh out/migrate-syn2mas.sh \
+            out/generate-synapse-config.sh out/generate-mas-config.sh out/init-mas-db.sh
 
           {
             printf 'DEPLOY_PUBLIC_IP=%s\n' "$DEPLOY_PUBLIC_IP"
             printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
             printf 'SYNAPSE_REGISTRATION_SECRET=%s\n' "$SYNAPSE_REGISTRATION_SECRET"
+            printf 'MAS_POSTGRES_PASSWORD=%s\n' "$MAS_POSTGRES_PASSWORD"
+            printf 'MAS_MATRIX_SECRET=%s\n' "$MAS_MATRIX_SECRET"
             printf 'BOT_MATRIX_PASSWORD=%s\n' "$BOT_MATRIX_PASSWORD"
             printf 'BOT_CRYPTO_STORE_PASSPHRASE=%s\n' "$BOT_CRYPTO_STORE_PASSPHRASE"
             printf 'DEMO_MATRIX_PASSWORD=%s\n' "$DEMO_MATRIX_PASSWORD"
@@ -290,24 +300,13 @@ jobs:
             printf 'GITHUB_REPOSITORY=%s\n' "${{ github.repository }}"
             printf 'DOMAIN=%s\n' "$DOMAIN"
             printf 'MATRIX_DOMAIN=%s\n' "$MATRIX_DOMAIN"
-            # Closed by default for release; set true in .env only for open signup.
-            printf 'SYNAPSE_ENABLE_REGISTRATION=%s\n' "${SYNAPSE_ENABLE_REGISTRATION:-false}"
+            # Open by default after MAS cutover; set false to close public signup.
+            printf 'SYNAPSE_ENABLE_REGISTRATION=%s\n' "${SYNAPSE_ENABLE_REGISTRATION:-true}"
             printf 'ENABLE_PUSH=%s\n' "${ENABLE_PUSH:-false}"
             printf 'MATRIX_MINIAPP_CORS_ORIGIN=%s\n' \
               "${MATRIX_MINIAPP_CORS_ORIGIN:-https://${DOMAIN}}"
             if [ -n "${MATRIX_MINIAPP_SECRET:-}" ]; then
               printf 'MATRIX_MINIAPP_SECRET=%s\n' "$MATRIX_MINIAPP_SECRET"
-            fi
-            if [ -n "${OIDC_ISSUER:-}" ] && [ -n "${OIDC_CLIENT_ID:-}" ] && [ -n "${OIDC_CLIENT_SECRET:-}" ]; then
-              printf 'OIDC_ISSUER=%s\n' "$OIDC_ISSUER"
-              printf 'OIDC_CLIENT_ID=%s\n' "$OIDC_CLIENT_ID"
-              printf 'OIDC_CLIENT_SECRET=%s\n' "$OIDC_CLIENT_SECRET"
-              if [ -n "${OIDC_IDP_ID:-}" ]; then
-                printf 'OIDC_IDP_ID=%s\n' "$OIDC_IDP_ID"
-              fi
-              if [ -n "${OIDC_IDP_NAME:-}" ]; then
-                printf 'OIDC_IDP_NAME=%s\n' "$OIDC_IDP_NAME"
-              fi
             fi
           } > out/deploy.env
           # Keep world-unreadable locally but readable by the SCP action container.
@@ -321,8 +320,12 @@ jobs:
             sygnal.yaml \
             sygnal-vapid.pem \
             bootstrap-bot.sh \
+            migrate-syn2mas.sh \
             generate-synapse-config.sh \
+            generate-mas-config.sh \
+            init-mas-db.sh \
             render-synapse-config.py \
+            render-mas-config.py \
             element-call-config.json \
             deploy.env
           ls -lh out/deploy-bundle.tgz
@@ -469,11 +472,24 @@ jobs:
 
             docker compose -f docker-compose.prod.yml config --quiet
             docker compose -f docker-compose.prod.yml pull
-            sed -i 's/\r$//' generate-synapse-config.sh bootstrap-bot.sh render-synapse-config.py || true
+            sed -i 's/\r$//' generate-synapse-config.sh generate-mas-config.sh \
+              init-mas-db.sh bootstrap-bot.sh migrate-syn2mas.sh \
+              render-synapse-config.py render-mas-config.py || true
 
-            if ! docker compose -f docker-compose.prod.yml run --rm --no-deps synapse-config; then
-              echo "::error::synapse-config failed"
-              docker compose -f docker-compose.prod.yml logs --tail=200 synapse-config || true
+            # Bring Postgres up first so MAS DB init / syn2mas can run.
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans postgres
+            for _ in $(seq 1 60); do
+              if docker compose -f docker-compose.prod.yml exec -T postgres \
+                pg_isready -U synapse -d synapse >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+
+            if ! COMPOSE_FILE=docker-compose.prod.yml sh ./migrate-syn2mas.sh; then
+              echo "::error::MAS config/migration failed"
+              docker compose -f docker-compose.prod.yml logs --tail=200 \
+                mas-config-generate mas-config mas-db-init || true
               exit 1
             fi
 
@@ -499,6 +515,7 @@ jobs:
 
             MATRIX_DOMAIN="${MATRIX_DOMAIN:-${DOMAIN:-testhighlife.strangled.net}}"
             PRIMARY="https://${MATRIX_DOMAIN}"
+            AUTH_HOST="auth.${MATRIX_DOMAIN}"
             CALL_HOST="call.${MATRIX_DOMAIN}"
             RTC_HOST="rtc.${MATRIX_DOMAIN}"
 
@@ -514,13 +531,13 @@ jobs:
             if [ "$ready" != 1 ]; then
               docker compose -f docker-compose.prod.yml ps
               docker compose -f docker-compose.prod.yml logs --tail=160 \
-                synapse caddy synapse-config lk-jwt-service livekit
+                synapse mas caddy synapse-config mas-config lk-jwt-service livekit
               exit 1
             fi
 
             COMPOSE_FILE=docker-compose.prod.yml sh ./bootstrap-bot.sh
 
-            docker compose -f docker-compose.prod.yml restart synapse
+            docker compose -f docker-compose.prod.yml restart synapse mas
             for _ in $(seq 1 60); do
               if docker compose -f docker-compose.prod.yml exec -T synapse \
                 curl --fail --silent http://127.0.0.1:8008/_matrix/client/versions >/dev/null; then
@@ -558,12 +575,11 @@ jobs:
               password="$2"
               attempt=1
               while [ "$attempt" -le 6 ]; do
-                # Hit Synapse loopback so public-IP rc_login buckets stay cool.
-                if docker compose -f docker-compose.prod.yml exec -T synapse \
-                  curl --fail --silent --show-error \
+                # Compat login is served by MAS (proxied on the public HS URL).
+                if curl --fail --silent --show-error \
                   -H 'Content-Type: application/json' \
                   --data "{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"${localpart}\"},\"password\":\"${password}\"}" \
-                  http://127.0.0.1:8008/_matrix/client/v3/login |
+                  "${PRIMARY}/_matrix/client/v3/login" |
                   grep -F '"access_token"' >/dev/null; then
                   echo "login ${localpart} ok"
                   return 0
@@ -613,27 +629,19 @@ jobs:
             fi
             echo "bot showcase online"
 
-            # Release default closes public registration (403). Open signup still
-            # returns 200 or UIA 401 when SYNAPSE_ENABLE_REGISTRATION=true.
-            registration_status="$(curl --silent --output /tmp/highlife-register.json --write-out '%{http_code}' \
-              -H 'Content-Type: application/json' \
-              --data '{"username":"public-probe-'"$(date +%s)"'","password":"probe-not-for-login-123","auth":{"type":"m.login.dummy"}}' \
-              "${PRIMARY}/_matrix/client/v3/register" || true)"
-            case "$registration_status" in
-              200|401|403) ;;
-              *)
-                echo "::error::Unexpected registration status: ${registration_status}"
-                sed -n '1,40p' /tmp/highlife-register.json || true
-                exit 1
-                ;;
-            esac
-            echo "registration probe HTTP ${registration_status} (closed=403, open=200/401)"
+            # Legacy /register is not the Element X path; OIDC-native clients
+            # register via MAS account UI. Probe compat login discovery instead.
+            curl_ok "${PRIMARY}/_matrix/client/v3/login"
+            grep -F 'm.login.password' /tmp/highlife-curl.out >/dev/null
+            echo "MAS compat login discovery ok"
 
             curl_ok "${PRIMARY}/_matrix/federation/v1/version"
             curl_ok "${PRIMARY}/.well-known/matrix/server"
             grep -F "\"m.server\":\"${MATRIX_DOMAIN}:443\"" /tmp/highlife-curl.out >/dev/null
             curl_ok "${PRIMARY}/.well-known/matrix/client"
             grep -F 'org.matrix.msc4143.rtc_foci' /tmp/highlife-curl.out >/dev/null
+            grep -F 'org.matrix.msc2965.authentication' /tmp/highlife-curl.out >/dev/null
+            grep -F "https://${AUTH_HOST}/" /tmp/highlife-curl.out >/dev/null
             curl_ok "${PRIMARY}/"
             curl_ok "${PRIMARY}/flutter/flutter_bootstrap.js"
 
@@ -648,7 +656,7 @@ jobs:
 
             PUSH_HOST="push.${MATRIX_DOMAIN}"
             dns_missing=0
-            dns_hosts="${CALL_HOST} ${RTC_HOST}"
+            dns_hosts="${AUTH_HOST} ${CALL_HOST} ${RTC_HOST}"
             if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then
               dns_hosts="${dns_hosts} ${PUSH_HOST}"
             fi
@@ -663,12 +671,32 @@ jobs:
             done
             if [ "$dns_missing" = 1 ]; then
               docker compose -f docker-compose.prod.yml ps
-              echo "Homeserver smoke passed; MatrixRTC hostnames still need DNS before calls work"
+              echo "Homeserver smoke passed; auth/MatrixRTC hostnames still need DNS"
               exit 1
             fi
 
             # Give Caddy time to finish ACME for newly published hostnames.
             sleep 20
+            curl_ok "https://${AUTH_HOST}/.well-known/openid-configuration"
+            grep -F "https://${AUTH_HOST}" /tmp/highlife-curl.out >/dev/null
+            # Synapse advertises MAS metadata for OIDC-native clients (Element X).
+            auth_meta_ok=0
+            for path in \
+              "/_matrix/client/v1/auth_metadata" \
+              "/_matrix/client/unstable/org.matrix.msc2965/auth_metadata"; do
+              if curl --fail --silent --show-error "${PRIMARY}${path}" \
+                >/tmp/highlife-auth-meta.out; then
+                if grep -F "https://${AUTH_HOST}" /tmp/highlife-auth-meta.out >/dev/null; then
+                  auth_meta_ok=1
+                  break
+                fi
+              fi
+            done
+            if [ "$auth_meta_ok" != 1 ]; then
+              echo "::error::Homeserver auth_metadata does not advertise ${AUTH_HOST}"
+              sed -n '1,80p' /tmp/highlife-auth-meta.out || true
+              exit 1
+            fi
             curl_ok "https://${CALL_HOST}/"
             curl_ok "https://${RTC_HOST}/livekit/jwt/healthz"
             if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then

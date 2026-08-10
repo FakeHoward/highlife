@@ -30,14 +30,14 @@ is an operator step outside the repo.
 ## Production ops / hardening
 
 - [x] Federated Synapse + well-known + MatrixRTC
+- [x] Matrix Authentication Service (Element X / OIDC-native clients)
 - [x] Caddy CSP + deploy smoke `default-src`
-- [x] Registration closed by default
+- [x] MAS password registration open by default (close via env)
 - [x] Bot crypto preserved on routine deploy
 - [x] FormSpace CORS allowlist + optional MiniApp secret
 - [x] `Caddyfile.template` domain render
 - [x] Deploy auth: `DEPLOY_PASSWORD` and/or `DEPLOY_SSH_KEY` for Actions only —
       **never disables password SSH on the VPS**
-- [x] Optional Synapse OIDC via env
 - [x] Optional Sygnal via `ENABLE_PUSH=true` + `push.` DNS + VAPID secrets
       (`SYGNAL_VAPID_PRIVATE_KEY` / `VITE_VAPID_PUBLIC_KEY`)
 - [x] Backup script `scripts/backup-highlife.sh`
@@ -45,9 +45,10 @@ is an operator step outside the repo.
 
 ## MatrixRTC / federation / push smoke
 
-1. DNS for `call.` / `rtc.` (and `push.` when `ENABLE_PUSH=true`)
-2. Deploy → Caddy certs
-3. Two-client MatrixRTC call
-4. Matrix.org Federation Tester
-5. Cron `scripts/backup-highlife.sh`
-6. Keep `DEPLOY_PASSWORD` if you use password SSH interactively
+1. DNS for `auth.` / `call.` / `rtc.` (and `push.` when `ENABLE_PUSH=true`)
+2. Deploy → Caddy certs + syn2mas (first MAS cutover only)
+3. Element X signup/login against `testhighlife.strangled.net`
+4. Two-client MatrixRTC call
+5. Matrix.org Federation Tester
+6. Cron `scripts/backup-highlife.sh`
+7. Keep `DEPLOY_PASSWORD` if you use password SSH interactively

@@ -33,20 +33,44 @@ def load_yaml(path: Path) -> dict:
 def validate_compose(path: Path, production: bool) -> None:
     compose = load_yaml(path)
     services = compose.get("services", {})
-    required = {"postgres", "synapse-config", "synapse", "redis", "livekit", "lk-jwt-service", "element-call"}
+    required = {
+        "postgres",
+        "mas-db-init",
+        "mas-config-generate",
+        "mas-config",
+        "mas",
+        "synapse-config",
+        "synapse",
+        "redis",
+        "livekit",
+        "lk-jwt-service",
+        "element-call",
+    }
     if production:
         required |= {"caddy", "bot", "coturn"}
     require(required <= set(services), f"{path}: missing services {sorted(required - set(services))}")
     require("conduit" not in services, f"{path}: Conduit must not be present")
 
     synapse = services["synapse"]
-    require(synapse.get("image") == "matrixdotorg/synapse:v1.157.2", f"{path}: Synapse image must be pinned")
+    require(synapse.get("image") == "matrixdotorg/synapse:v1.158.0", f"{path}: Synapse image must be pinned")
     require("healthcheck" in synapse, f"{path}: Synapse requires a healthcheck")
     require("healthcheck" in services["postgres"], f"{path}: PostgreSQL requires a healthcheck")
     require("healthcheck" in services["livekit"], f"{path}: LiveKit requires a healthcheck")
+    require(
+        services["mas"].get("image")
+        == "ghcr.io/element-hq/matrix-authentication-service:1.22.0",
+        f"{path}: MAS image must be pinned",
+    )
+    require("healthcheck" in services["mas"], f"{path}: MAS requires a healthcheck")
+    require(
+        services["element-call"].get("image") == "ghcr.io/element-hq/element-call:v0.23.0",
+        f"{path}: Element Call image must be pinned",
+    )
 
     rendered = yaml.safe_dump(compose, sort_keys=False)
     require("${SYNAPSE_REGISTRATION_SECRET" in rendered, f"{path}: registration secret must be injected")
+    require("${MAS_POSTGRES_PASSWORD" in rendered, f"{path}: MAS database secret must be injected")
+    require("${MAS_MATRIX_SECRET" in rendered, f"{path}: MAS shared secret must be injected")
     require("${LIVEKIT_SECRET" in rendered, f"{path}: LiveKit secret must be injected")
     require("${TURN_SHARED_SECRET" in rendered, f"{path}: TURN secret must be injected")
 
@@ -59,14 +83,10 @@ def validate_compose(path: Path, production: bool) -> None:
         bot_environment = bot.get("environment", {})
         require("highlifebot" in bot_environment.get("MATRIX_USER_ID", ""), "production bot MXID must use highlifebot")
         require(bot_environment.get("MATRIX_CRYPTO") == "true", "production bot crypto must be enabled")
-        # Docker-network Synapse avoids public rc_login contention with browsers/CI.
+        # Public client API via Caddy so login/logout/refresh hit MAS compat.
         require(
-            bot_environment.get("MATRIX_HOMESERVER") == "http://synapse:8008",
-            "production bot must use the internal Synapse client API",
-        )
-        require(
-            bot_environment.get("ALLOW_INSECURE_HOMESERVER") == "true",
-            "production bot must allow the internal http://synapse:8008 URL",
+            bot_environment.get("MATRIX_HOMESERVER") == f"https://{DOMAIN}",
+            "production bot must use the public homeserver URL (MAS compat)",
         )
         require(
             "${BOT_CRYPTO_STORE_PASSPHRASE" in bot_environment.get("MATRIX_CRYPTO_STORE_PASSPHRASE", ""),
@@ -89,8 +109,8 @@ def validate_compose(path: Path, production: bool) -> None:
             f"{path}: SYNAPSE_ENABLE_REGISTRATION must be injectable",
         )
         require(
-            "${OIDC_ISSUER" in rendered and "${OIDC_CLIENT_ID" in rendered and "${OIDC_CLIENT_SECRET" in rendered,
-            f"{path}: optional OIDC env vars must be injectable into synapse-config",
+            "migrate" in (services.get("mas-migrate", {}).get("profiles") or []),
+            f"{path}: mas-migrate must use Compose profile migrate",
         )
         sygnal = services.get("sygnal")
         require(isinstance(sygnal, dict), f"{path}: missing optional sygnal service")
@@ -116,6 +136,9 @@ def validate_static_config() -> None:
     require("__MATRIX_DOMAIN__" in template, "Caddyfile.template must use __MATRIX_DOMAIN__ placeholders")
     require("push.__MATRIX_DOMAIN__" in template, "Caddyfile.template must define push.__MATRIX_DOMAIN__")
     require("reverse_proxy sygnal:5000" in template, "Caddyfile.template must proxy push to sygnal")
+    require("auth.__MATRIX_DOMAIN__" in template, "Caddyfile.template must define auth.__MATRIX_DOMAIN__")
+    require("org.matrix.msc2965.authentication" in template, "Caddyfile.template must advertise MAS")
+    require("reverse_proxy mas:8080" in template, "Caddyfile.template must proxy auth to MAS")
     rendered_from_template = template.replace("__MATRIX_DOMAIN__", DOMAIN)
     caddy = (SERVER / "Caddyfile").read_text(encoding="utf-8")
     require(
@@ -124,12 +147,14 @@ def validate_static_config() -> None:
     )
     for fragment in (
         DOMAIN,
+        f"auth.{DOMAIN}",
         f"call.{DOMAIN}",
         f"rtc.{DOMAIN}",
         f"push.{DOMAIN}",
         "/.well-known/matrix/client",
         "/.well-known/matrix/server",
         "org.matrix.msc4143.rtc_foci",
+        "org.matrix.msc2965.authentication",
         "Strict-Transport-Security",
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline'",
@@ -143,6 +168,7 @@ def validate_static_config() -> None:
         "root * /srv/flutter",
         "root * /srv/miniapp",
         "reverse_proxy sygnal:5000",
+        "reverse_proxy mas:8080",
     ):
         require(fragment in caddy, f"Caddyfile is missing {fragment}")
 
@@ -154,8 +180,12 @@ def validate_static_config() -> None:
     )
 
     render_py = (SERVER / "render-synapse-config.py").read_text(encoding="utf-8")
-    require("oidc_providers" in render_py, "render-synapse-config.py must support oidc_providers")
-    require("OIDC_ISSUER" in render_py, "render-synapse-config.py must read OIDC_ISSUER")
+    require(
+        "matrix_authentication_service" in render_py,
+        "render-synapse-config.py must delegate authentication to MAS",
+    )
+    require("msc4108_enabled" in render_py, "render-synapse-config.py must enable QR login")
+    require((SERVER / "render-mas-config.py").is_file(), "server/render-mas-config.py is required")
 
     deploy = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
     for fragment in (
@@ -167,19 +197,33 @@ def validate_static_config() -> None:
         "--org app.highlife",
         "--base-href /flutter/",
         "DOMAIN=",
-        "200|401|403",
+        "m.login.password",
         "recover-bot.yml",
         "DEPLOY_SSH_KEY",
         "key: ${{ secrets.DEPLOY_SSH_KEY }}",
         "Caddyfile.template",
         "default-src",
         "sygnal.yaml",
+        "MAS_POSTGRES_PASSWORD",
+        "MAS_MATRIX_SECRET",
+        "migrate-syn2mas.sh",
+        "org.matrix.msc2965.authentication",
+        "auth.${MATRIX_DOMAIN}",
     ):
         require(fragment in deploy, f"deploy workflow is missing {fragment}")
     require(
         "DEPLOY_SSH_KEY" in deploy and "or DEPLOY_PASSWORD" in deploy,
         "deploy workflow must accept DEPLOY_SSH_KEY or DEPLOY_PASSWORD",
     )
+    require(
+        (SERVER / "migrate-syn2mas.sh").is_file(),
+        "server/migrate-syn2mas.sh is required",
+    )
+    require(
+        (SERVER / "generate-mas-config.sh").is_file(),
+        "server/generate-mas-config.sh is required",
+    )
+    require((SERVER / "init-mas-db.sh").is_file(), "server/init-mas-db.sh is required")
     for workflow_name in ("recover-bot.yml", "diagnose-bot.yml"):
         workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
         require(
@@ -227,6 +271,8 @@ def docker_compose_config(path: Path) -> None:
         {
             "POSTGRES_PASSWORD": "validation-only",
             "SYNAPSE_REGISTRATION_SECRET": "validation-only",
+            "MAS_POSTGRES_PASSWORD": "validation-only",
+            "MAS_MATRIX_SECRET": "validation-only-mas-matrix-secret-32b",
             "BOT_MATRIX_PASSWORD": "validation-only",
             "BOT_CRYPTO_STORE_PASSPHRASE": "validation-only",
             "LIVEKIT_KEY": "validation-key",

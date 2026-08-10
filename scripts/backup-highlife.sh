@@ -20,7 +20,7 @@ if docker compose -f "$COMPOSE" ps postgres >/dev/null 2>&1; then
 fi
 
 # Named volumes — adjust names if compose project prefix differs.
-for volume in highlife_synapse-data highlife_bot-data highlife_caddy-data; do
+for volume in highlife_synapse-data highlife_mas-data highlife_bot-data highlife_caddy-data; do
   if docker volume inspect "$volume" >/dev/null 2>&1; then
     docker run --rm -v "$volume:/data:ro" -v "$OUT:/backup" alpine \
       tar czf "/backup/${volume}.tar.gz" -C /data .

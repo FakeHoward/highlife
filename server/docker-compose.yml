@@ -6,7 +6,16 @@ x-synapse-environment: &synapse-environment
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-postgres-only}
   SYNAPSE_REGISTRATION_SECRET: ${SYNAPSE_REGISTRATION_SECRET:-local-registration-only}
   TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-local-turn-only}
-  # Local/CI keeps open registration; production defaults to false.
+  # Local/CI keeps open registration; production defaults follow SYNAPSE_ENABLE_REGISTRATION.
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
+  MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:-local-mas-matrix-secret-at-least-32-chars}
+
+x-mas-environment: &mas-environment
+  SYNAPSE_SERVER_NAME: localhost
+  MAS_DATA_DIR: /data
+  MAS_PUBLIC_BASE: ${MAS_PUBLIC_BASE:-http://127.0.0.1:8083/}
+  MAS_POSTGRES_PASSWORD: ${MAS_POSTGRES_PASSWORD:-local-mas-postgres-only}
+  MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:-local-mas-matrix-secret-at-least-32-chars}
   SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
 
 services:
@@ -25,8 +34,88 @@ services:
       timeout: 5s
       retries: 10
 
+  mas-db-init:
+    image: postgres:17.10-alpine
+    restart: "no"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-postgres-only}
+      MAS_POSTGRES_PASSWORD: ${MAS_POSTGRES_PASSWORD:-local-mas-postgres-only}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/init-mas-db.sh > /tmp/init-mas-db.sh
+        exec /bin/sh /tmp/init-mas-db.sh
+    volumes:
+      - ./init-mas-db.sh:/config/init-mas-db.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mas-config-generate:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.22.0-debug
+    user: "0:0"
+    restart: "no"
+    environment:
+      MAS_DATA_DIR: /data
+    entrypoint: ["/busybox/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/generate-mas-config.sh > /tmp/generate-mas-config.sh
+        exec /busybox/sh /tmp/generate-mas-config.sh
+    volumes:
+      - mas-data:/data
+      - ./generate-mas-config.sh:/config/generate-mas-config.sh:ro
+
+  mas-config:
+    image: python:3.13-alpine
+    user: "0:0"
+    restart: "no"
+    environment: *mas-environment
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        pip install --no-cache-dir --disable-pip-version-check PyYAML==6.0.2 >/tmp/pip.log
+        tr -d '\r' < /config/render-mas-config.py > /tmp/render-mas-config.py
+        python /tmp/render-mas-config.py
+        # Distroless MAS runs as nonroot (uid 65532).
+        chown -R 65532:65532 /data
+        chmod 640 /data/config.yaml /data/config.base.yaml 2>/dev/null || true
+    volumes:
+      - mas-data:/data
+      - ./render-mas-config.py:/config/render-mas-config.py:ro
+    depends_on:
+      mas-config-generate:
+        condition: service_completed_successfully
+      mas-db-init:
+        condition: service_completed_successfully
+
+  mas:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.22.0
+    restart: unless-stopped
+    command: ["server", "--config", "/data/config.yaml"]
+    ports:
+      - "8083:8080"
+    volumes:
+      - mas-data:/data
+    depends_on:
+      mas-config:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/mas-cli", "--config", "/data/config.yaml", "config", "check"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
   synapse-config:
-    image: matrixdotorg/synapse:v1.157.2
+    image: matrixdotorg/synapse:v1.158.0
     user: "0:0"
     environment: *synapse-environment
     entrypoint: ["/bin/sh", "-c"]
@@ -43,7 +132,7 @@ services:
       - ./render-synapse-config.py:/config/render-synapse-config.py:ro
 
   synapse:
-    image: matrixdotorg/synapse:v1.157.2
+    image: matrixdotorg/synapse:v1.158.0
     restart: unless-stopped
     ports:
       - "8008:8008"
@@ -53,6 +142,8 @@ services:
       postgres:
         condition: service_healthy
       synapse-config:
+        condition: service_completed_successfully
+      mas-config:
         condition: service_completed_successfully
     healthcheck:
       test: [CMD, "curl", "--fail", "--silent", "http://127.0.0.1:8008/health"]
@@ -126,7 +217,7 @@ services:
       retries: 10
 
   element-call:
-    image: ghcr.io/element-hq/element-call:v0.22.0
+    image: ghcr.io/element-hq/element-call:v0.23.0
     restart: unless-stopped
     ports:
       - "8081:8080"
@@ -167,4 +258,5 @@ services:
 volumes:
   postgres-data:
   synapse-data:
+  mas-data:
   redis-data:

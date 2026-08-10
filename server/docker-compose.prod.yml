@@ -8,16 +8,17 @@ x-synapse-environment: &synapse-environment
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
   SYNAPSE_REGISTRATION_SECRET: ${SYNAPSE_REGISTRATION_SECRET:?SYNAPSE_REGISTRATION_SECRET is required}
   TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:?TURN_SHARED_SECRET is required}
-  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-false}
-  # Optional OIDC — when all three are set, render-synapse-config.py emits oidc_providers.
-  OIDC_ISSUER: ${OIDC_ISSUER:-}
-  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-  OIDC_IDP_ID: ${OIDC_IDP_ID:-}
-  OIDC_IDP_NAME: ${OIDC_IDP_NAME:-}
-  OIDC_SCOPES: ${OIDC_SCOPES:-}
-  OIDC_LOCALPART_TEMPLATE: ${OIDC_LOCALPART_TEMPLATE:-}
-  OIDC_DISPLAY_NAME_TEMPLATE: ${OIDC_DISPLAY_NAME_TEMPLATE:-}
+  # Open signup by default after MAS cutover; set false to close public registration.
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
+  MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:?MAS_MATRIX_SECRET is required}
+
+x-mas-environment: &mas-environment
+  SYNAPSE_SERVER_NAME: testhighlife.strangled.net
+  MAS_DATA_DIR: /data
+  MAS_PUBLIC_BASE: https://auth.testhighlife.strangled.net/
+  MAS_POSTGRES_PASSWORD: ${MAS_POSTGRES_PASSWORD:?MAS_POSTGRES_PASSWORD is required}
+  MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:?MAS_MATRIX_SECRET is required}
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
 
 services:
   postgres:
@@ -37,8 +38,116 @@ services:
       retries: 10
     networks: [backend]
 
+  mas-db-init:
+    image: postgres:17.10-alpine
+    restart: "no"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      MAS_POSTGRES_PASSWORD: ${MAS_POSTGRES_PASSWORD:?MAS_POSTGRES_PASSWORD is required}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/init-mas-db.sh > /tmp/init-mas-db.sh
+        exec /bin/sh /tmp/init-mas-db.sh
+    volumes:
+      - ./init-mas-db.sh:/config/init-mas-db.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+  mas-config-generate:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.22.0-debug
+    user: "0:0"
+    restart: "no"
+    environment:
+      MAS_DATA_DIR: /data
+    entrypoint: ["/busybox/sh", "-c"]
+    command:
+      - |
+        set -eu
+        tr -d '\r' < /config/generate-mas-config.sh > /tmp/generate-mas-config.sh
+        exec /busybox/sh /tmp/generate-mas-config.sh
+    volumes:
+      - mas-data:/data
+      - ./generate-mas-config.sh:/config/generate-mas-config.sh:ro
+    networks: [backend]
+
+  mas-config:
+    image: python:3.13-alpine
+    user: "0:0"
+    restart: "no"
+    environment: *mas-environment
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        pip install --no-cache-dir --disable-pip-version-check PyYAML==6.0.2 >/tmp/pip.log
+        tr -d '\r' < /config/render-mas-config.py > /tmp/render-mas-config.py
+        python /tmp/render-mas-config.py
+        # Distroless MAS runs as nonroot (uid 65532).
+        chown -R 65532:65532 /data
+        chmod 640 /data/config.yaml /data/config.base.yaml 2>/dev/null || true
+    volumes:
+      - mas-data:/data
+      - ./render-mas-config.py:/config/render-mas-config.py:ro
+    depends_on:
+      mas-config-generate:
+        condition: service_completed_successfully
+      mas-db-init:
+        condition: service_completed_successfully
+    networks: [backend]
+
+  # One-shot: docker compose --profile migrate run --rm mas-migrate
+  mas-migrate:
+    profiles: ["migrate"]
+    image: ghcr.io/element-hq/matrix-authentication-service:1.22.0
+    # Root so Synapse's mode-0600 homeserver.yaml is readable during import.
+    user: "0:0"
+    restart: "no"
+    volumes:
+      - mas-data:/data
+      - synapse-data:/synapse:ro
+    command:
+      [
+        "syn2mas",
+        "migrate",
+        "--config",
+        "/data/config.yaml",
+        "--synapse-config",
+        "/synapse/homeserver.yaml",
+      ]
+    depends_on:
+      mas-config:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    networks: [backend]
+
+  mas:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.22.0
+    restart: unless-stopped
+    command: ["server", "--config", "/data/config.yaml"]
+    volumes:
+      - mas-data:/data
+    depends_on:
+      mas-config:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/mas-cli", "--config", "/data/config.yaml", "config", "check"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [backend]
+
   synapse-config:
-    image: matrixdotorg/synapse:v1.157.2
+    image: matrixdotorg/synapse:v1.158.0
     user: "0:0"
     restart: "no"
     environment: *synapse-environment
@@ -58,7 +167,7 @@ services:
     networks: [backend]
 
   synapse:
-    image: matrixdotorg/synapse:v1.157.2
+    image: matrixdotorg/synapse:v1.158.0
     restart: unless-stopped
     volumes:
       - synapse-data:/data
@@ -66,6 +175,8 @@ services:
       postgres:
         condition: service_healthy
       synapse-config:
+        condition: service_completed_successfully
+      mas-config:
         condition: service_completed_successfully
     healthcheck:
       test: [CMD, "curl", "--fail", "--silent", "http://127.0.0.1:8008/health"]
@@ -141,7 +252,7 @@ services:
     networks: [backend]
 
   element-call:
-    image: ghcr.io/element-hq/element-call:v0.22.0
+    image: ghcr.io/element-hq/element-call:v0.23.0
     restart: unless-stopped
     volumes:
       - ./element-call-config.json:/app/config.json:ro
@@ -195,14 +306,14 @@ services:
     depends_on:
       synapse:
         condition: service_healthy
+      mas:
+        condition: service_started
       livekit:
         condition: service_healthy
       lk-jwt-service:
         condition: service_started
       element-call:
         condition: service_healthy
-      bot:
-        condition: service_started
     healthcheck:
       test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
       interval: 15s
@@ -212,6 +323,7 @@ services:
       backend:
         aliases:
           - testhighlife.strangled.net
+          - auth.testhighlife.strangled.net
 
   bot:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fakehoward}/highlife-formspace-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
@@ -219,10 +331,10 @@ services:
     expose:
       - "8090"
     environment:
-      # Hit Synapse on the Docker network. Public HTTPS shares rc_login with
-      # browsers/CI and the bot's restart loop previously 429'd itself forever.
-      MATRIX_HOMESERVER: http://synapse:8008
-      ALLOW_INSECURE_HOMESERVER: "true"
+      # Reach the public client API via Caddy so login/logout/refresh hit MAS
+      # compat while other CS API paths reach Synapse.
+      MATRIX_HOMESERVER: https://testhighlife.strangled.net
+      ALLOW_INSECURE_HOMESERVER: "false"
       MATRIX_USER_ID: "@${BOT_LOCALPART:-highlifebot}:testhighlife.strangled.net"
       MATRIX_PASSWORD: ${BOT_MATRIX_PASSWORD:?BOT_MATRIX_PASSWORD is required}
       MATRIX_CRYPTO_STORE_PASSPHRASE: ${BOT_CRYPTO_STORE_PASSPHRASE:?BOT_CRYPTO_STORE_PASSPHRASE is required}
@@ -237,6 +349,10 @@ services:
     depends_on:
       synapse:
         condition: service_healthy
+      mas:
+        condition: service_started
+      caddy:
+        condition: service_started
       redis:
         condition: service_healthy
     networks: [backend]
@@ -272,6 +388,7 @@ networks:
 volumes:
   postgres-data:
   synapse-data:
+  mas-data:
   redis-data:
   bot-data:
   caddy-data:
