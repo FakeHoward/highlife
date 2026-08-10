@@ -27,10 +27,10 @@ register_account() {
   if output="$(docker compose -f "$compose_file" exec -T mas \
     /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
     --yes \
-    --username "$localpart" \
     --password "$password" \
     --no-admin \
-    --ignore-password-complexity 2>&1)"; then
+    --ignore-password-complexity \
+    "$localpart" 2>&1)"; then
     echo "${label} account created"
     return 0
   fi

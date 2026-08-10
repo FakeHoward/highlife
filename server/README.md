@@ -86,8 +86,8 @@ Register a user on the host:
 ```bash
 docker compose -f docker-compose.prod.yml exec -T mas \
   /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
-  --yes --username alice --password '...' --no-admin \
-  --ignore-password-complexity
+  --yes --password '...' --no-admin \
+  --ignore-password-complexity alice
 ```
 
 Or use the GitHub Actions workflow **Provision account**.
