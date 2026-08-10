@@ -23,9 +23,9 @@ register_account() {
   }
 
   echo "Ensuring @${localpart}:testhighlife.strangled.net exists via MAS"
-  # Image ENTRYPOINT is mas-cli.
+  # docker compose exec does not use the image ENTRYPOINT.
   if output="$(docker compose -f "$compose_file" exec -T mas \
-    --config /data/config.yaml manage register-user \
+    /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
     --yes \
     --username "$localpart" \
     --password "$password" \
@@ -48,7 +48,7 @@ register_account() {
 ready=0
 for _ in $(seq 1 30); do
   if docker compose -f "$compose_file" exec -T mas \
-    --config /data/config.yaml config check >/dev/null 2>&1; then
+    /usr/local/bin/mas-cli --config /data/config.yaml config check >/dev/null 2>&1; then
     ready=1
     break
   fi

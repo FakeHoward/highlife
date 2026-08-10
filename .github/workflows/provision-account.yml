@@ -46,9 +46,9 @@ jobs:
                 exit 1
                 ;;
             esac
-            # Image ENTRYPOINT is mas-cli; accounts are owned by Matrix Auth Service.
+            # docker compose exec does not use the image ENTRYPOINT.
             if output="$(docker compose -f docker-compose.prod.yml exec -T mas \
-              --config /data/config.yaml manage register-user \
+              /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
               --yes \
               --username "$localpart" \
               --password "$password" \

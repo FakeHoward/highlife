@@ -34,7 +34,7 @@ $ready = $false
 for ($attempt = 0; $attempt -lt 90; $attempt++) {
   try {
     Invoke-RestMethod -Uri "http://localhost:8008/health" -TimeoutSec 2 | Out-Null
-    docker compose exec -T mas --config /data/config.yaml config check | Out-Null
+    docker compose exec -T mas /usr/local/bin/mas-cli --config /data/config.yaml config check | Out-Null
     if ($LASTEXITCODE -eq 0) {
       $ready = $true
       break
