@@ -1,7 +1,7 @@
 import type { TimelineItem } from "@highlife/ui-contracts";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useI18n } from "../i18n";
-import { createPoll, sendMessage, setTyping, uploadFile } from "../matrix/service";
+import { sendMessage, setTyping, uploadFile } from "../matrix/service";
 import { IconAttach, IconSend } from "./Icons";
 
 export type ComposeMode = { type: "reply" | "edit"; item: TimelineItem } | null;
@@ -20,24 +20,17 @@ export function Composer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadRatio, setUploadRatio] = useState<number | null>(null);
-  const [pollOpen, setPollOpen] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState("");
-  const [pollAnswers, setPollAnswers] = useState("");
   const typingTimer = useRef<number | undefined>(undefined);
   const file = useRef<HTMLInputElement>(null);
   const previousRoom = useRef(roomId);
   const previousMode = useRef(mode);
-
-  // Client-side slash actions only. Bot menus (/start, /help) belong in bot DMs.
-  const commands = [{ value: "/poll", label: t("composer.createPoll") }];
 
   useEffect(() => {
     if (previousRoom.current !== roomId) {
       previousRoom.current = roomId;
       setText("");
       setError(null);
-      setPollOpen(false);
-      void setTyping(roomId, false).catch(() => undefined);
+      void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
     }
   }, [roomId]);
 
@@ -55,19 +48,13 @@ export function Composer({
 
   useEffect(() => () => {
     window.clearTimeout(typingTimer.current);
-    void setTyping(roomId, false).catch(() => undefined);
+    void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
   }, [roomId]);
 
   async function submit(event?: FormEvent) {
     event?.preventDefault();
     const body = text.trim();
     if (!body || busy) return;
-    if (body.toLowerCase() === "/poll" || body.toLowerCase().startsWith("/poll ")) {
-      setPollOpen(true);
-      setText("");
-      await setTyping(roomId, false);
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
@@ -85,29 +72,6 @@ export function Composer({
     }
   }
 
-  async function submitPoll(event: FormEvent) {
-    event.preventDefault();
-    const question = pollQuestion.trim();
-    const answers = pollAnswers
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 4);
-    if (!question || answers.length < 2 || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await createPoll(roomId, { question, answers });
-      setPollQuestion("");
-      setPollAnswers("");
-      setPollOpen(false);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("composer.sendFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -117,12 +81,12 @@ export function Composer({
 
   function change(value: string) {
     setText(value);
-    if (value.toLowerCase() === "/poll") {
-      setPollOpen(true);
-    }
-    void setTyping(roomId, true).catch(() => undefined);
+    void Promise.resolve(setTyping(roomId, true)).catch(() => undefined);
     window.clearTimeout(typingTimer.current);
-    typingTimer.current = window.setTimeout(() => void setTyping(roomId, false), 6000);
+    typingTimer.current = window.setTimeout(
+      () => void Promise.resolve(setTyping(roomId, false)).catch(() => undefined),
+      6000,
+    );
   }
 
   async function attach(event: ChangeEvent<HTMLInputElement>) {
@@ -147,10 +111,6 @@ export function Composer({
   }
 
   const canSend = Boolean(text.trim()) && !busy;
-  const matches = text.startsWith("/")
-    ? commands.filter((command) => command.value.startsWith(text.toLowerCase()))
-    : [];
-
   return (
     <div className="composer-wrap">
       {mode && (
@@ -168,53 +128,6 @@ export function Composer({
           </button>
         </div>
       )}
-      {pollOpen && (
-        <form className="poll-composer" onSubmit={submitPoll}>
-          <label>
-            <span>{t("composer.pollQuestion")}</span>
-            <input
-              value={pollQuestion}
-              onChange={(event) => setPollQuestion(event.target.value)}
-              placeholder={t("composer.pollQuestion")}
-              required
-            />
-          </label>
-          <label>
-            <span>{t("composer.pollAnswers")}</span>
-            <textarea
-              rows={4}
-              value={pollAnswers}
-              onChange={(event) => setPollAnswers(event.target.value)}
-              placeholder={t("composer.pollAnswersPlaceholder")}
-              required
-            />
-          </label>
-          <div className="poll-composer-actions">
-            <button type="button" className="button" onClick={() => setPollOpen(false)}>{t("composer.cancel")}</button>
-            <button type="submit" className="button primary" disabled={busy}>{t("composer.createPoll")}</button>
-          </div>
-        </form>
-      )}
-      {matches.length > 0 && (
-        <div className="command-menu" role="listbox">
-          {matches.map((command) => (
-            <button
-              key={command.value}
-              type="button"
-              onClick={() => {
-                if (command.value === "/poll") {
-                  setPollOpen(true);
-                  setText("");
-                  return;
-                }
-                setText(`${command.value} `);
-              }}
-            >
-              <code>{command.value}</code><span>{command.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
       {error && <p className="composer-error" role="alert">{error}</p>}
       {uploadRatio != null && (
         <div className="upload-progress" role="status" aria-live="polite">
@@ -226,15 +139,6 @@ export function Composer({
         <input ref={file} type="file" hidden onChange={attach} />
         <button type="button" className="icon-button attach" onClick={() => file.current?.click()} aria-label={t("composer.attach")} disabled={busy}>
           <IconAttach />
-        </button>
-        <button
-          type="button"
-          className={`icon-button poll-toggle ${pollOpen ? "active" : ""}`}
-          onClick={() => setPollOpen((value) => !value)}
-          aria-label={t("composer.createPoll")}
-          disabled={busy}
-        >
-          {t("composer.createPoll")}
         </button>
         <textarea
           rows={1}

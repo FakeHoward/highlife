@@ -2,6 +2,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RoomListItem, TimelineItem } from "@highlife/ui-contracts";
 import { LocaleProvider } from "../i18n";
+import { sendMessage } from "../matrix/service";
+import { Avatar } from "./Avatar";
+import { Composer } from "./Composer";
 import { LoginScreen } from "./LoginScreen";
 import { MessageTimeline } from "./MessageTimeline";
 import { RoomSidebar } from "./RoomSidebar";
@@ -18,7 +21,7 @@ vi.mock("../matrix/service", () => ({
   endPoll: vi.fn(),
   resolveMediaObjectUrl: vi.fn(async () => ""),
   createPoll: vi.fn(),
-  setTyping: vi.fn(),
+  setTyping: vi.fn(async () => undefined),
   uploadFile: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
@@ -30,6 +33,10 @@ vi.mock("../matrix/service", () => ({
   leaveRoom: vi.fn(),
   listSpaces: () => [],
   addRoomToSpace: vi.fn(),
+  getRoomAliases: () => ({ canonicalAlias: "#highlife:example.org", aliases: ["#highlife:example.org"] }),
+  setCanonicalAlias: vi.fn(),
+  removeRoomAlias: vi.fn(),
+  setRoomAvatar: vi.fn(),
 }));
 
 vi.mock("../matrix/oidc", () => ({
@@ -121,6 +128,73 @@ describe("responsive room navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: /HighLife QA/i }));
     expect(select).toHaveBeenCalledWith(room.roomId);
   });
+
+  it("uses a narrow space rail and exposes a dismissible selected-space panel", () => {
+    const selectSpace = vi.fn();
+    wrap(
+      <RoomSidebar
+        rooms={[room]}
+        activeId={null}
+        query=""
+        onQuery={vi.fn()}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onNewSpace={vi.fn()}
+        onSettings={vi.fn()}
+        spaces={[{
+          roomId: "!space:example.org",
+          name: "Work",
+          topic: "Project rooms",
+          childRoomIds: [room.roomId],
+        }]}
+        selectedSpaceId="!space:example.org"
+        onSelectSpace={selectSpace}
+      />,
+    );
+
+    expect(screen.getByRole("navigation", { name: "Spaces" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("complementary", { name: "Work" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close Work" }));
+    expect(selectSpace).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("avatars", () => {
+  it("uses an image when an avatar URL is available", () => {
+    wrap(<Avatar id="@alice:example.org" name="Alice" src="https://example.org/alice.png" />);
+    expect(screen.getByRole("img", { name: "Alice" })).toHaveAttribute(
+      "src",
+      "https://example.org/alice.png",
+    );
+  });
+
+  it("uses a deterministic accessible fallback based on the id", () => {
+    const { rerender } = wrap(<Avatar id="@alice:example.org" name="Alice" />);
+    const first = screen.getByRole("img", { name: "Alice" });
+    const color = first.getAttribute("style");
+    expect(first).toHaveTextContent("A");
+
+    rerender(<LocaleProvider><Avatar id="@alice:example.org" name="Changed name" /></LocaleProvider>);
+    expect(screen.getByRole("img", { name: "Changed name" }).getAttribute("style")).toBe(color);
+  });
+});
+
+describe("composer", () => {
+  it("keeps poll creation out of the message row and sends /poll as text", () => {
+    wrap(<Composer roomId={room.roomId} mode={null} onMode={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Poll" })).not.toBeInTheDocument();
+
+    const input = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(input, { target: { value: "/poll" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(screen.queryByText("Poll question")).not.toBeInTheDocument();
+    expect(vi.mocked(sendMessage)).toHaveBeenCalledWith(room.roomId, "/poll", {
+      editEventId: undefined,
+      replyEventId: undefined,
+    });
+  });
 });
 
 describe("message actions", () => {
@@ -145,12 +219,11 @@ describe("message actions", () => {
         onMiniApp={vi.fn()}
         history={{ loading: false, exhausted: true, error: null }}
         onLoadOlder={vi.fn()}
-        onOpenThread={vi.fn()}
       />,
     );
     const grouped = container.querySelector("article.message.grouped");
     expect(grouped).not.toBeNull();
-    expect(grouped?.querySelector(".message-avatar.spacer")).not.toBeNull();
+    expect(grouped?.querySelector(".message-avatar-spacer")).not.toBeNull();
     expect(grouped?.querySelector(".message-stack")).not.toBeNull();
   });
 
@@ -164,12 +237,38 @@ describe("message actions", () => {
         onMiniApp={vi.fn()}
         history={{ loading: false, exhausted: true, error: null }}
         onLoadOlder={vi.fn()}
-        onOpenThread={vi.fn()}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     expect(compose).toHaveBeenCalledWith({ type: "reply", item: message });
+  });
+
+  it("renders foreign thread relations as replies without thread controls", () => {
+    wrap(
+      <MessageTimeline
+        items={[{
+          ...message,
+          isOwn: false,
+          senderId: "@alice:example.org",
+          senderName: "Alice",
+          replyToEventId: "$root",
+          replyPreview: {
+            senderId: "@bob:example.org",
+            senderName: "Bob",
+            body: "Root message",
+          },
+        }]}
+        roomId={room.roomId}
+        onComposeMode={vi.fn()}
+        onMiniApp={vi.fn()}
+        history={{ loading: false, exhausted: true, error: null }}
+        onLoadOlder={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Root message")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Thread" })).not.toBeInTheDocument();
   });
 
   it("does not render unsafe MiniApp content", () => {
@@ -188,7 +287,6 @@ describe("message actions", () => {
         onMiniApp={vi.fn()}
         history={{ loading: false, exhausted: true, error: null }}
         onLoadOlder={vi.fn()}
-        onOpenThread={vi.fn()}
       />,
     );
 
@@ -203,6 +301,8 @@ describe("room member list", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("@alice:example.org")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.getAllByText("#highlife:example.org").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Copy address" })).not.toHaveLength(0);
   });
 });
 

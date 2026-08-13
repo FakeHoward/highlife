@@ -2,7 +2,13 @@
 
 Matrix clients and a small self-host stack built around [aiomatrix](https://www.npmjs.com/package/aiomatrix).
 
-React and Flutter apps speak ordinary Matrix (E2EE, Spaces, DMs, Element Call) and also render `dev.aiomatrix.*` room UI: inline keyboards, signed callbacks, host toasts/progress, Mini Apps, and FormSpace. The `bot` package is the FormSpace reference bot. `server/` is Synapse + Caddy + LiveKit + coturn for a deployable homeserver.
+React and Flutter apps speak ordinary Matrix (E2EE, Spaces, DMs, first-party
+1:1 voice calls, first-party MatrixRTC/LiveKit group calls, and Element Call
+as last-resort fallback) and also render
+`dev.aiomatrix.*` room UI: inline keyboards, signed callbacks, host
+toasts/progress, Mini Apps, and FormSpace. The `bot` package is the FormSpace
+reference bot. `server/` is Synapse + Caddy + LiveKit + coturn for a deployable
+homeserver.
 
 Demo: [testhighlife.strangled.net](https://testhighlife.strangled.net) (MiniApp at `/miniapp/`).
 

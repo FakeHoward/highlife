@@ -61,44 +61,21 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
+                  constraints: const BoxConstraints(maxWidth: 360),
                   child: ListView(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 28,
-                      vertical: 40,
+                      horizontal: 20,
+                      vertical: 28,
                     ),
                     shrinkWrap: true,
                     children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(10),
+                Text(
+                  s.appName,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      child: const Text(
-                        'H',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      s.appName,
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                    ),
-                  ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 6),
                 Text(
                   registering ? s.registerHint : s.loginTagline,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -125,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 SegmentedButton<_AuthMode>(
                   segments: [
                     ButtonSegment(
@@ -149,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           });
                         },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 TextField(
                   controller: _hs,
                   enabled: !session.busy,
@@ -243,7 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: tokens.dangerSoft,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(6),
                       border: Border(
                         left: BorderSide(color: tokens.danger, width: 3),
                       ),

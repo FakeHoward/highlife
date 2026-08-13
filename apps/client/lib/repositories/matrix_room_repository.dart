@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:matrix/matrix.dart';
 
+import '../domain/matrix_identity.dart';
+
 class MatrixRoomRepository {
   const MatrixRoomRepository(this.client);
 
@@ -40,11 +42,24 @@ class MatrixRoomRepository {
     return out;
   }
 
-  Future<String> createRoom(String name, {bool? enableEncryption}) {
-    return client.createGroupChat(
+  Future<String> createRoom(
+    String name, {
+    bool? enableEncryption,
+    String? alias,
+  }) async {
+    final roomId = await client.createGroupChat(
       groupName: name.trim(),
       enableEncryption: enableEncryption,
     );
+    final normalizedAlias = normalizeRoomReference(
+      alias ?? '',
+      homeserver: client.homeserver?.host,
+    );
+    if (normalizedAlias.isNotEmpty) {
+      final room = client.getRoomById(roomId);
+      if (room != null) await room.setCanonicalAlias(normalizedAlias);
+    }
+    return roomId;
   }
 
   /// Private Matrix space (sidebar folder).
@@ -72,7 +87,10 @@ class MatrixRoomRepository {
   }
 
   Future<String> joinRoom(String roomIdOrAlias) {
-    final id = roomIdOrAlias.trim();
+    final id = normalizeRoomReference(
+      roomIdOrAlias,
+      homeserver: client.homeserver?.host,
+    );
     final colon = id.lastIndexOf(':');
     final via =
         colon > 0 && colon < id.length - 1 ? <String>[id.substring(colon + 1)] : null;
@@ -120,15 +138,11 @@ class MatrixRoomRepository {
     String text, {
     Event? replyTo,
     Event? edit,
-    String? threadRootEventId,
-    String? threadLastEventId,
   }) {
     return room.sendTextEvent(
       text,
       inReplyTo: replyTo,
       editEventId: edit?.eventId,
-      threadRootEventId: threadRootEventId,
-      threadLastEventId: threadLastEventId,
     );
   }
 

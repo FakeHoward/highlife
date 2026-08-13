@@ -11,6 +11,7 @@ enum TimelineItemKind {
   file,
   location,
   poll,
+  system,
 }
 
 /// Lightweight event shape so timeline logic can be tested without a live Matrix client.
@@ -56,7 +57,6 @@ class TimelineItem {
     this.replyToEventId,
     this.edited = false,
     this.reactions = const [],
-    this.threadRootEventId,
   });
 
   final String eventId;
@@ -67,8 +67,6 @@ class TimelineItem {
   final String? replyToEventId;
   final bool edited;
   final List<ReactionSummary> reactions;
-  /// Set when this event is part of an `m.thread` relation.
-  final String? threadRootEventId;
 
   factory TimelineItem.fromContent({
     required String eventId,
@@ -77,7 +75,6 @@ class TimelineItem {
     required Map<String, dynamic> content,
     bool edited = false,
     List<ReactionSummary> reactions = const [],
-    String? threadRootEventId,
   }) {
     final msgtype = content['msgtype'] as String? ?? 'm.text';
     final kind = switch (msgtype) {
@@ -106,7 +103,6 @@ class TimelineItem {
       replyToEventId: replyMap['event_id'] as String?,
       edited: edited,
       reactions: reactions,
-      threadRootEventId: threadRootEventId,
     );
     if (kind == TimelineItemKind.text ||
         kind == TimelineItemKind.notice ||
@@ -131,7 +127,6 @@ class MediaTimelineItem extends TimelineItem {
     super.replyToEventId,
     super.edited,
     super.reactions,
-    super.threadRootEventId,
   });
 
   final String? mxcUrl;
@@ -147,7 +142,6 @@ class MediaTimelineItem extends TimelineItem {
       replyToEventId: item.replyToEventId,
       edited: item.edited,
       reactions: item.reactions,
-      threadRootEventId: item.threadRootEventId,
     );
   }
 }
@@ -166,7 +160,6 @@ class PollTimelineItem extends TimelineItem {
     required this.totalVoters,
     this.disclosed = true,
     super.reactions,
-    super.threadRootEventId,
   }) : super(body: question, kind: TimelineItemKind.poll);
 
   final String question;
@@ -259,6 +252,31 @@ List<TimelineItem> buildTimelineItems(
   for (final event in events) {
     if (event.redacted) continue;
 
+    if (const {
+      'm.room.name',
+      'm.room.topic',
+      'm.room.canonical_alias',
+      'm.room.avatar',
+    }.contains(event.type)) {
+      final body = switch (event.type) {
+        'm.room.name' => event.content['name'] as String? ?? '',
+        'm.room.topic' => event.content['topic'] as String? ?? '',
+        'm.room.canonical_alias' =>
+          event.content['alias'] as String? ?? '',
+        _ => '',
+      };
+      items.add(
+        TimelineItem(
+          eventId: event.eventId,
+          senderId: event.senderId,
+          timestamp: event.timestamp,
+          body: body,
+          kind: TimelineItemKind.system,
+        ),
+      );
+      continue;
+    }
+
     if (isPollStartType(event.type)) {
       final start = parsePollStartContent(event.content);
       if (start == null) continue;
@@ -312,10 +330,6 @@ List<TimelineItem> buildTimelineItems(
     final content = editedContent == null
         ? event.content
         : <String, dynamic>{...event.content, ...editedContent};
-    final threadRoot = relation['rel_type'] == 'm.thread'
-        ? relation['event_id'] as String?
-        : null;
-
     final reactionMap = reactions[event.eventId] ?? const {};
     final reactionList = reactionMap.entries
         .map(
@@ -337,27 +351,12 @@ List<TimelineItem> buildTimelineItems(
         content: content,
         edited: editedContent != null,
         reactions: reactionList,
-        threadRootEventId: threadRoot,
       ),
     );
   }
 
   items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   return items;
-}
-
-/// Filter to a thread root + its replies (and the root itself).
-List<TimelineItem> filterThreadItems(
-  List<TimelineItem> items,
-  String threadRootEventId,
-) {
-  return items
-      .where(
-        (item) =>
-            item.eventId == threadRootEventId ||
-            item.threadRootEventId == threadRootEventId,
-      )
-      .toList();
 }
 
 class TimelineGroup {

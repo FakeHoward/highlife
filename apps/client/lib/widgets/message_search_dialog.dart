@@ -5,13 +5,13 @@ import '../l10n/messages.dart';
 import '../theme.dart';
 import 'hl_button.dart';
 
-Future<void> showMessageSearchDialog(
+Future<String?> showMessageSearchDialog(
   BuildContext context, {
   required Client client,
   required AppStrings strings,
   String? roomId,
 }) {
-  return showDialog<void>(
+  return showDialog<String>(
     context: context,
     builder: (context) => MessageSearchDialog(
       client: client,
@@ -130,14 +130,13 @@ class _MessageSearchDialogState extends State<MessageSearchDialog> {
                             final body = content['body']?.toString() ?? '';
                             final roomId = event?.roomId ?? '';
                             final sender = event?.senderId ?? '';
-                            return ListTile(
-                              title: Text(
-                                body.isEmpty ? '(no body)' : body,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text('$sender\n$roomId'),
-                              isThreeLine: true,
+                            return SearchResultTile(
+                              eventId: event?.eventId ?? '',
+                              body: body.isEmpty ? '(no body)' : body,
+                              sender: sender,
+                              roomId: roomId,
+                              onSelected: (eventId) =>
+                                  Navigator.pop(context, eventId),
                             );
                           },
                         ),
@@ -151,6 +150,38 @@ class _MessageSearchDialogState extends State<MessageSearchDialog> {
           label: Text(s.done),
         ),
       ],
+    );
+  }
+}
+
+class SearchResultTile extends StatelessWidget {
+  const SearchResultTile({
+    super.key,
+    required this.eventId,
+    required this.body,
+    required this.sender,
+    required this.roomId,
+    required this.onSelected,
+  });
+
+  final String eventId;
+  final String body;
+  final String sender;
+  final String roomId;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(
+        body,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text('$sender\n$roomId'),
+      isThreeLine: true,
+      enabled: eventId.isNotEmpty,
+      onTap: eventId.isEmpty ? null : () => onSelected(eventId),
     );
   }
 }

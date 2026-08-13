@@ -23,6 +23,7 @@ import {
   type MiniAppCard,
 } from "../protocol/aiomatrix";
 import { IconDownload } from "./Icons";
+import { Avatar } from "./Avatar";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀"] as const;
 
@@ -79,7 +80,6 @@ interface Props {
   onMiniApp: (card: MiniAppCard, item: TimelineItem) => void;
   history: { loading: boolean; exhausted: boolean; error: string | null };
   onLoadOlder: () => Promise<void>;
-  onOpenThread: (item: TimelineItem) => void;
   highlightEventId?: string | null;
 }
 
@@ -90,7 +90,6 @@ export function MessageTimeline({
   onMiniApp,
   history,
   onLoadOlder,
-  onOpenThread,
   highlightEventId,
 }: Props) {
   const { t } = useI18n();
@@ -215,12 +214,15 @@ export function MessageTimeline({
             className={`message ${item.isOwn ? "own" : ""} ${grouped ? "grouped" : ""} ${highlightEventId === item.eventId ? "highlight" : ""}`}
           >
             {!item.isOwn && (
-              <span
-                className={`message-avatar ${grouped ? "spacer" : ""}`}
-                aria-hidden="true"
-              >
-                {grouped ? "" : item.senderName.slice(0, 1).toUpperCase()}
-              </span>
+              grouped
+                ? <span className="message-avatar-spacer" aria-hidden="true" />
+                : <Avatar
+                    className="message-avatar"
+                    id={item.senderId}
+                    name={item.senderName}
+                    src={item.senderAvatarUrl}
+                    size="small"
+                  />
             )}
             <div className="message-stack">
               {!grouped && !item.isOwn && <header><strong>{item.senderName}</strong></header>}
@@ -232,7 +234,6 @@ export function MessageTimeline({
                       : <>{t("timeline.replyUnavailable")}</>}
                   </button>
                 )}
-                {item.threadRootId && <span className="thread-label">{t("timeline.threadReply")}</span>}
                 {item.redacted ? (
                   <em className="muted">{item.body}</em>
                 ) : item.poll ? (
@@ -315,7 +316,6 @@ export function MessageTimeline({
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={() => onOpenThread(item)}>{t("timeline.thread")}</button>
                   {item.isOwn && <button type="button" onClick={() => onComposeMode({ type: "edit", item })}>{t("timeline.edit")}</button>}
                   {item.isOwn && (
                     <button

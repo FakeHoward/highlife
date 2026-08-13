@@ -22,7 +22,10 @@ is an operator step outside the repo.
 - [x] Android CI signing secrets + AAB artifact
 - [x] Flutter-web crypto hard-failure banner
 - [x] Vendored `android/` `web/` `linux/` `windows/` + `pubspec.lock`
-- [x] MatrixRTC Element Call + Widget API host
+- [x] MatrixRTC Element Call + Widget API host (group-call fallback)
+- [x] Isolated first-party Matrix 1:1 voice cores (web + Flutter)
+- [x] First-party call cores integrated with session/chat lifecycle and localized UI
+- [x] Native first-party MatrixRTC/LiveKit group media; Element Call is last-resort fallback
 - [x] CI + FormSpace bot
 - [ ] Play Console store listing (operator; UnifiedPush/signing ready in repo)
 - [ ] iOS — out of scope
@@ -43,11 +46,15 @@ is an operator step outside the repo.
 - [x] Backup script `scripts/backup-highlife.sh`
 - [x] Stale `raw-deploy.yml` removed
 
-## MatrixRTC / federation / push smoke
+## Calling / federation / push smoke
 
 1. DNS for `call.` / `rtc.` (and `push.` when `ENABLE_PUSH=true`)
 2. Deploy → Caddy certs
-3. Two-client MatrixRTC call
-4. Matrix.org Federation Tester
-5. Cron `scripts/backup-highlife.sh`
-6. Keep `DEPLOY_PASSWORD` if you use password SSH interactively
+3. Two-client first-party 1:1 voice call on web and one
+   supported Flutter target (answer/reject/mute/hangup + remote audio)
+4. Two-client first-party MatrixRTC/LiveKit group call; Element Call only if JWT/SFU fails
+5. Verify TURN on UDP/TCP `3478` and relay ports `49160-49200`; TLS `443`
+   belongs to Caddy and is not advertised as TURN/TLS
+6. Matrix.org Federation Tester
+7. Cron `scripts/backup-highlife.sh`
+8. Keep `DEPLOY_PASSWORD` if you use password SSH interactively

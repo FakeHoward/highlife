@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:matrix/encryption.dart';
@@ -14,6 +15,8 @@ import 'auth_errors.dart';
 import 'call_uri.dart';
 import 'crypto_initializer.dart';
 import 'crypto_service.dart';
+import 'matrix_rtc_service.dart';
+import 'native_call_service.dart';
 import 'push_service.dart';
 import 'unified_push_service.dart';
 
@@ -43,6 +46,8 @@ class HighLifeSession extends ChangeNotifier {
   CryptoService? _crypto;
   PushService? _push;
   UnifiedPushService? _unifiedPush;
+  NativeCallService? _nativeCalls;
+  MatrixRtcService? _matrixRtc;
   SyncStatusUpdate? _syncStatus;
   bool _initialSyncDone = false;
   KeyVerification? _incomingVerification;
@@ -65,6 +70,8 @@ class HighLifeSession extends ChangeNotifier {
   String? get cryptoInitError => _cryptoInitError;
   CryptoService? get crypto => _crypto;
   PushService? get push => _push;
+  NativeCallService? get nativeCalls => _nativeCalls;
+  MatrixRtcService? get matrixRtc => _matrixRtc;
   bool get ssoAvailable => _ssoAvailable;
   bool get passwordLoginAvailable => _passwordLoginAvailable;
   Uri? get ssoRedirectUrl => _ssoRedirectUrl;
@@ -76,11 +83,15 @@ class HighLifeSession extends ChangeNotifier {
   KeyVerification? get incomingVerification => _incomingVerification;
   HostToast? get hostToast => _hostToast;
 
-  /// MatrixRTC media still needs LiveKit/Element Call infrastructure.
-  /// When configured, HighLife opens the trusted Element Call deployment.
+  /// Last-resort Element Call widget when first-party LiveKit/MatrixRTC fails.
   bool get rtcAvailable => const bool.fromEnvironment(
         'HIGHLIFE_RTC_AVAILABLE',
         defaultValue: true,
+      );
+
+  String get livekitJwtUrl => const String.fromEnvironment(
+        'HIGHLIFE_LIVEKIT_JWT_URL',
+        defaultValue: 'https://rtc.testhighlife.strangled.net/livekit/jwt',
       );
 
   String get elementCallUrl => const String.fromEnvironment(
@@ -137,6 +148,7 @@ class HighLifeSession extends ChangeNotifier {
     await _client!.init();
     if (_client!.isLogged()) {
       _rooms = MatrixRoomRepository(_client!);
+      _startNativeCalling(_client!);
       _startPushPipeline();
       unawaited(_refreshOwnDevices(_client!));
     }
@@ -155,6 +167,19 @@ class HighLifeSession extends ChangeNotifier {
     // Always try UnifiedPush on Android; HTTP pusher registers only when a
     // real endpoint arrives and HIGHLIFE_PUSH_GATEWAY_URL is set.
     unawaited(_unifiedPush!.start());
+  }
+
+  void _startNativeCalling(Client active) {
+    final previous = _nativeCalls;
+    if (previous != null) unawaited(previous.dispose());
+    final calls = NativeCallService(active);
+    _nativeCalls = calls;
+    _subs.add(calls.snapshots.listen((_) => notifyListeners()));
+    final previousRtc = _matrixRtc;
+    if (previousRtc != null) unawaited(previousRtc.dispose());
+    final rtc = MatrixRtcService(active, fallbackJwtUrl: livekitJwtUrl);
+    _matrixRtc = rtc;
+    _subs.add(rtc.snapshots.listen((_) => notifyListeners()));
   }
 
   Future<void> _maybeRegisterPush({String? pushkey}) async {
@@ -389,6 +414,7 @@ class HighLifeSession extends ChangeNotifier {
         throw AuthErrorKeys.loginFailed;
       }
       _rooms = MatrixRoomRepository(client);
+      _startNativeCalling(client);
       _startPushPipeline();
       unawaited(_refreshOwnDevices(client));
     } catch (e) {
@@ -424,6 +450,7 @@ class HighLifeSession extends ChangeNotifier {
         throw AuthErrorKeys.loginFailed;
       }
       _rooms = MatrixRoomRepository(client);
+      _startNativeCalling(client);
       _startPushPipeline();
       unawaited(_refreshOwnDevices(client));
     } catch (e) {
@@ -477,6 +504,7 @@ class HighLifeSession extends ChangeNotifier {
         throw AuthErrorKeys.registerIncomplete;
       }
       _rooms = MatrixRoomRepository(client);
+      _startNativeCalling(client);
       _startPushPipeline();
       unawaited(_refreshOwnDevices(client));
     } catch (e) {
@@ -497,6 +525,38 @@ class HighLifeSession extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<Uri?> fetchAvatarUrl() async {
+    final client = _client;
+    final userId = client?.userID;
+    if (client == null || userId == null) return null;
+    try {
+      return (await client.getProfileFromUserId(userId)).avatarUrl;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setOwnAvatar(Uint8List bytes, String fileName) async {
+    final client = _client;
+    if (client == null) return;
+    await client.setAvatar(MatrixFile(bytes: bytes, name: fileName));
+    notifyListeners();
+  }
+
+  Future<void> setRoomAvatar(
+    Room room,
+    Uint8List bytes,
+    String fileName,
+  ) async {
+    await room.setAvatar(MatrixFile(bytes: bytes, name: fileName));
+    notifyListeners();
+  }
+
+  Future<void> setCanonicalAlias(Room room, String alias) async {
+    await room.setCanonicalAlias(alias.trim());
+    notifyListeners();
   }
 
   Future<void> setDisplayName(String displayName) async {
@@ -536,6 +596,12 @@ class HighLifeSession extends ChangeNotifier {
       failure = AuthErrorKeys.logoutFailed;
     }
     _rooms = null;
+    final nativeCalls = _nativeCalls;
+    _nativeCalls = null;
+    if (nativeCalls != null) await nativeCalls.dispose();
+    final matrixRtc = _matrixRtc;
+    _matrixRtc = null;
+    if (matrixRtc != null) await matrixRtc.dispose();
     _push = null;
     _unifiedPush?.dispose();
     _unifiedPush = null;
@@ -569,10 +635,18 @@ class HighLifeSession extends ChangeNotifier {
     return repository.roomsInSpace(space);
   }
 
-  Future<void> createRoom(String name, {bool? enableEncryption}) async {
+  Future<void> createRoom(
+    String name, {
+    bool? enableEncryption,
+    String? alias,
+  }) async {
     final repository = _rooms;
     if (repository == null || name.trim().isEmpty) return;
-    await repository.createRoom(name, enableEncryption: enableEncryption);
+    await repository.createRoom(
+      name,
+      enableEncryption: enableEncryption,
+      alias: alias,
+    );
     notifyListeners();
   }
 
@@ -775,6 +849,12 @@ class HighLifeSession extends ChangeNotifier {
 
   @override
   void dispose() {
+    final nativeCalls = _nativeCalls;
+    _nativeCalls = null;
+    if (nativeCalls != null) unawaited(nativeCalls.dispose());
+    final matrixRtc = _matrixRtc;
+    _matrixRtc = null;
+    if (matrixRtc != null) unawaited(matrixRtc.dispose());
     for (final sub in _subs) {
       unawaited(sub.cancel());
     }

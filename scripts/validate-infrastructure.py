@@ -53,7 +53,23 @@ def validate_compose(path: Path, production: bool) -> None:
     if production:
         ports = services["livekit"].get("ports", [])
         require(any("50000-50100" in str(port) and "udp" in str(port) for port in ports), "LiveKit UDP range missing")
-        require(any("3478" in str(port) and "udp" in str(port) for port in services["coturn"].get("ports", [])), "TURN UDP port missing")
+        turn_ports = services["coturn"].get("ports", [])
+        require(any("3478" in str(port) and "udp" in str(port) for port in turn_ports), "TURN UDP port missing")
+        require(any("3478" in str(port) and "tcp" in str(port) for port in turn_ports), "TURN TCP port missing")
+        require(
+            any("49160-49200" in str(port) and "udp" in str(port) for port in turn_ports),
+            "TURN UDP relay range missing",
+        )
+        require(
+            any("49160-49200" in str(port) and "tcp" in str(port) for port in turn_ports),
+            "TURN TCP relay range missing",
+        )
+        require(not any("443:" in str(port) for port in turn_ports), "TURN must not claim Caddy's TLS 443")
+        turn_command = services["coturn"].get("command", [])
+        require(
+            any("--stale-nonce=600" == str(argument) for argument in turn_command),
+            "TURN must rotate authentication nonces",
+        )
         bot = services["bot"]
         require("/highlife-formspace-bot:" in bot.get("image", ""), "production bot image must use highlife-formspace-bot")
         bot_environment = bot.get("environment", {})
@@ -136,6 +152,7 @@ def validate_static_config() -> None:
         "worker-src 'self' blob:",
         'frame-ancestors https://testhighlife.strangled.net',
         'camera=(self \\"https://call.testhighlife.strangled.net\\")',
+        'microphone=(self \\"https://call.testhighlife.strangled.net\\")',
         "handle_path /flutter/*",
         "handle_path /miniapp/*",
         "handle_path /miniapp-api/*",
@@ -143,8 +160,11 @@ def validate_static_config() -> None:
         "root * /srv/flutter",
         "root * /srv/miniapp",
         "reverse_proxy sygnal:5000",
+        'Access-Control-Allow-Methods "POST, OPTIONS"',
     ):
         require(fragment in caddy, f"Caddyfile is missing {fragment}")
+    require("fonts.googleapis.com" not in caddy, "Caddy CSP must not allow Google Fonts")
+    require("fonts.gstatic.com" not in caddy, "Caddy CSP must not allow remote Google font files")
 
     call_block = caddy.split(f"call.{DOMAIN} {{", 1)[1].split(f"rtc.{DOMAIN} {{", 1)[0]
     require("-X-Frame-Options" in call_block, "Element Call must strip upstream X-Frame-Options")
@@ -162,6 +182,7 @@ def validate_static_config() -> None:
         "npm ci",
         "npm run build",
         "VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net",
+        "VITE_LIVEKIT_JWT_URL: https://rtc.testhighlife.strangled.net/livekit/jwt",
         "VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net",
         "--project-name highlife_client",
         "--org app.highlife",

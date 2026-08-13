@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -9,6 +10,7 @@ import '../l10n/messages.dart';
 import '../services/session.dart';
 import '../services/update_checker.dart';
 import 'hl_button.dart';
+import 'matrix_avatar.dart';
 import 'verification_dialog.dart';
 
 Future<void> showSettingsDialog(BuildContext context) {
@@ -28,6 +30,7 @@ class SettingsDialog extends StatefulWidget {
 class _SettingsDialogState extends State<SettingsDialog> {
   PackageInfo? _packageInfo;
   String? _displayName;
+  Uri? _avatarUrl;
   var _checkingUpdates = false;
 
   @override
@@ -40,10 +43,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final session = context.read<HighLifeSession>();
     final info = await PackageInfo.fromPlatform();
     final name = await session.fetchDisplayName();
+    final avatar = await session.fetchAvatarUrl();
     if (!mounted) return;
     setState(() {
       _packageInfo = info;
       _displayName = name;
+      _avatarUrl = avatar;
     });
   }
 
@@ -63,19 +68,37 @@ class _SettingsDialogState extends State<SettingsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(session.userId ?? ''),
-              const SizedBox(height: 8),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.badge_outlined),
+                leading: InkWell(
+                  onTap: () => _changeAvatar(session),
+                  borderRadius: BorderRadius.circular(14),
+                  child: MatrixAvatar(
+                    name: _displayName ?? session.userId ?? '',
+                    mxc: _avatarUrl,
+                    client: session.client,
+                    radius: 24,
+                  ),
+                ),
                 title: Text(s.displayName),
                 subtitle: Text(
-                  _displayName?.isNotEmpty == true ? _displayName! : '—',
+                  '${_displayName?.isNotEmpty == true ? _displayName! : '—'}\n'
+                  '${session.userId ?? ''}',
                 ),
-                trailing: IconButton(
-                  tooltip: s.editDisplayName,
-                  onPressed: () => _editDisplayName(session, s),
-                  icon: const Icon(Icons.edit_outlined),
+                isThreeLine: true,
+                trailing: Wrap(
+                  children: [
+                    IconButton(
+                      tooltip: s.changeAvatar,
+                      onPressed: () => _changeAvatar(session),
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                    ),
+                    IconButton(
+                      tooltip: s.editDisplayName,
+                      onPressed: () => _editDisplayName(session, s),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                  ],
                 ),
               ),
               const Divider(),
@@ -282,6 +305,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
       );
     }
+  }
+
+  Future<void> _changeAvatar(HighLifeSession session) async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final file =
+        result == null || result.files.isEmpty ? null : result.files.first;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+    await session.setOwnAvatar(bytes, file.name);
+    final avatar = await session.fetchAvatarUrl();
+    if (mounted) setState(() => _avatarUrl = avatar);
   }
 
   Future<void> _checkUpdates(AppStrings s) async {

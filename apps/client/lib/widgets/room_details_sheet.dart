@@ -1,10 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:matrix/matrix.dart';
 
 import '../l10n/messages.dart';
 import '../services/session.dart';
 import '../theme.dart';
 import 'hl_button.dart';
+import 'matrix_avatar.dart';
 
 Future<void> showRoomDetailsSheet(
   BuildContext context, {
@@ -111,6 +114,49 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
     }
   }
 
+  Future<void> _changeRoomAvatar() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final file =
+        result == null || result.files.isEmpty ? null : result.files.first;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null) return;
+    await widget.session.setRoomAvatar(widget.room, bytes, file.name);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _editAlias() async {
+    final controller = TextEditingController(text: widget.room.canonicalAlias);
+    final alias = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.strings.editRoomAlias),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: widget.strings.roomAliasHint),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          HlButton.text(
+            onPressed: () => Navigator.pop(context),
+            label: Text(widget.strings.cancel),
+          ),
+          HlButton.primary(
+            onPressed: () => Navigator.pop(context, controller.text),
+            label: Text(widget.strings.save),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (alias == null || alias.trim().isEmpty) return;
+    await widget.session.setCanonicalAlias(widget.room, alias);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _leave() async {
     final colors = Theme.of(context).colorScheme;
     final s = widget.strings;
@@ -164,6 +210,17 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
               child: Row(
                 children: [
+                  InkWell(
+                    onTap: _changeRoomAvatar,
+                    borderRadius: BorderRadius.circular(14),
+                    child: MatrixAvatar(
+                      name: name,
+                      mxc: room.avatar,
+                      client: room.client,
+                      radius: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       name,
@@ -196,6 +253,19 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   _MetaRow(label: s.roomIdLabel, value: room.id),
                   const SizedBox(height: 8),
                   _MetaRow(
+                    label: s.roomAliasLabel,
+                    value: room.canonicalAlias.isEmpty
+                        ? '—'
+                        : room.canonicalAlias,
+                    onCopy: room.canonicalAlias.isEmpty
+                        ? null
+                        : () => Clipboard.setData(
+                              ClipboardData(text: room.canonicalAlias),
+                            ),
+                    onEdit: _editAlias,
+                  ),
+                  const SizedBox(height: 8),
+                  _MetaRow(
                     label: s.encryptionLabel,
                     value: encrypted ? s.encryptionOn : s.encryptionOff,
                   ),
@@ -221,6 +291,12 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                     ..._members.map((user) {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
+                        leading: MatrixAvatar(
+                          name: user.calcDisplayname(),
+                          mxc: user.avatarUrl,
+                          client: room.client,
+                          radius: 18,
+                        ),
                         title: Text(user.calcDisplayname()),
                         subtitle: Text(user.id),
                         trailing: Text(
@@ -336,10 +412,17 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
 }
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.label, required this.value});
+  const _MetaRow({
+    required this.label,
+    required this.value,
+    this.onCopy,
+    this.onEdit,
+  });
 
   final String label;
   final String value;
+  final VoidCallback? onCopy;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -354,9 +437,19 @@ class _MetaRow extends StatelessWidget {
             style: TextStyle(color: tokens.muted),
           ),
         ),
-        Expanded(
-          child: SelectableText(value),
-        ),
+        Expanded(child: SelectableText(value)),
+        if (onCopy != null)
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onCopy,
+            icon: const Icon(Icons.copy_outlined, size: 17),
+          ),
+        if (onEdit != null)
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 17),
+          ),
       ],
     );
   }

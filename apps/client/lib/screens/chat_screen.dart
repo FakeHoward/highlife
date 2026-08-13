@@ -50,8 +50,11 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _failedText;
   Event? _replyTo;
   Event? _editing;
-  Event? _threadRoot;
   bool _loadingHistory = false;
+  bool _uploading = false;
+  String? _highlightEventId;
+  Timer? _highlightTimer;
+  final Map<String, GlobalKey> _eventKeys = {};
   Timer? _typingDebounce;
   Timer? _typingRefresh;
   bool _typingSent = false;
@@ -79,10 +82,58 @@ class _ChatScreenState extends State<ChatScreen> {
     _scroll.jumpTo(_scroll.position.maxScrollExtent);
   }
 
+  Future<void> _openSearch(
+    HighLifeSession session,
+    AppStrings strings,
+  ) async {
+    final client = session.client;
+    if (client == null) return;
+    final eventId = await showMessageSearchDialog(
+      context,
+      client: client,
+      strings: strings,
+      roomId: widget.room.id,
+    );
+    if (!mounted || eventId == null) return;
+    await _revealEvent(eventId);
+  }
+
+  Future<void> _revealEvent(String eventId) async {
+    final timeline = _timeline;
+    if (timeline == null) return;
+    for (var attempt = 0; attempt < 10; attempt++) {
+      if (timeline.events.any((event) => event.eventId == eventId)) break;
+      final before = timeline.events.length;
+      await timeline.requestHistory(historyCount: 50);
+      if (timeline.events.length == before) break;
+    }
+    if (!mounted ||
+        !timeline.events.any((event) => event.eventId == eventId)) {
+      return;
+    }
+    setState(() => _highlightEventId = eventId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _eventKeys[eventId]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.35,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _highlightEventId = null);
+    });
+  }
+
   @override
   void dispose() {
     _typingDebounce?.cancel();
     _typingRefresh?.cancel();
+    _highlightTimer?.cancel();
     if (_typingSent) {
       unawaited(widget.room.setTyping(false));
     }
@@ -155,11 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
         redacted: event.redacted,
       ),
     );
-    var items = buildTimelineItems(raw, ownUserId: session.userId);
-    final threadRootId = _threadRoot?.eventId;
-    if (threadRootId != null) {
-      items = filterThreadItems(items, threadRootId);
-    }
+    final items = buildTimelineItems(raw, ownUserId: session.userId);
     final bodyById = {for (final item in items) item.eventId: item.body};
     final groups = groupTimelineItems(items);
     final rows = <_TimelineRow>[];
@@ -253,19 +300,10 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             tooltip: s.searchMessages,
-            onPressed: () {
-              final client = session.client;
-              if (client == null) return;
-              showMessageSearchDialog(
-                context,
-                client: client,
-                strings: s,
-                roomId: widget.room.id,
-              );
-            },
+            onPressed: () => _openSearch(session, s),
             icon: const Icon(Icons.search),
           ),
-          if (session.rtcAvailable)
+          if (session.nativeCalls != null || session.rtcAvailable)
             IconButton(
               tooltip: s.startCall,
               onPressed: () => _startCall(session),
@@ -294,26 +332,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 leading: const Icon(Icons.call),
                 title: Text(s.callBannerActive),
                 trailing: HlButton.primary(
-                  onPressed: () => _startCall(session),
+                  onPressed: () => _joinMatrixRtc(session),
                   label: Text(s.joinCall),
-                ),
-              ),
-            ),
-          if (_threadRoot != null)
-            Material(
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: ListTile(
-                dense: true,
-                title: Text(s.threadReply),
-                subtitle: Text(
-                  _threadRoot!.body,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  tooltip: s.closeThread,
-                  onPressed: () => setState(() => _threadRoot = null),
-                  icon: const Icon(Icons.close, size: 18),
                 ),
               ),
             ),
@@ -382,11 +402,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     return _DaySeparator(day: row.day!, strings: s);
                   }
                   final event = row.event!;
-                  return _MessageTile(
+                  return KeyedSubtree(
+                    key: _eventKeys.putIfAbsent(
+                      event.eventId,
+                      () => GlobalKey(),
+                    ),
+                    child: _MessageTile(
                     event: event,
                     item: row.item!,
                     own: row.own,
                     showSender: row.showSender,
+                    highlighted: event.eventId == _highlightEventId,
                     replyPreview: row.replyPreview,
                     httpMediaUrl: row.httpMediaUrl,
                     feedback: session.callbackFeedback[event.eventId] == null
@@ -406,11 +432,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         ? () => session.endPoll(widget.room, event.eventId)
                         : null,
                     onReply: () => setState(() {
-                      _replyTo = event;
-                      _editing = null;
-                    }),
-                    onReplyInThread: () => setState(() {
-                      _threadRoot = _resolveThreadRoot(event);
                       _replyTo = event;
                       _editing = null;
                     }),
@@ -451,6 +472,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               mode: LaunchMode.externalApplication,
                             ),
                     strings: s,
+                    ),
                   );
                 },
               ),
@@ -498,34 +520,45 @@ class _ChatScreenState extends State<ChatScreen> {
                       _editing = null;
                     }),
                   ),
+                if (_uploading) const LinearProgressIndicator(minHeight: 2),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 7, 10, 10),
                   child: Row(
                     children: [
-                      IconButton(
-                        tooltip: s.attachFile,
-                        onPressed: () => _attach(session),
-                        icon: const Icon(Icons.attach_file),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _composer,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: InputDecoration(
-                            hintText: s.messageHint,
-                          ),
-                          onChanged: (_) => _onComposerChanged(session),
-                          onSubmitted: (_) => _send(session),
+                      SizedBox.square(
+                        dimension: 40,
+                        child: IconButton(
+                          tooltip: s.attachFile,
+                          onPressed: _uploading ? null : () => _attach(session),
+                          icon: const Icon(Icons.attach_file, size: 20),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        tooltip: s.sendMessage,
-                        onPressed: _composer.text.trim().isEmpty
-                            ? null
-                            : () => _send(session),
-                        icon: const Icon(Icons.send, size: 20),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 40),
+                          child: TextField(
+                            controller: _composer,
+                            minLines: 1,
+                            maxLines: 4,
+                            decoration: InputDecoration(
+                              hintText: s.messageHint,
+                            ),
+                            onChanged: (_) => _onComposerChanged(session),
+                            onSubmitted: (_) => _send(session),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      SizedBox.square(
+                        dimension: 40,
+                        child: IconButton.filled(
+                          tooltip: s.sendMessage,
+                          onPressed: _composer.text.trim().isEmpty
+                              ? null
+                              : () => _send(session),
+                          icon: const Icon(Icons.send, size: 18),
+                        ),
                       ),
                     ],
                   ),
@@ -546,18 +579,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (typers.isEmpty) return null;
     if (typers.length == 1) return s.typingUsers(typers.first);
     return s.typingUsers(typers.join(', '));
-  }
-
-  Event _resolveThreadRoot(Event event) {
-    if (event.relationshipType == RelationshipTypes.thread) {
-      final rootId = event.relationshipEventId;
-      if (rootId != null) {
-        for (final candidate in _timeline?.events ?? const <Event>[]) {
-          if (candidate.eventId == rootId) return candidate;
-        }
-      }
-    }
-    return event;
   }
 
   Future<void> _toggleReaction(
@@ -584,7 +605,30 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _startCall(HighLifeSession session) async {
+    final calls = session.nativeCalls;
+    final peerId = widget.room.directChatMatrixID;
+    if (calls != null && peerId != null && peerId.isNotEmpty) {
+      try {
+        await calls.startVoiceCall(widget.room, peerUserId: peerId);
+      } catch (error) {
+        if (mounted) setState(() => _actionError = error.toString());
+      }
+      return;
+    }
+    await _joinMatrixRtc(session);
+  }
+
+  Future<void> _joinMatrixRtc(HighLifeSession session) async {
     final s = context.read<HighLifeLocales>().strings;
+    final rtc = session.matrixRtc;
+    if (rtc != null) {
+      try {
+        await rtc.join(widget.room);
+        return;
+      } catch (_) {
+        await rtc.leave();
+      }
+    }
     final uri = session.buildCallUri(widget.room);
     if (uri == null) {
       if (!mounted) return;
@@ -627,16 +671,11 @@ class _ChatScreenState extends State<ChatScreen> {
       _failedText = null;
     });
     try {
-      final threadRootId = _threadRoot?.eventId;
       await session.roomRepository?.sendText(
         widget.room,
         text,
         replyTo: _replyTo,
         edit: _editing,
-        threadRootEventId: threadRootId,
-        threadLastEventId: threadRootId == null
-            ? null
-            : (_replyTo?.eventId ?? threadRootId),
       );
       _stopTyping(session);
       setState(() {
@@ -668,7 +707,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.bytes == null) return;
-    setState(() => _actionError = null);
+    setState(() {
+      _actionError = null;
+      _uploading = true;
+    });
     try {
       await session.roomRepository?.upload(
         widget.room,
@@ -679,6 +721,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _replyTo = null);
     } catch (error) {
       if (mounted) setState(() => _actionError = error.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -922,10 +966,10 @@ class _MessageTile extends StatelessWidget {
     required this.item,
     required this.own,
     required this.showSender,
+    required this.highlighted,
     required this.onButton,
     required this.onMiniApp,
     required this.onReply,
-    required this.onReplyInThread,
     required this.onReact,
     required this.onToggleReaction,
     required this.strings,
@@ -943,6 +987,7 @@ class _MessageTile extends StatelessWidget {
   final TimelineItem item;
   final bool own;
   final bool showSender;
+  final bool highlighted;
   final String? replyPreview;
   final void Function(ReactionSummary summary) onToggleReaction;
   final Uri? httpMediaUrl;
@@ -951,7 +996,6 @@ class _MessageTile extends StatelessWidget {
   final Future<void> Function(List<String> answerIds) onPollVote;
   final VoidCallback? onEndPoll;
   final VoidCallback onReply;
-  final VoidCallback onReplyInThread;
   final ValueChanged<String> onReact;
   final VoidCallback? onEdit;
   final VoidCallback? onRedact;
@@ -991,8 +1035,13 @@ class _MessageTile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(11, 8, 9, 6),
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: tokens.hairline),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: highlighted
+                    ? Theme.of(context).colorScheme.primary
+                    : tokens.hairline,
+                width: highlighted ? 2 : 1,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1000,14 +1049,29 @@ class _MessageTile extends StatelessWidget {
                 if (showSender)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      event.senderFromMemoryOrFallback.displayName ??
-                          event.senderId,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontSize: 12,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MatrixAvatar(
+                          name:
+                              event.senderFromMemoryOrFallback.calcDisplayname(),
+                          mxc: event.senderFromMemoryOrFallback.avatarUrl,
+                          client: event.room.client,
+                          radius: 10,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            event.senderFromMemoryOrFallback.displayName ??
+                                event.senderId,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (replyPreview != null)
@@ -1065,6 +1129,7 @@ class _MessageTile extends StatelessWidget {
                     httpMediaUrl: httpMediaUrl,
                     onOpenMedia: onOpenMedia,
                     attachmentLabel: strings.attachment,
+                    systemLabel: strings.roomUpdate,
                   ),
                 if (keyboard != null)
                   InlineKeyboardView(keyboard: keyboard, onPressed: onButton),
@@ -1078,7 +1143,7 @@ class _MessageTile extends StatelessWidget {
                         for (final reaction in item.reactions)
                           InkWell(
                             onTap: () => onToggleReaction(reaction),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6),
                             child: Builder(
                               builder: (context) {
                                 final accent =
@@ -1089,7 +1154,7 @@ class _MessageTile extends StatelessWidget {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(6),
                                     color: reaction.reactedByMe
                                         ? accent.withValues(alpha: 0.15)
                                         : null,
@@ -1126,6 +1191,25 @@ class _MessageTile extends StatelessWidget {
                         time,
                         style: TextStyle(fontSize: 10, color: tokens.muted),
                       ),
+                      if (own) ...[
+                        const SizedBox(width: 3),
+                        Icon(
+                          event.status.isSending
+                              ? Icons.schedule
+                              : event.status.isError
+                                  ? Icons.error_outline
+                                  : event.receipts.any(
+                                      (receipt) =>
+                                          receipt.user.id != event.senderId,
+                                    )
+                                      ? Icons.done_all
+                                      : Icons.done,
+                          size: 13,
+                          color: event.status.isError
+                              ? tokens.danger
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
                       const Spacer(),
                       IconButton(
                         tooltip: strings.reply,
@@ -1188,10 +1272,6 @@ class _MessageTile extends StatelessWidget {
       ),
       items: [
         PopupMenuItem(value: 'reply', child: Text(strings.reply)),
-        PopupMenuItem(
-          value: 'thread',
-          child: Text(strings.replyInThread),
-        ),
         for (final emoji in const ['👍', '❤️', '😂', '🎉', '👀'])
           PopupMenuItem(value: 'react:$emoji', child: Text(emoji)),
         if (onEdit != null)
@@ -1210,8 +1290,6 @@ class _MessageTile extends StatelessWidget {
     switch (action) {
       case 'reply':
         onReply();
-      case 'thread':
-        onReplyInThread();
       case 'edit':
         onEdit?.call();
       case 'redact':
@@ -1226,18 +1304,35 @@ class _RichMessageBody extends StatelessWidget {
   const _RichMessageBody({
     required this.item,
     required this.attachmentLabel,
+    required this.systemLabel,
     this.httpMediaUrl,
     this.onOpenMedia,
   });
 
   final TimelineItem item;
   final String attachmentLabel;
+  final String systemLabel;
   final Uri? httpMediaUrl;
   final VoidCallback? onOpenMedia;
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
+    if (item.kind == TimelineItemKind.system) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.info_outline, size: 15),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              item.body.isEmpty ? systemLabel : '$systemLabel: ${item.body}',
+              style: TextStyle(fontSize: 12, color: tokens.muted),
+            ),
+          ),
+        ],
+      );
+    }
     if (item.kind == TimelineItemKind.emote) {
       return MarkdownMessage(source: '* ${item.body}');
     }
@@ -1259,7 +1354,7 @@ class _RichMessageBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
               child: Image.network(

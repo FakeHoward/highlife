@@ -4,6 +4,7 @@ import 'package:matrix/matrix.dart';
 import '../l10n/messages.dart';
 import '../services/session.dart';
 import 'hl_button.dart';
+import 'matrix_avatar.dart';
 
 Future<void> showMembersPanel(
   BuildContext context, {
@@ -149,6 +150,12 @@ class _MembersPanelState extends State<MembersPanel> {
                       itemBuilder: (context, index) {
                         final user = _members[index];
                         return ListTile(
+                          leading: MatrixAvatar(
+                            name: user.calcDisplayname(),
+                            mxc: user.avatarUrl,
+                            client: widget.room.client,
+                            radius: 18,
+                          ),
                           title: Text(user.calcDisplayname()),
                           subtitle: Text(user.id),
                           trailing: user.canKick
