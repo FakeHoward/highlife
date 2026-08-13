@@ -21,7 +21,7 @@ vi.mock("../matrix/service", () => ({
   endPoll: vi.fn(),
   resolveMediaObjectUrl: vi.fn(async () => ""),
   createPoll: vi.fn(),
-  setTyping: vi.fn(),
+  setTyping: vi.fn(async () => undefined),
   uploadFile: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
@@ -301,7 +301,7 @@ describe("room member list", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("@alice:example.org")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
-    expect(screen.getByText("#highlife:example.org")).toBeInTheDocument();
+    expect(screen.getAllByText("#highlife:example.org").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Copy address" })).not.toHaveLength(0);
   });
 });

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MatrixRtcSurface } from "./MatrixRtcSurface";
 
 const labels = {
@@ -15,6 +15,10 @@ const labels = {
 };
 
 describe("MatrixRtcSurface", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("offers Element Call only after LiveKit/MatrixRTC fails", () => {
     const fallback = vi.fn();
     render(

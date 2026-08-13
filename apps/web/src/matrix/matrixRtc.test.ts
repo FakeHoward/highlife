@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("matrix-js-sdk/lib/matrixrtc", () => ({
+  MatrixRTCSessionEvent: { MembershipsChanged: "MembershipsChanged" },
+}));
+
 import { MatrixRTCSessionEvent } from "matrix-js-sdk/lib/matrixrtc";
 import {
   DEFAULT_LIVEKIT_JWT_URL,

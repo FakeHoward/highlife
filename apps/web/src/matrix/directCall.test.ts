@@ -1,4 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("matrix-js-sdk", () => ({
+  CallEvent: { State: "state", Hangup: "hangup", Error: "error", FeedsChanged: "feeds_changed" },
+}));
+vi.mock("matrix-js-sdk/lib/webrtc/call", () => ({
+  CallErrorCode: { UserHangup: "user_hangup" },
+  CallState: {
+    Fledgling: "fledgling",
+    Ringing: "ringing",
+    Connected: "connected",
+    Ended: "ended",
+  },
+}));
+vi.mock("matrix-js-sdk/lib/webrtc/callEventHandler", () => ({
+  CallEventHandlerEvent: { Incoming: "Call.incoming" },
+}));
+
 import { CallEvent } from "matrix-js-sdk";
 import {
   CallErrorCode,

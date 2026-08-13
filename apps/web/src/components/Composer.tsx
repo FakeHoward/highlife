@@ -30,7 +30,7 @@ export function Composer({
       previousRoom.current = roomId;
       setText("");
       setError(null);
-      void setTyping(roomId, false).catch(() => undefined);
+      void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
     }
   }, [roomId]);
 
@@ -48,7 +48,7 @@ export function Composer({
 
   useEffect(() => () => {
     window.clearTimeout(typingTimer.current);
-    void setTyping(roomId, false).catch(() => undefined);
+    void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
   }, [roomId]);
 
   async function submit(event?: FormEvent) {
@@ -81,9 +81,12 @@ export function Composer({
 
   function change(value: string) {
     setText(value);
-    void setTyping(roomId, true).catch(() => undefined);
+    void Promise.resolve(setTyping(roomId, true)).catch(() => undefined);
     window.clearTimeout(typingTimer.current);
-    typingTimer.current = window.setTimeout(() => void setTyping(roomId, false), 6000);
+    typingTimer.current = window.setTimeout(
+      () => void Promise.resolve(setTyping(roomId, false)).catch(() => undefined),
+      6000,
+    );
   }
 
   async function attach(event: ChangeEvent<HTMLInputElement>) {
