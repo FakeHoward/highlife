@@ -12,7 +12,10 @@ export 'package:shadcn_flutter/shadcn_flutter.dart'
         SelectableText,
         TextButton,
         MaterialPageRoute,
-        Timeline;
+        Timeline,
+        showMenu,
+        SimpleDialog,
+        SimpleDialogOption;
 
 export 'theme.dart';
 export 'widgets/hl_button.dart';

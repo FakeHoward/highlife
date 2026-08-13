@@ -674,15 +674,6 @@ class SimpleDialogOption extends StatelessWidget {
   }
 }
 
-class RelativeRect {
-  const RelativeRect.fromLTRB(this.left, this.top, this.right, this.bottom);
-
-  final double left;
-  final double top;
-  final double right;
-  final double bottom;
-}
-
 Future<T?> showMenu<T>({
   required BuildContext context,
   required RelativeRect position,
