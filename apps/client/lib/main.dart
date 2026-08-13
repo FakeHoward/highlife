@@ -11,7 +11,7 @@ import 'theme.dart';
 import 'widgets/call_surface.dart';
 import 'widgets/host_toast_listener.dart';
 import 'widgets/hl_button.dart';
-import 'widgets/matrix_rtc_call_surface.dart';
+import 'services/matrix_rtc_service.dart';
 import 'widgets/native_voice_call_surface.dart';
 
 Future<void> main() async {
@@ -162,11 +162,61 @@ class HighLifeApp extends StatelessWidget {
                     : const LoginScreen();
                 final calls = session.nativeCalls;
                 final matrixRtc = session.matrixRtc;
+                final incomingRtc = session.incomingRtcInvite;
                 return Stack(
                   children: [
                     Positioned.fill(
                       child: HostToastListener(child: content),
                     ),
+                    if (incomingRtc != null &&
+                        (matrixRtc == null ||
+                            matrixRtc.snapshot.phase == MatrixRtcPhase.idle ||
+                            matrixRtc.snapshot.phase == MatrixRtcPhase.ended))
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: Material(
+                          color: Theme.of(context).colorScheme.surface,
+                          child: SafeArea(
+                            bottom: false,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          incomingRtc.room
+                                              .getLocalizedDisplayname(),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                        Text(locales.strings.callIncoming),
+                                      ],
+                                    ),
+                                  ),
+                                  HlButton.primary(
+                                    onPressed: () => unawaited(
+                                      matrixRtc?.join(incomingRtc.room),
+                                    ),
+                                    label: Text(locales.strings.callAnswer),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  HlButton.text(
+                                    onPressed: () => session
+                                        .dismissIncomingRtc(incomingRtc.room.id),
+                                    label: Text(locales.strings.callReject),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (calls != null)
                       Align(
                         alignment: Alignment.bottomCenter,

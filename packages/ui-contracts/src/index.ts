@@ -70,6 +70,8 @@ export interface MediaDescriptor {
   height?: number;
   /** Present when attachment bytes are encrypted at rest (Matrix file encryption). */
   encrypted?: EncryptedFileDescriptor;
+  voice?: boolean;
+  durationMs?: number;
 }
 
 export interface ReactionSummary {
@@ -138,6 +140,7 @@ export interface RoomListItem {
   lastActive: number;
   /** Parent space room id when this room is nested under a space. */
   spaceParentId?: string;
+  muted?: boolean;
 }
 
 export type ConnectionState = "booting" | "syncing" | "online" | "offline" | "error";

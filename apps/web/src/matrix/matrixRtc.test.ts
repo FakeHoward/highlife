@@ -69,7 +69,7 @@ class FakeSession {
   }
 }
 
-function fakeClient(session: FakeSession): MatrixRtcClient {
+function fakeClient(session: FakeSession, room: unknown = { roomId: "!room:example.org" }): MatrixRtcClient {
   return {
     getUserId: () => "@me:example.org",
     getDeviceId: () => "DEVICE",
@@ -84,7 +84,7 @@ function fakeClient(session: FakeSession): MatrixRtcClient {
         { type: "livekit", livekit_service_url: "https://rtc.example.org/livekit/jwt" },
       ],
     }),
-    getRoom: () => ({ roomId: "!room:example.org" }) as never,
+    getRoom: () => room as never,
     matrixRTC: {
       getRoomSession: () => session as never,
     },
@@ -160,5 +160,37 @@ describe("MatrixRtcController", () => {
     expect(controller.snapshot.phase).toBe("error");
     expect(controller.snapshot.fallbackAvailable).toBe(true);
     expect(session.left).toBe(true);
+  });
+
+  it("uses the Element X LiveKit focus already in the room", async () => {
+    const session = new FakeSession();
+    const media = new FakeMedia();
+    const fetchJson = vi.fn(async () => ({ url: "wss://sfu", jwt: "token" }));
+    const room = {
+      roomId: "!room:example.org",
+      currentState: {
+        getStateEvents: () => [
+          {
+            getStateKey: () => "_@ada:example.org_EX",
+            getSender: () => "@ada:example.org",
+            getContent: () => ({
+              application: "m.call",
+              device_id: "EX",
+              foci_preferred: [
+                { type: "livekit", livekit_service_url: "https://rtc.element.io/livekit/jwt" },
+              ],
+            }),
+          },
+        ],
+      },
+    };
+    const controller = new MatrixRtcController(fakeClient(session, room), media, fetchJson);
+
+    await controller.join("!room:example.org");
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      "https://rtc.element.io/livekit/jwt/sfu/get",
+      expect.objectContaining({ room: "!room:example.org" }),
+    );
   });
 });

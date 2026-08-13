@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -32,6 +33,12 @@ class HostToast {
   final bool alert;
 }
 
+class IncomingRtcInvite {
+  const IncomingRtcInvite({required this.room});
+
+  final Room room;
+}
+
 /// Thin ChangeNotifier around famedly `matrix` Client.
 class HighLifeSession extends ChangeNotifier {
   HighLifeSession();
@@ -55,7 +62,8 @@ class HighLifeSession extends ChangeNotifier {
   final List<StreamSubscription<dynamic>> _subs = [];
   HostToast? _hostToast;
   int _toastSeq = 0;
-  bool _hostCapsAdvertised = false;
+  bool _hostCapsBusy = false;
+  final Set<String> _dismissedRtcInvites = <String>{};
   bool _ssoAvailable = false;
   bool _passwordLoginAvailable = false;
   Uri? _ssoRedirectUrl;
@@ -129,9 +137,7 @@ class HighLifeSession extends ChangeNotifier {
             status.status == SyncStatus.processing ||
             status.status == SyncStatus.cleaningUp) {
           _initialSyncDone = true;
-          if (!_hostCapsAdvertised) {
-            unawaited(advertiseHostCapabilities());
-          }
+          unawaited(advertiseHostCapabilities());
         }
         notifyListeners();
       }),
@@ -229,27 +235,54 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Best-effort `dev.aiomatrix.host` state so bots can skip stock fallbacks.
+  /// Advertise aiomatrix host caps only in rooms that have a bot; strip leftovers from DMs.
   Future<void> advertiseHostCapabilities({Room? room}) async {
     final client = _client;
     final self = client?.userID;
     if (client == null || self == null || !client.isLogged()) return;
-    _hostCapsAdvertised = true;
+    if (_hostCapsBusy) return;
+    _hostCapsBusy = true;
     final content = buildHostCapabilitiesContent();
     final targets = room != null
         ? <Room>[room]
         : rooms.where((r) => r.membership == Membership.join);
-    for (final target in targets) {
-      try {
-        await client.setRoomStateWithKey(
-          target.id,
-          hostCapabilitiesStateEventType,
-          self,
-          content,
+    try {
+      for (final target in targets) {
+        final needed = roomNeedsHostHandshake(
+          memberUserIds:
+              target.getParticipants([Membership.join]).map((user) => user.id),
+          hasCommandsState:
+              target.states[commandsStateEventType]?.isNotEmpty == true,
         );
-      } catch (_) {
-        // Needs power level; stock rooms stay on aware bot defaults.
+        if (!needed) {
+          final leftover =
+              target.getState(hostCapabilitiesStateEventType, self);
+          if (leftover != null) {
+            try {
+              await leftover.redactEvent();
+            } catch (_) {}
+          }
+          continue;
+        }
+        final existing =
+            target.getState(hostCapabilitiesStateEventType, self);
+        if (existing != null &&
+            jsonEncode(existing.content) == jsonEncode(content)) {
+          continue;
+        }
+        try {
+          await client.setRoomStateWithKey(
+            target.id,
+            hostCapabilitiesStateEventType,
+            self,
+            content,
+          );
+        } catch (_) {
+          // Needs power level; stock rooms stay on aware bot defaults.
+        }
       }
+    } finally {
+      _hostCapsBusy = false;
     }
   }
 
@@ -609,7 +642,8 @@ class HighLifeSession extends ChangeNotifier {
     _incomingVerification = null;
     _hostToast = null;
     _initialSyncDone = false;
-    _hostCapsAdvertised = false;
+    _hostCapsBusy = false;
+    _dismissedRtcInvites.clear();
     _error = failure;
     notifyListeners();
     return failure;
@@ -832,6 +866,43 @@ class HighLifeSession extends ChangeNotifier {
     return hasActiveCallMemberStates(
       states.values.map((e) => Map<String, dynamic>.from(e.content)),
     );
+  }
+
+  IncomingRtcInvite? get incomingRtcInvite {
+    final self = userId;
+    final rtc = _matrixRtc;
+    if (self == null) return null;
+    if (rtc != null &&
+        (rtc.snapshot.phase == MatrixRtcPhase.connecting ||
+            rtc.snapshot.phase == MatrixRtcPhase.connected)) {
+      return null;
+    }
+    for (final room in rooms) {
+      if (room.membership != Membership.join) continue;
+      if (_dismissedRtcInvites.contains(room.id)) continue;
+      final states = room.states[callMemberStateEventType];
+      if (states == null || states.isEmpty) continue;
+      var others = false;
+      var me = false;
+      for (final entry in states.entries) {
+        final content = Map<String, dynamic>.from(entry.value.content);
+        if (!hasActiveCallMemberStates([content])) continue;
+        final sender = entry.value.senderId ??
+            userIdFromCallMemberStateKey(entry.key, '');
+        if (sender == self) {
+          me = true;
+        } else {
+          others = true;
+        }
+      }
+      if (others && !me) return IncomingRtcInvite(room: room);
+    }
+    return null;
+  }
+
+  void dismissIncomingRtc(String roomId) {
+    _dismissedRtcInvites.add(roomId);
+    notifyListeners();
   }
 
   Uri? buildCallUri(Room room) {

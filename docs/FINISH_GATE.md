@@ -27,6 +27,7 @@ is an operator step outside the repo.
 - [x] First-party call cores integrated with session/chat lifecycle and localized UI
 - [x] Native first-party MatrixRTC/LiveKit group media; Element Call is last-resort fallback
 - [x] CI + FormSpace bot
+- [x] Pins, mute, forward, unread divider, DM presence, user sheet, shared media (web + Flutter); voice notes on web
 - [ ] Play Console store listing (operator; UnifiedPush/signing ready in repo)
 - [ ] iOS — out of scope
 

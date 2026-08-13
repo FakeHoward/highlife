@@ -72,10 +72,12 @@ class MatrixRtcService {
         (await client.getWellknown()).toJson(),
       );
     } catch (_) {}
-    final focus = discoverLivekitFocus(
-      wellKnownJson,
-      fallbackUrl: fallbackJwtUrl,
-    );
+    final remote = remoteLivekitFocus(room, userId);
+    final focus = remote ??
+        discoverLivekitFocus(
+          wellKnownJson,
+          fallbackUrl: fallbackJwtUrl,
+        );
     if (userId == null || deviceId == null || focus == null) {
       _publish(
         MatrixRtcSnapshot(

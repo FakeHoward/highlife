@@ -93,6 +93,22 @@ void main() {
       ]),
       isFalse,
     );
+    expect(
+      hasActiveCallMemberStates([
+        {
+          'application': 'm.call',
+          'call_id': '',
+          'device_id': 'EXDEVICE',
+          'foci_preferred': [
+            {
+              'type': 'livekit',
+              'livekit_service_url': 'https://rtc.element.io/livekit/jwt',
+            },
+          ],
+        },
+      ]),
+      isTrue,
+    );
     final past = DateTime.utc(2020).millisecondsSinceEpoch;
     expect(
       hasActiveCallMemberStates(

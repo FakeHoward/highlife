@@ -14,20 +14,21 @@ import 'matrix_avatar.dart';
 import 'verification_dialog.dart';
 
 Future<void> showSettingsDialog(BuildContext context) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) => const SettingsDialog(),
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => const ProfilePage()),
   );
 }
 
-class SettingsDialog extends StatefulWidget {
-  const SettingsDialog({super.key});
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key, this.onClose});
+
+  final VoidCallback? onClose;
 
   @override
-  State<SettingsDialog> createState() => _SettingsDialogState();
+  State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _SettingsDialogState extends State<SettingsDialog> {
+class _ProfilePageState extends State<ProfilePage> {
   PackageInfo? _packageInfo;
   String? _displayName;
   Uri? _avatarUrl;
@@ -59,15 +60,18 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final s = locales.strings;
     final packageInfo = _packageInfo;
 
-    return AlertDialog(
-      title: Text(s.settings),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(s.profile),
+        leading: IconButton(
+          tooltip: s.done,
+          onPressed: _close,
+          icon: const Icon(Icons.arrow_back),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: InkWell(
@@ -101,6 +105,38 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   ],
                 ),
               ),
+              if (session.userId != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.badge_outlined),
+                  title: Text(s.matrixUserId),
+                  subtitle: Text(session.userId!),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: session.userId!),
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(s.copied)),
+                    );
+                  },
+                ),
+              if (session.homeserverUrl != null)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.dns_outlined),
+                  title: Text(s.homeserver),
+                  subtitle: Text(session.homeserverUrl!),
+                  onTap: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: session.homeserverUrl!),
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(s.copied)),
+                    );
+                  },
+                ),
               const Divider(),
               Text(s.theme),
               const SizedBox(height: 6),
@@ -233,30 +269,32 @@ class _SettingsDialogState extends State<SettingsDialog> {
                         icon: const Icon(Icons.system_update_alt),
                       ),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.logout),
+                title: Text(s.signOut),
+                onTap: () async {
+                  final failure = await session.logout();
+                  if (!context.mounted) return;
+                  _close();
+                  if (failure != null && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(s.authError(failure))),
+                    );
+                  }
+                },
+              ),
             ],
-          ),
-        ),
       ),
-      actions: [
-        HlButton.text(
-          onPressed: () async {
-            final failure = await session.logout();
-            if (!context.mounted) return;
-            Navigator.pop(context);
-            if (failure != null && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(s.authError(failure))),
-              );
-            }
-          },
-          label: Text(s.signOut),
-        ),
-        HlButton.primary(
-          onPressed: () => Navigator.pop(context),
-          label: Text(s.done),
-        ),
-      ],
     );
+  }
+
+  void _close() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+      return;
+    }
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
   }
 
   Future<void> _editDisplayName(HighLifeSession session, AppStrings s) async {

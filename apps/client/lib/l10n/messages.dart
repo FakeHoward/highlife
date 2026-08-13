@@ -141,6 +141,8 @@ class AppStrings {
   String get newRoom => _('newRoom');
   String get joinRoom => _('joinRoom');
   String get settings => _('settings');
+  String get profile => _('profile');
+  String get copied => _('copied');
   String get searchConversations => _('searchConversations');
   String get searchMessages => _('searchMessages');
   String get searchHint => _('searchHint');
@@ -273,6 +275,24 @@ class AppStrings {
   String get edit => _('edit');
   String get delete => _('delete');
   String get openMedia => _('openMedia');
+  String get muteNotifications => _('muteNotifications');
+  String get unmuteNotifications => _('unmuteNotifications');
+  String get pinMessage => _('pinMessage');
+  String get unpinMessage => _('unpinMessage');
+  String get forwardMessage => _('forwardMessage');
+  String get unreadMessages => _('unreadMessages');
+  String get userProfile => _('userProfile');
+  String get ignoreUser => _('ignoreUser');
+  String get unignoreUser => _('unignoreUser');
+  String lastSeen(String when) => _('lastSeen').replaceAll('{when}', when);
+  String get userOffline => _('userOffline');
+  String get userOnline => _('userOnline');
+  String get userAway => _('userAway');
+  String get pinned => _('pinned');
+  String get mutedRoom => _('mutedRoom');
+  String get sharedMedia => _('sharedMedia');
+  String get noSharedMedia => _('noSharedMedia');
+  String get copyMxid => _('copyMxid');
   String get miniApp => _('miniApp');
   String get edited => _('edited');
   String get attachment => _('attachment');
@@ -570,6 +590,8 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'newRoom': {AppLocale.en: 'New room', AppLocale.ru: 'Новая комната'},
   'joinRoom': {AppLocale.en: 'Join room', AppLocale.ru: 'Присоединиться'},
   'settings': {AppLocale.en: 'Settings', AppLocale.ru: 'Настройки'},
+  'profile': {AppLocale.en: 'Profile', AppLocale.ru: 'Профиль'},
+  'copied': {AppLocale.en: 'Copied', AppLocale.ru: 'Скопировано'},
   'searchConversations': {
     AppLocale.en: 'Search conversations',
     AppLocale.ru: 'Поиск бесед',
@@ -1034,4 +1056,40 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'sending': {AppLocale.en: 'Sending…', AppLocale.ru: 'Отправка…'},
   'sent': {AppLocale.en: 'Sent', AppLocale.ru: 'Отправлено'},
   'failed': {AppLocale.en: 'Failed', AppLocale.ru: 'Ошибка'},
+  'muteNotifications': {
+    AppLocale.en: 'Mute notifications',
+    AppLocale.ru: 'Выключить уведомления',
+  },
+  'unmuteNotifications': {
+    AppLocale.en: 'Unmute',
+    AppLocale.ru: 'Включить уведомления',
+  },
+  'pinMessage': {AppLocale.en: 'Pin', AppLocale.ru: 'Закрепить'},
+  'unpinMessage': {AppLocale.en: 'Unpin', AppLocale.ru: 'Открепить'},
+  'forwardMessage': {AppLocale.en: 'Forward', AppLocale.ru: 'Переслать'},
+  'unreadMessages': {
+    AppLocale.en: 'Unread messages',
+    AppLocale.ru: 'Непрочитанные',
+  },
+  'userProfile': {AppLocale.en: 'Profile', AppLocale.ru: 'Профиль'},
+  'ignoreUser': {AppLocale.en: 'Ignore', AppLocale.ru: 'Игнорировать'},
+  'unignoreUser': {
+    AppLocale.en: 'Stop ignoring',
+    AppLocale.ru: 'Перестать игнорировать',
+  },
+  'lastSeen': {
+    AppLocale.en: 'Last seen {when}',
+    AppLocale.ru: 'Был(а) {when}',
+  },
+  'userOffline': {AppLocale.en: 'Offline', AppLocale.ru: 'Не в сети'},
+  'userOnline': {AppLocale.en: 'Online', AppLocale.ru: 'В сети'},
+  'userAway': {AppLocale.en: 'Away', AppLocale.ru: 'Отошёл'},
+  'pinned': {AppLocale.en: 'Pinned', AppLocale.ru: 'Закреплено'},
+  'mutedRoom': {AppLocale.en: 'Muted', AppLocale.ru: 'Без уведомлений'},
+  'sharedMedia': {AppLocale.en: 'Shared media', AppLocale.ru: 'Общие медиа'},
+  'noSharedMedia': {
+    AppLocale.en: 'No photos, files, or voice notes in the loaded history.',
+    AppLocale.ru: 'В загруженной истории нет фото, файлов и голосовых.',
+  },
+  'copyMxid': {AppLocale.en: 'Copy Matrix ID', AppLocale.ru: 'Скопировать MXID'},
 };

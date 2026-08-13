@@ -1,4 +1,5 @@
 export const DIRECT_CALL_MIC_BLOCKED = "mic_blocked";
+export const DIRECT_CALL_CRYPTO_UNAVAILABLE = "crypto_unavailable";
 
 export function classifyDirectCallFailure(reason: unknown): string {
   const name =
@@ -23,6 +24,9 @@ export function classifyDirectCallFailure(reason: unknown): string {
     /notallowederror/i.test(message)
   ) {
     return DIRECT_CALL_MIC_BLOCKED;
+  }
+  if (/does not support encryption/i.test(message) || /crypto_unavailable/.test(message)) {
+    return DIRECT_CALL_CRYPTO_UNAVAILABLE;
   }
   return message || "Call failed";
 }

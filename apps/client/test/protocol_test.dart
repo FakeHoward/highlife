@@ -112,6 +112,27 @@ void main() {
     expect(hostCapabilitiesStateEventType, 'dev.aiomatrix.host');
     expect(callbackAnswerEventType, 'dev.aiomatrix.callback_answer');
     expect(toastEventType, 'dev.aiomatrix.toast');
-    expect(progressEventType, 'dev.aiomatrix.progress');
+  test('advertises host handshake only for bots or command rooms', () {
+    expect(
+      roomNeedsHostHandshake(
+        memberUserIds: ['@me:example.org', '@ada:example.org'],
+      ),
+      isFalse,
+    );
+    expect(
+      roomNeedsHostHandshake(
+        memberUserIds: ['@me:example.org', '@highlifebot:example.org'],
+      ),
+      isTrue,
+    );
+    expect(
+      roomNeedsHostHandshake(
+        memberUserIds: ['@me:example.org'],
+        hasCommandsState: true,
+      ),
+      isTrue,
+    );
+    expect(isLikelyBotUserId('@formspacebot:example.org'), isTrue);
+    expect(isLikelyBotUserId('@ada:example.org'), isFalse);
   });
 }

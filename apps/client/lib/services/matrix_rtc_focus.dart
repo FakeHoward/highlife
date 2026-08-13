@@ -1,3 +1,7 @@
+import 'package:matrix/matrix.dart';
+
+import 'call_uri.dart';
+
 const String defaultLivekitJwtUrl =
     'https://rtc.testhighlife.strangled.net/livekit/jwt';
 
@@ -94,3 +98,47 @@ Map<String, dynamic> msc3401MembershipContent({
 }
 
 String msc3401StateKey(String userId, String deviceId) => '_${userId}_$deviceId';
+
+LivekitFocus? livekitFocusFromCallMemberContent(Map<String, dynamic> content) {
+  for (final key in const ['foci_preferred', 'foci_active', 'foci']) {
+    final list = content[key];
+    if (list is! List) continue;
+    for (final item in list) {
+      if (item is! Map) continue;
+      final focus = Map<String, dynamic>.from(item);
+      if (focus['type'] != 'livekit') continue;
+      final url = '${focus['livekit_service_url'] ?? ''}'.trim();
+      if (url.isEmpty) continue;
+      final alias = focus['livekit_alias'];
+      return LivekitFocus(
+        serviceUrl: url.replaceAll(RegExp(r'/$'), ''),
+        alias: alias is String && alias.isNotEmpty ? alias : null,
+      );
+    }
+  }
+  final memberships = content['memberships'];
+  if (memberships is List) {
+    for (final raw in memberships) {
+      if (raw is! Map) continue;
+      final nested =
+          livekitFocusFromCallMemberContent(Map<String, dynamic>.from(raw));
+      if (nested != null) return nested;
+    }
+  }
+  return null;
+}
+
+LivekitFocus? remoteLivekitFocus(Room room, String selfUserId) {
+  final states = room.states[callMemberStateEventType];
+  if (states == null) return null;
+  for (final entry in states.entries) {
+    final sender = entry.value.senderId ??
+        userIdFromCallMemberStateKey(entry.key, '');
+    if (sender == selfUserId) continue;
+    final focus = livekitFocusFromCallMemberContent(
+      Map<String, dynamic>.from(entry.value.content),
+    );
+    if (focus != null) return focus;
+  }
+  return null;
+}

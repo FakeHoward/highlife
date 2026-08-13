@@ -55,4 +55,22 @@ void main() {
     expect(boundary.nativeGroupCallingAvailable, isTrue);
     expect(boundary.elementCallFallbackAvailable, isTrue);
   });
+
+  test('reads the LiveKit URL from an Element X call membership', () {
+    final focus = livekitFocusFromCallMemberContent({
+      'application': 'm.call',
+      'device_id': 'EX',
+      'foci_preferred': [
+        {
+          'type': 'livekit',
+          'livekit_service_url': 'https://rtc.element.io/livekit/jwt/',
+        },
+      ],
+      'focus_active': {
+        'type': 'livekit',
+        'focus_selection': 'oldest_membership',
+      },
+    });
+    expect(focus?.serviceUrl, 'https://rtc.element.io/livekit/jwt');
+  });
 }

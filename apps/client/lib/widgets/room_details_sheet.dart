@@ -8,6 +8,7 @@ import '../services/session.dart';
 import '../theme.dart';
 import 'hl_button.dart';
 import 'matrix_avatar.dart';
+import 'user_profile_sheet.dart';
 
 Future<void> showRoomDetailsSheet(
   BuildContext context, {
@@ -15,6 +16,7 @@ Future<void> showRoomDetailsSheet(
   required HighLifeSession session,
   required AppStrings strings,
   VoidCallback? onLeft,
+  List<Event>? mediaEvents,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -24,6 +26,7 @@ Future<void> showRoomDetailsSheet(
       session: session,
       strings: strings,
       onLeft: onLeft,
+      mediaEvents: mediaEvents,
     ),
   );
 }
@@ -37,12 +40,14 @@ class RoomDetailsSheet extends StatefulWidget {
     required this.session,
     required this.strings,
     this.onLeft,
+    this.mediaEvents,
   });
 
   final Room room;
   final HighLifeSession session;
   final AppStrings strings;
   final VoidCallback? onLeft;
+  final List<Event>? mediaEvents;
 
   @override
   State<RoomDetailsSheet> createState() => _RoomDetailsSheetState();
@@ -155,6 +160,36 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
     if (alias == null || alias.trim().isEmpty) return;
     await widget.session.setCanonicalAlias(widget.room, alias);
     if (mounted) setState(() {});
+  }
+
+  List<Widget> _sharedMediaTiles(AppStrings s, HighLifeTokens tokens) {
+    final events = (widget.mediaEvents ?? const <Event>[])
+        .where((event) {
+          if (event.type != EventTypes.Message) return false;
+          final type = event.messageType;
+          return type == MessageTypes.Image ||
+              type == MessageTypes.Video ||
+              type == MessageTypes.Audio ||
+              type == MessageTypes.File;
+        })
+        .toList();
+    if (events.isEmpty) {
+      return [
+        Text(s.noSharedMedia, style: TextStyle(color: tokens.muted)),
+      ];
+    }
+    return [
+      for (final event in events.take(24))
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(
+            event.body.isEmpty ? event.messageType : event.body,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+    ];
   }
 
   Future<void> _leave() async {
@@ -271,6 +306,15 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   ),
                   const SizedBox(height: 20),
                   Text(
+                    s.sharedMedia,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._sharedMediaTiles(s, tokens),
+                  const SizedBox(height: 20),
+                  Text(
                     s.members,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -299,6 +343,12 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                         ),
                         title: Text(user.calcDisplayname()),
                         subtitle: Text(user.id),
+                        onTap: () => showUserProfileSheet(
+                          context,
+                          userId: user.id,
+                          session: widget.session,
+                          strings: widget.strings,
+                        ),
                         trailing: Text(
                           s.powerLevel(user.powerLevel.level),
                           style: TextStyle(color: tokens.muted),

@@ -8,11 +8,14 @@ import { useI18n } from "./i18n";
 import { useBootstrap, useMatrix } from "./matrix/hooks";
 import {
   acceptDirectCall,
+  dismissIncomingRtcCall,
   getDirectCallSnapshot,
+  getIncomingRtcCall,
   getMatrixRtcSnapshot,
   hangupDirectCall,
   leaveMatrixRtc,
   rejectDirectCall,
+  startMatrixRtc,
   subscribeDirectCall,
   subscribeMatrixRtc,
   toggleDirectCallMicrophone,
@@ -35,6 +38,8 @@ export function App() {
     getMatrixRtcSnapshot,
   );
 
+  const incomingRtc = getIncomingRtcCall();
+
   if (!ready) {
     return (
       <main className="boot" aria-live="polite">
@@ -48,6 +53,30 @@ export function App() {
   return (
     <>
       {matrix.client ? <Workspace /> : <LoginScreen initialError={matrix.error} />}
+      {incomingRtc && matrixRtc.phase === "idle" && (
+        <section className="direct-call" role="dialog" aria-label={t("call.dialog")}>
+          <div className="direct-call-copy">
+            <strong>{incomingRtc.name}</strong>
+            <span>{t("call.incoming")}</span>
+          </div>
+          <div className="direct-call-actions">
+            <button
+              type="button"
+              className="button call-answer"
+              onClick={() => void startMatrixRtc(incomingRtc.roomId)}
+            >
+              {t("call.answer")}
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              onClick={() => dismissIncomingRtcCall(incomingRtc.roomId)}
+            >
+              {t("call.decline")}
+            </button>
+          </div>
+        </section>
+      )}
       <DirectCallSurface
         snapshot={directCall}
         labels={{

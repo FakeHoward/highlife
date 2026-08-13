@@ -5,22 +5,33 @@ import { useHistoryState, useMatrix, useRooms, useTimeline } from "../matrix/hoo
 import {
   acceptInvite,
   dismissToast,
+  forwardMessage,
   getCallCapability,
   getIncomingVerification,
+  getOwnAvatarUrl,
+  getOwnDisplayName,
+  getOwnReadUpTo,
+  getPeerUserId,
+  getPinnedEventIds,
+  getSessionIdentity,
   getTypingUsers,
+  getUserPresence,
   leaveMatrixRtc,
   listSpaces,
   markRead,
   paginateRoomHistory,
   rejectInvite,
   respondToIncomingVerification,
+  setRoomMuted,
   showLocalToast,
-  startDirectCall,
+  startOutgoingCall,
   startMatrixRtc,
   subscribeIncomingVerification,
+  togglePinnedEvent,
   type SasChallenge,
 } from "../matrix/service";
-import { classifyDirectCallFailure, DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
+import { firstUnreadEventId, formatPresenceLabel } from "../matrix/messengerExtras";
+import { classifyDirectCallFailure, DIRECT_CALL_CRYPTO_UNAVAILABLE, DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
 import { parseAiomatrixPayload, type MiniAppCard } from "../protocol/aiomatrix";
 import { Composer, type ComposeMode } from "./Composer";
 import { Avatar } from "./Avatar";
@@ -36,6 +47,8 @@ import {
   RoomDetails,
   SearchSurface,
   Settings,
+  UserProfile,
+  ForwardPicker,
 } from "./Surfaces";
 
 type Surface =
@@ -60,6 +73,10 @@ export function Workspace() {
   const [surface, setSurface] = useState<Surface>(null);
   const [mode, setMode] = useState<ComposeMode>(null);
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [forwardEventId, setForwardEventId] = useState<string | null>(null);
+  const [unreadEventId, setUnreadEventId] = useState<string | null>(null);
+  const unreadCapturedFor = useRef<string | null>(null);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [sas, setSas] = useState<SasChallenge | null>(null);
   const [verificationState, setVerificationState] = useState<string | null>(null);
@@ -89,9 +106,34 @@ export function Workspace() {
     : typingUsers.length === 1
       ? t("chat.typingOne", { name: typingUsers[0]! })
       : t("chat.typingMany", { names: typingUsers.join(", ") });
+  const peerId = activeRoom?.isDirect && activeId ? getPeerUserId(activeId) : null;
+  const peerPresence = peerId ? getUserPresence(peerId) : null;
+  const presenceLabel = peerPresence
+    ? formatPresenceLabel(peerPresence.presence, peerPresence.lastActiveAgo, peerPresence.currentlyActive, {
+        online: t("profile.online"),
+        away: t("profile.away"),
+        offline: t("user.offline"),
+        lastSeen: (when) => t("user.lastSeen", { when }),
+      })
+    : null;
+  const pinnedIds = activeId ? getPinnedEventIds(activeId) : [];
+  const pinnedItem = pinnedIds.length
+    ? [...timeline].reverse().find((item) => pinnedIds.includes(item.eventId)) ?? null
+    : null;
 
   useEffect(() => {
-    if (activeId) void markRead(activeId).catch(() => undefined);
+    if (!activeId) {
+      unreadCapturedFor.current = null;
+      setUnreadEventId(null);
+      return;
+    }
+    if (unreadCapturedFor.current !== activeId && timeline.length > 0) {
+      unreadCapturedFor.current = activeId;
+      setUnreadEventId(
+        firstUnreadEventId(timeline.map((item) => item.eventId), getOwnReadUpTo(activeId)),
+      );
+    }
+    void markRead(activeId).catch(() => undefined);
   }, [activeId, timeline.length]);
 
   useEffect(() => {
@@ -130,10 +172,11 @@ export function Workspace() {
     setActiveId(roomId);
     setMode(null);
     setHighlightEventId(null);
+    if (surface === "settings") setSurface(null);
   }
 
   return (
-    <div className={`workspace ${activeId ? "room-open" : ""}`}>
+    <div className={`workspace ${activeId || surface === "settings" ? "room-open" : ""}`}>
       <RoomSidebar
         rooms={filteredRooms}
         activeId={activeId}
@@ -143,11 +186,19 @@ export function Workspace() {
         onNew={() => setSurface("rooms")}
         onNewSpace={() => setSurface("createSpace")}
         onSettings={() => setSurface("settings")}
+        onProfile={() => setSurface("settings")}
+        profileId={getSessionIdentity()?.userId ?? ""}
+        profileName={getOwnDisplayName() || getSessionIdentity()?.userId || "HighLife"}
+        profileAvatar={getOwnAvatarUrl()}
         spaces={spaces}
         selectedSpaceId={selectedSpaceId}
         onSelectSpace={setSelectedSpaceId}
       />
       <main className="chat-panel">
+        {surface === "settings" ? (
+          <Settings onClose={() => setSurface(null)} />
+        ) : (
+        <>
         {incoming && (
           <div className="verification-banner" role="status">
             <div>
@@ -254,6 +305,7 @@ export function Workspace() {
                 <strong>{activeRoom.name}</strong>
                 <span>
                   {typingLabel
+                    ?? presenceLabel
                     ?? (activeRoom.membership === "invite"
                       ? t("chat.invitation")
                       : activeRoom.isEncrypted
@@ -270,20 +322,20 @@ export function Workspace() {
                     className="icon-button"
                     type="button"
                     onClick={() => {
-                      if (activeRoom.isDirect) {
-                        void startDirectCall(activeRoom.roomId).catch((error: Error) => {
-                          const classified = classifyDirectCallFailure(error);
-                          showLocalToast(
-                            classified === DIRECT_CALL_MIC_BLOCKED ? t("call.micBlocked") : error.message,
-                            true,
-                          );
-                        });
-                        return;
-                      }
-                      void startMatrixRtc(activeRoom.roomId).catch((error: Error) => {
-                        showLocalToast(error.message, true);
-                        void leaveMatrixRtc();
-                        setSurface("call");
+                      void startOutgoingCall(activeRoom.roomId).catch((error: Error) => {
+                        const classified = classifyDirectCallFailure(error);
+                        showLocalToast(
+                          classified === DIRECT_CALL_MIC_BLOCKED
+                            ? t("call.micBlocked")
+                            : classified === DIRECT_CALL_CRYPTO_UNAVAILABLE
+                              ? t("call.cryptoUnavailable")
+                              : error.message,
+                          true,
+                        );
+                        if (!activeRoom.isDirect) {
+                          void leaveMatrixRtc();
+                          setSurface("call");
+                        }
                       });
                     }}
                     aria-label={t("chat.call")}
@@ -306,6 +358,16 @@ export function Workspace() {
                     <button type="button" role="menuitem" onClick={() => setSurface("poll")}>
                       {t("composer.createPoll")}
                     </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        void setRoomMuted(activeRoom.roomId, !activeRoom.muted);
+                        setSurface(null);
+                      }}
+                    >
+                      {activeRoom.muted ? t("chat.unmute") : t("chat.mute")}
+                    </button>
                     <button type="button" role="menuitem" onClick={() => setSurface("details")}>
                       {t("chat.details")}
                     </button>
@@ -313,6 +375,16 @@ export function Workspace() {
                 )}
               </div>
             </header>
+            {pinnedIds.length > 0 && activeRoom.membership === "join" && (
+              <button
+                type="button"
+                className="pin-banner"
+                onClick={() => pinnedItem && setHighlightEventId(pinnedItem.eventId)}
+              >
+                <span>{t("chat.pinned")}</span>
+                <strong>{pinnedItem?.body || t("chat.noPinnedBody")}</strong>
+              </button>
+            )}
             {callCapability?.groupActive && activeRoom.membership === "join" && (
               <div className="call-banner" role="status">
                 <span>{t("call.bannerActive")}</span>
@@ -344,6 +416,11 @@ export function Workspace() {
                   history={history}
                   onLoadOlder={() => paginateRoomHistory(activeRoom.roomId)}
                   highlightEventId={highlightEventId}
+                  unreadEventId={unreadEventId}
+                  pinnedIds={pinnedIds}
+                  onPin={(item) => void togglePinnedEvent(activeRoom.roomId, item.eventId)}
+                  onForward={(item) => setForwardEventId(item.eventId)}
+                  onOpenProfile={(item) => setProfileUserId(item.senderId)}
                 />
                 <Composer roomId={activeRoom.roomId} mode={mode} onMode={setMode} />
               </>
@@ -356,6 +433,8 @@ export function Workspace() {
             <button className="button primary" onClick={() => setSurface("rooms")}>{t("chat.findRoom")}</button>
           </div>
         )}
+        </>
+        )}
       </main>
       {surface === "rooms" && <RoomActions onClose={() => setSurface(null)} onOpen={openRoom} />}
       {surface === "createSpace" && (
@@ -367,8 +446,21 @@ export function Workspace() {
           }}
         />
       )}
-      {surface === "settings" && <Settings onClose={() => setSurface(null)} />}
-      {surface === "details" && activeRoom && <RoomDetails room={activeRoom} onClose={() => setSurface(null)} onLeft={() => { setSurface(null); setActiveId(null); }} />}
+      {surface === "details" && activeRoom && (
+        <RoomDetails
+          room={activeRoom}
+          onClose={() => setSurface(null)}
+          onLeft={() => { setSurface(null); setActiveId(null); }}
+          onJump={(eventId) => {
+            setHighlightEventId(eventId);
+            setSurface(null);
+          }}
+          onOpenUser={(userId) => {
+            setProfileUserId(userId);
+            setSurface(null);
+          }}
+        />
+      )}
       {surface === "search" && activeId && (
         <SearchSurface
           roomId={activeId}
@@ -382,6 +474,30 @@ export function Workspace() {
       {surface === "poll" && activeId && <CreatePollSurface roomId={activeId} onClose={() => setSurface(null)} />}
       {surface === "call" && activeId && <GroupCallSurface roomId={activeId} onClose={() => setSurface(null)} />}
       {surface && typeof surface === "object" && "miniApp" in surface && <MiniAppSurface card={surface.miniApp} item={surface.item} onClose={() => setSurface(null)} />}
+      {profileUserId && (
+        <UserProfile
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+          onOpenedDm={(roomId) => {
+            setProfileUserId(null);
+            openRoom(roomId);
+          }}
+        />
+      )}
+      {forwardEventId && activeId && (
+        <ForwardPicker
+          rooms={allRooms.filter((room) => !room.isSpace && room.membership === "join")}
+          onClose={() => setForwardEventId(null)}
+          onPick={(roomId) => {
+            void forwardMessage(activeId, forwardEventId, roomId)
+              .then(() => {
+                setForwardEventId(null);
+                openRoom(roomId);
+              })
+              .catch((error: Error) => showLocalToast(error.message, true));
+          }}
+        />
+      )}
     </div>
   );
 }

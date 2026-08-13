@@ -25,6 +25,7 @@ import {
   RelationType,
   RoomEvent,
   RoomMemberEvent,
+  RoomStateEvent,
   type MatrixClient,
   type MatrixEvent,
   type Room,
@@ -59,6 +60,7 @@ import {
   DEFAULT_LIVEKIT_JWT_URL,
   MatrixRtcController,
   createBrowserMatrixRtcClient,
+  discoverLivekitFocus,
   fetchLivekitJson,
   type MatrixRtcSnapshot,
 } from "./matrixRtc";
@@ -82,7 +84,21 @@ import {
   saveSession,
   type StoredSession,
 } from "./sessionStore";
+import {
+  formatForwardedBody,
+  isRoomMutedByPushRules,
+  togglePinnedIds,
+} from "./messengerExtras";
+import { DIRECT_CALL_CRYPTO_UNAVAILABLE } from "./directCallErrors";
+import { roomNeedsHostHandshake } from "./hostHandshake";
+import { outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
+import {
+  MSC3401_MEMBER_EVENT,
+  isActiveCallMemberContent,
+  pickIncomingRtcCall,
+  type CallMemberEventLike,
+} from "./rtcMembership";
 import { normalizeTimeline, type RawTimelineEvent } from "./timeline";
 
 export { normalizeRoomIdOrAlias } from "./roomAddress";
@@ -158,7 +174,8 @@ let snapshot: MatrixSnapshot = {
   version: 0,
 };
 let toastSeq = 0;
-let hostCapsAdvertised = false;
+let hostCapsBusy = false;
+const dismissedRtcInvites = new Set<string>();
 const listeners = new Set<() => void>();
 const historyStates = new Map<string, HistoryState>();
 const secretStorageKeys = new Map<string, Uint8Array<ArrayBuffer>>();
@@ -202,6 +219,20 @@ function disposeCallControllers(): void {
   detachMatrixRtc = null;
   matrixRtcController?.dispose();
   matrixRtcController = null;
+}
+
+function matrixRtcManager(active: MatrixClient | null): { start?: () => void; stop?: () => void } | undefined {
+  return active?.matrixRTC as { start?: () => void; stop?: () => void } | undefined;
+}
+
+function callMemberEventsFromRoom(room: Room): CallMemberEventLike[] {
+  const raw = room.currentState.getStateEvents(MSC3401_MEMBER_EVENT);
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return list.map((event) => ({
+    stateKey: event.getStateKey() ?? "",
+    sender: event.getSender() ?? "",
+    content: event.getContent() as Record<string, unknown>,
+  }));
 }
 
 function livekitFallbackUrl(): string {
@@ -331,25 +362,51 @@ export function showLocalToast(text: string, alert = false): void {
   });
 }
 
-/** Best-effort aware-host handshake (`dev.aiomatrix.host`). */
+/** Advertise aiomatrix host caps only in rooms that have a bot; strip leftovers from DMs. */
 async function advertiseHostCapabilities(): Promise<void> {
-  if (!client || hostCapsAdvertised) return;
-  hostCapsAdvertised = true;
+  if (!client || hostCapsBusy) return;
+  hostCapsBusy = true;
   const userId = client.getUserId();
-  if (!userId) return;
+  if (!userId) {
+    hostCapsBusy = false;
+    return;
+  }
   const content = buildHostCapabilitiesContent();
-  for (const room of client.getRooms()) {
-    if (room.getMyMembership() !== "join") continue;
-    try {
-      await client.sendStateEvent(
-        room.roomId,
-        AIOMATRIX_HOST_STATE_EVENT_TYPE as typeof EventType.RoomTopic,
-        content as never,
-        userId,
-      );
-    } catch {
-      // Needs power level; aware bots already use toast profile.
+  try {
+    for (const room of client.getRooms()) {
+      if (room.getMyMembership() !== "join") continue;
+      const needed = roomNeedsHostHandshake({
+        isDirect: Boolean(room.getDMInviter() || room.guessDMUserId()),
+        memberUserIds: room.getJoinedMembers().map((member) => member.userId),
+        hasCommandsState: room.currentState.getStateEvents("dev.aiomatrix.commands").length > 0,
+      });
+      const existing = room.currentState.getStateEvents(AIOMATRIX_HOST_STATE_EVENT_TYPE, userId);
+      if (!needed) {
+        const eventId = existing?.getId();
+        if (eventId) {
+          try {
+            await client.redactEvent(room.roomId, eventId);
+          } catch {
+            /* no power or already gone */
+          }
+        }
+        continue;
+      }
+      const previous = existing?.getContent() ?? {};
+      if (JSON.stringify(previous) === JSON.stringify(content)) continue;
+      try {
+        await client.sendStateEvent(
+          room.roomId,
+          AIOMATRIX_HOST_STATE_EVENT_TYPE as typeof EventType.RoomTopic,
+          content as never,
+          userId,
+        );
+      } catch {
+        // Needs power level; aware bots already use toast profile.
+      }
     }
+  } finally {
+    hostCapsBusy = false;
   }
 }
 
@@ -385,7 +442,14 @@ function attachIncomingVerification(active: MatrixClient): void {
 
 async function start(session: StoredSession): Promise<void> {
   disposeCallControllers();
-  if (client) client.stopClient();
+  if (client) {
+    try {
+      matrixRtcManager(client)?.stop?.();
+    } catch {
+      /* older SDK */
+    }
+    client.stopClient();
+  }
   pendingIncomingVerification = null;
   client = createClient({
     baseUrl: session.baseUrl,
@@ -398,7 +462,8 @@ async function start(session: StoredSession): Promise<void> {
   });
   attachCallControllers(client);
   publish({ connection: navigator.onLine ? "syncing" : "offline", error: null, toast: null });
-  hostCapsAdvertised = false;
+  hostCapsBusy = false;
+  dismissedRtcInvites.clear();
   client.on(ClientEvent.Sync, (state) => {
     publish({
       connection: state === "SYNCING" || state === "PREPARED" ? "online" : state === "ERROR" ? "error" : "syncing",
@@ -420,6 +485,9 @@ async function start(session: StoredSession): Promise<void> {
   client.on(RoomEvent.Receipt, () => publish());
   client.on(RoomEvent.LocalEchoUpdated, () => publish());
   client.on(RoomMemberEvent.Typing, () => publish());
+  client.on(RoomStateEvent.Events, (event) => {
+    if (event.getType() === MSC3401_MEMBER_EVENT) publish();
+  });
   // Encrypted events land as m.room.encrypted; after async decrypt the clear
   // type becomes m.room.message. Without this, bot replies stay invisible.
   client.on(MatrixEventEvent.Decrypted, (event) => {
@@ -448,6 +516,11 @@ async function start(session: StoredSession): Promise<void> {
     publish({ error: `Encryption unavailable: ${messageOf(error)}` });
   }
   await client.startClient({ initialSyncLimit: 50 });
+  try {
+    matrixRtcManager(client)?.start?.();
+  } catch {
+    /* older SDK without a session manager */
+  }
   void registerPushAfterLogin(client).catch(() => undefined);
 }
 
@@ -624,6 +697,11 @@ export async function logout(): Promise<void> {
     try {
       await active.logout(true);
     } finally {
+      try {
+        matrixRtcManager(active)?.stop?.();
+      } catch {
+        /* older SDK */
+      }
       active.stopClient();
     }
   }
@@ -638,7 +716,8 @@ export async function logout(): Promise<void> {
     await clearCryptoDatabases(userId, deviceId);
   }
   publish({ connection: "offline", error: null, toast: null });
-  hostCapsAdvertised = false;
+  hostCapsBusy = false;
+  dismissedRtcInvites.clear();
   publishVerification();
 }
 
@@ -691,6 +770,7 @@ export function listRooms(query = ""): RoomListItem[] {
         isSpace: room.isSpaceRoom(),
         membership: room.getMyMembership(),
         lastActive: room.getLastActiveTimestamp(),
+        muted: isRoomMutedByPushRules(active.pushRules?.global?.room, room.roomId),
         ...(parentId ? { spaceParentId: parentId } : {}),
       };
     })
@@ -842,7 +922,7 @@ export async function sendMessage(
 export async function uploadFile(
   roomId: string,
   file: File,
-  options: { replyEventId?: string; onProgress?: (ratio: number) => void } = {},
+  options: { replyEventId?: string; onProgress?: (ratio: number) => void; voice?: boolean; durationMs?: number } = {},
 ): Promise<void> {
   const active = requiredClient();
   const room = active.getRoom(roomId);
@@ -893,6 +973,12 @@ export async function uploadFile(
 
   if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
+  }
+  if (options.voice) {
+    content["org.matrix.msc3245.voice"] = {};
+    const info = (content.info as Record<string, unknown> | undefined) ?? {};
+    if (typeof options.durationMs === "number") info.duration = options.durationMs;
+    content.info = info;
   }
   options.onProgress?.(0.98);
   await active.sendEvent(roomId, EventType.RoomMessage, content as never);
@@ -966,6 +1052,103 @@ export async function markRead(roomId: string): Promise<void> {
     await active.sendReadReceipt(event);
     return;
   }
+}
+
+export function getOwnReadUpTo(roomId: string): string | null {
+  const active = client;
+  const self = active?.getUserId();
+  const room = active?.getRoom(roomId);
+  if (!active || !self || !room) return null;
+  return room.getEventReadUpTo(self) ?? null;
+}
+
+export function getPinnedEventIds(roomId: string): string[] {
+  const content = client?.getRoom(roomId)?.currentState
+    .getStateEvents(EventType.RoomPinnedEvents, "")
+    ?.getContent() as { pinned?: unknown } | undefined;
+  return Array.isArray(content?.pinned)
+    ? content.pinned.filter((id): id is string => typeof id === "string")
+    : [];
+}
+
+export async function togglePinnedEvent(roomId: string, eventId: string): Promise<void> {
+  const next = togglePinnedIds(getPinnedEventIds(roomId), eventId);
+  await requiredClient().sendStateEvent(roomId, EventType.RoomPinnedEvents, { pinned: next } as never, "");
+  publish();
+}
+
+export async function setRoomMuted(roomId: string, muted: boolean): Promise<void> {
+  await requiredClient().setRoomMutePushRule("global", roomId, muted);
+  publish();
+}
+
+export function getUserPresence(userId: string): {
+  presence: string;
+  lastActiveAgo?: number;
+  currentlyActive?: boolean;
+} {
+  const user = client?.getUser(userId);
+  return {
+    presence: user?.presence ?? "offline",
+    ...(typeof user?.lastActiveAgo === "number" ? { lastActiveAgo: user.lastActiveAgo } : {}),
+    ...(typeof user?.currentlyActive === "boolean" ? { currentlyActive: user.currentlyActive } : {}),
+  };
+}
+
+export function getPeerUserId(roomId: string): string | null {
+  const room = client?.getRoom(roomId);
+  const self = client?.getUserId();
+  if (!room || !self) return null;
+  const guessed = room.guessDMUserId();
+  if (guessed && guessed !== self) return guessed;
+  const other = room.getJoinedMembers().find((member) => member.userId !== self);
+  return other?.userId ?? null;
+}
+
+export function getUserProfileInfo(userId: string): {
+  userId: string;
+  displayName: string;
+  avatarUrl?: string;
+} {
+  const active = client;
+  if (!active) return { userId, displayName: userId };
+  for (const room of active.getRooms()) {
+    const member = room.getMember(userId);
+    if (!member) continue;
+    return {
+      userId,
+      displayName: member.name || userId,
+      avatarUrl: member.getAvatarUrl(active.baseUrl, 96, 96, "crop", false, false) ?? undefined,
+    };
+  }
+  const user = active.getUser(userId);
+  return { userId, displayName: user?.displayName || userId };
+}
+
+export function isUserIgnored(userId: string): boolean {
+  return Boolean(client?.isUserIgnored(userId));
+}
+
+export async function setUserIgnored(userId: string, ignored: boolean): Promise<void> {
+  const active = requiredClient();
+  const current = active.getIgnoredUsers();
+  const next = ignored
+    ? [...new Set([...current, userId])]
+    : current.filter((id) => id !== userId);
+  await active.setIgnoredUsers(next);
+  publish();
+}
+
+export async function forwardMessage(fromRoomId: string, eventId: string, toRoomId: string): Promise<void> {
+  const item = roomTimeline(fromRoomId).find((entry) => entry.eventId === eventId);
+  if (!item || item.redacted) throw new Error("Message is not available");
+  await sendMessage(toRoomId, formatForwardedBody(item.senderName, item.body || item.media?.name || ""));
+}
+
+export function listRoomMedia(roomId: string): TimelineItem[] {
+  return roomTimeline(roomId).filter((item) =>
+    Boolean(item.media) && (item.kind === "image" || item.kind === "video" || item.kind === "audio" || item.kind === "file"),
+  );
 }
 
 export async function setTyping(roomId: string, typing: boolean): Promise<void> {
@@ -1156,6 +1339,32 @@ export function getOwnAvatarUrl(): string | undefined {
   if (!userId) return undefined;
   const mxc = active.getUser(userId)?.avatarUrl;
   return mxc ? active.mxcUrlToHttp(mxc, 96, 96, "crop", true) ?? undefined : undefined;
+}
+
+export function getOwnPresence(): "online" | "unavailable" | "offline" {
+  const active = client;
+  const userId = active?.getUserId();
+  if (!active || !userId) return "online";
+  const value = active.getUser(userId)?.presence;
+  if (value === "unavailable" || value === "offline" || value === "online") return value;
+  return "online";
+}
+
+export async function setOwnPresence(presence: "online" | "unavailable" | "offline"): Promise<void> {
+  await requiredClient().setPresence({ presence });
+  publish();
+}
+
+export function browserNotificationPermission(): NotificationPermission | "unsupported" {
+  if (typeof Notification === "undefined") return "unsupported";
+  return Notification.permission;
+}
+
+export async function requestDesktopNotifications(): Promise<NotificationPermission | "unsupported"> {
+  if (typeof Notification === "undefined") return "unsupported";
+  const perm = await Notification.requestPermission();
+  if (perm === "granted" && client) await registerPushAfterLogin(client);
+  return perm;
 }
 
 export async function updateProfile(displayName: string, avatar?: File): Promise<void> {
@@ -1577,7 +1786,10 @@ export function getCallCapability(roomId: string): {
   const session = active.matrixRTC.getActiveRoomSession(room);
   const memberships = session?.memberships;
   const direct = directCallController?.snapshot;
-  const groupActive = Boolean(memberships && memberships.length > 0);
+  const groupActive = Boolean(
+    (memberships && memberships.length > 0)
+    || callMemberEventsFromRoom(room).some((event) => isActiveCallMemberContent(event.content)),
+  );
   const callActive =
     groupActive
     || Boolean(direct?.call && direct.roomId === roomId);
@@ -1608,6 +1820,7 @@ export function startMatrixRtc(roomId: string): Promise<void> {
     return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
   }
   if (!matrixRtcController) return Promise.reject(new Error("Sign in to call"));
+  dismissedRtcInvites.delete(roomId);
   return matrixRtcController.join(roomId);
 }
 
@@ -1646,7 +1859,68 @@ export function startDirectCall(roomId: string): Promise<void> {
     return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
   }
   if (!directCallController) return Promise.reject(new Error("Sign in to call"));
+  const room = client?.getRoom(roomId);
+  if (room?.hasEncryptionStateEvent() && !client?.getCrypto()) {
+    return Promise.reject(new Error(DIRECT_CALL_CRYPTO_UNAVAILABLE));
+  }
   return directCallController.start(roomId);
+}
+
+export async function startOutgoingCall(roomId: string): Promise<void> {
+  const capability = getCallCapability(roomId);
+  if (!capability.available) {
+    throw new Error(capability.reason ?? "Calls are unavailable");
+  }
+  const room = client?.getRoom(roomId);
+  const mode = outgoingCallMode({
+    isDirect: Boolean(room?.getDMInviter() || room?.guessDMUserId()),
+    encrypted: Boolean(room?.hasEncryptionStateEvent()),
+    cryptoReady: Boolean(client?.getCrypto()),
+    matrixRtcAvailable: Boolean(discoverLivekitFocus(client?.getClientWellKnown(), livekitFallbackUrl())),
+  });
+  if (mode === "matrixrtc") {
+    await startMatrixRtc(roomId);
+    return;
+  }
+  if (mode === "direct") {
+    await startDirectCall(roomId);
+    return;
+  }
+  throw new Error(DIRECT_CALL_CRYPTO_UNAVAILABLE);
+}
+
+export function getIncomingRtcCall(): { roomId: string; name: string } | null {
+  if (!client) return null;
+  const phase = matrixRtcController?.snapshot.phase;
+  if (phase === "connecting" || phase === "connected") return null;
+  const self = client.getUserId();
+  if (!self) return null;
+  const incoming = pickIncomingRtcCall({
+    selfUserId: self,
+    dismissedRoomIds: dismissedRtcInvites,
+    rooms: client.getRooms()
+      .filter((room) => room.getMyMembership() === "join")
+      .map((room) => ({
+        roomId: room.roomId,
+        name: room.name,
+        members: callMemberEventsFromRoom(room),
+      })),
+  });
+  if (!incoming) {
+    for (const roomId of [...dismissedRtcInvites]) {
+      const room = client.getRoom(roomId);
+      if (!room || !callMemberEventsFromRoom(room).some((event) => isActiveCallMemberContent(event.content))) {
+        dismissedRtcInvites.delete(roomId);
+      }
+    }
+    return null;
+  }
+  return { roomId: incoming.roomId, name: incoming.name };
+}
+
+export function dismissIncomingRtcCall(roomId: string): void {
+  dismissedRtcInvites.add(roomId);
+  publish();
 }
 
 export function acceptDirectCall(): Promise<void> {

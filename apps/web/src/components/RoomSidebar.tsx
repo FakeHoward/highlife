@@ -12,6 +12,10 @@ interface Props {
   onNew: () => void;
   onNewSpace: () => void;
   onSettings: () => void;
+  onProfile?: () => void;
+  profileId?: string;
+  profileName?: string;
+  profileAvatar?: string;
   spaces?: SpaceSummary[];
   selectedSpaceId?: string | null;
   onSelectSpace?: (spaceId: string | null) => void;
@@ -26,6 +30,10 @@ export function RoomSidebar({
   onNew,
   onNewSpace,
   onSettings,
+  onProfile,
+  profileId,
+  profileName,
+  profileAvatar,
   spaces = [],
   selectedSpaceId = null,
   onSelectSpace,
@@ -143,12 +151,27 @@ export function RoomSidebar({
                   </span>
                 )}
                 {room.membership === "invite" ? t("sidebar.invitation") : (room.lastMessage ?? t("sidebar.noMessages"))}
+                {room.muted && <span className="mute-mark">{t("sidebar.muted")}</span>}
               </span>
             </span>
             {room.unread > 0 && <span className={`unread ${room.highlight ? "hot" : ""}`}>{room.unread}</span>}
           </button>
         ))}
       </nav>
+      {onProfile && profileId && (
+        <button
+          type="button"
+          className="sidebar-profile"
+          onClick={onProfile}
+          aria-label={t("sidebar.profile")}
+        >
+          <Avatar id={profileId} name={profileName || profileId} src={profileAvatar} size="small" />
+          <span className="room-copy">
+            <strong>{profileName || profileId}</strong>
+            <span className="room-preview">{profileId}</span>
+          </span>
+        </button>
+      )}
       </aside>
     </>
   );

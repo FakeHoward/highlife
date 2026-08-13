@@ -427,3 +427,19 @@ bool isSafeHttpUrl(String url, {bool requireHttps = false}) {
       uri.host == '127.0.0.1' ||
       uri.host == '[::1]';
 }
+
+bool isLikelyBotUserId(String userId) {
+  final localpart = userId.startsWith('@')
+      ? userId.substring(1).split(':').first
+      : userId;
+  final key = localpart.toLowerCase();
+  return key == 'highlifebot' || key.endsWith('bot') || key.startsWith('bot');
+}
+
+bool roomNeedsHostHandshake({
+  required Iterable<String> memberUserIds,
+  bool hasCommandsState = false,
+}) {
+  if (hasCommandsState) return true;
+  return memberUserIds.any(isLikelyBotUserId);
+}

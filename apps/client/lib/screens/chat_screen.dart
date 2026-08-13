@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../aiomatrix/markdown.dart';
 import '../aiomatrix/protocol.dart';
+import '../domain/messenger_extras.dart';
 import '../domain/timeline_models.dart';
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
@@ -25,6 +26,7 @@ import '../widgets/mini_app_surface.dart';
 import '../widgets/poll_card.dart';
 import '../widgets/room_details_sheet.dart';
 import '../widgets/sync_status_banner.dart';
+import '../widgets/user_profile_sheet.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -58,10 +60,13 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _typingDebounce;
   Timer? _typingRefresh;
   bool _typingSent = false;
+  String? _unreadAnchor;
 
   @override
   void initState() {
     super.initState();
+    final readUpTo = widget.room.fullyRead;
+    _unreadAnchor = readUpTo.isEmpty ? null : readUpTo;
     _loadTimeline();
   }
 
@@ -211,6 +216,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final groups = groupTimelineItems(items);
     final rows = <_TimelineRow>[];
     DateTime? lastDay;
+    final eventIds = [
+      for (final group in groups)
+        for (final item in group.items) item.eventId,
+    ];
+    final unreadId = firstUnreadEventId(eventIds, _unreadAnchor);
 
     for (final group in groups) {
       if (lastDay == null || lastDay != group.day) {
@@ -221,6 +231,9 @@ class _ChatScreenState extends State<ChatScreen> {
       for (final item in group.items) {
         final event = byId[item.eventId];
         if (event == null) continue;
+        if (unreadId == item.eventId) {
+          rows.add(_TimelineRow.unread());
+        }
         final replyRaw = item.replyToEventId == null
             ? null
             : bodyById[item.replyToEventId!] ??
@@ -269,7 +282,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 onPressed: widget.onBack ?? () => Navigator.maybePop(context),
                 icon: const Icon(Icons.arrow_back),
               ),
-        title: Row(
+        title: GestureDetector(
+          onTap: () {
+            final peer = widget.room.directChatMatrixID;
+            if (peer != null) {
+              unawaited(_openProfile(session, s, peer));
+            }
+          },
+          child: Row(
           children: [
             MatrixAvatar(
               name: widget.room.getLocalizedDisplayname(),
@@ -291,11 +311,17 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                       _typingLabel(session, s)!,
                       style: Theme.of(context).textTheme.bodySmall,
+                    )
+                  else if (_presenceLabel(s) != null)
+                    Text(
+                      _presenceLabel(s)!,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                 ],
               ),
             ),
           ],
+          ),
         ),
         actions: [
           IconButton(
@@ -314,6 +340,14 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (_) => [
               PopupMenuItem(value: 'details', child: Text(s.roomDetails)),
               PopupMenuItem(value: 'poll', child: Text(s.createPoll)),
+              PopupMenuItem(
+                value: 'mute',
+                child: Text(
+                  widget.room.pushRuleState == PushRuleState.dontNotify
+                      ? s.unmuteNotifications
+                      : s.muteNotifications,
+                ),
+              ),
               PopupMenuItem(value: 'members', child: Text(s.members)),
               PopupMenuItem(value: 'invite', child: Text(s.inviteMember)),
               PopupMenuItem(value: 'leave', child: Text(s.leaveRoom)),
@@ -324,6 +358,24 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           const SyncStatusBanner(),
+          if (widget.room.pinnedEventIds.isNotEmpty)
+            Material(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.push_pin_outlined, size: 18),
+                title: Text(s.pinned),
+                subtitle: Text(
+                  _pinnedPreview(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  final id = widget.room.pinnedEventIds.lastOrNull;
+                  if (id != null) unawaited(_revealEvent(id));
+                },
+              ),
+            ),
           if (callActive)
             Material(
               color: Theme.of(context).colorScheme.primaryContainer,
@@ -401,6 +453,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (row.day != null) {
                     return _DaySeparator(day: row.day!, strings: s);
                   }
+                  if (row.unread) {
+                    return _UnreadSeparator(label: s.unreadMessages);
+                  }
                   final event = row.event!;
                   return KeyedSubtree(
                     key: _eventKeys.putIfAbsent(
@@ -471,6 +526,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               row.httpMediaUrl!,
                               mode: LaunchMode.externalApplication,
                             ),
+                    onPin: () => _togglePin(event),
+                    onForward: () => _forward(session, s, event),
+                    onOpenProfile: event.senderId == session.userId
+                        ? null
+                        : () => _openProfile(session, s, event.senderId),
                     strings: s,
                     ),
                   );
@@ -581,6 +641,86 @@ class _ChatScreenState extends State<ChatScreen> {
     return s.typingUsers(typers.join(', '));
   }
 
+  String? _presenceLabel(AppStrings s) {
+    if (!widget.room.isDirectChat) return null;
+    final peerId = widget.room.directChatMatrixID;
+    if (peerId == null) return null;
+    final presence = widget.room.client.presences[peerId];
+    if (presence == null) return s.userOffline;
+    if (presence.currentlyActive == true ||
+        presence.presence == PresenceType.online) {
+      return s.userOnline;
+    }
+    if (presence.presence == PresenceType.unavailable) return s.userAway;
+    final at = presence.lastActiveTimestamp;
+    if (at != null) return s.lastSeen(at.toLocal().toString());
+    return s.userOffline;
+  }
+
+  String _pinnedPreview() {
+    final id = widget.room.pinnedEventIds.lastOrNull;
+    if (id == null) return '';
+    final event = _timeline?.events.firstWhereOrNull((item) => item.eventId == id);
+    final body = event?.body.trim() ?? '';
+    return body.isEmpty ? id : body;
+  }
+
+  Future<void> _togglePin(Event event) async {
+    final next = togglePinnedIds(widget.room.pinnedEventIds, event.eventId);
+    await widget.room.setPinnedEvents(next);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openProfile(
+    HighLifeSession session,
+    AppStrings s,
+    String userId,
+  ) async {
+    final roomId = await showUserProfileSheet(
+      context,
+      userId: userId,
+      session: session,
+      strings: s,
+    );
+    if (!mounted || roomId == null || widget.embedded) return;
+    final room = session.client?.getRoomById(roomId);
+    if (room == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => ChatScreen(room: room)),
+    );
+  }
+
+  Future<void> _forward(
+    HighLifeSession session,
+    AppStrings s,
+    Event event,
+  ) async {
+    final rooms = session.rooms
+        .where((room) => !room.isSpace && room.id != widget.room.id)
+        .toList();
+    final targetId = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(s.forwardMessage),
+        children: [
+          for (final room in rooms)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, room.id),
+              child: Text(room.getLocalizedDisplayname()),
+            ),
+        ],
+      ),
+    );
+    if (targetId == null) return;
+    final target = session.client?.getRoomById(targetId);
+    if (target == null) return;
+    final body = formatForwardedBody(
+      event.senderFromMemoryOrFallback.calcDisplayname(),
+      event.body,
+    );
+    await target.sendTextEvent(body);
+  }
+
   Future<void> _toggleReaction(
     HighLifeSession session,
     Event event,
@@ -605,16 +745,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _startCall(HighLifeSession session) async {
-    final calls = session.nativeCalls;
-    final peerId = widget.room.directChatMatrixID;
-    if (calls != null && peerId != null && peerId.isNotEmpty) {
-      try {
-        await calls.startVoiceCall(widget.room, peerUserId: peerId);
-      } catch (error) {
-        if (mounted) setState(() => _actionError = error.toString());
-      }
-      return;
-    }
     await _joinMatrixRtc(session);
   }
 
@@ -731,6 +861,14 @@ class _ChatScreenState extends State<ChatScreen> {
     AppStrings s,
     String action,
   ) async {
+    if (action == 'mute') {
+      final muted = widget.room.pushRuleState == PushRuleState.dontNotify;
+      await widget.room.setPushRuleState(
+        muted ? PushRuleState.notify : PushRuleState.dontNotify,
+      );
+      if (mounted) setState(() {});
+      return;
+    }
     if (action == 'details') {
       await showRoomDetailsSheet(
         context,
@@ -738,6 +876,7 @@ class _ChatScreenState extends State<ChatScreen> {
         session: session,
         strings: s,
         onLeft: widget.onBack,
+        mediaEvents: _timeline?.events,
       );
       return;
     }
@@ -902,9 +1041,12 @@ class _TimelineRow {
     this.showSender = false,
     this.replyPreview,
     this.httpMediaUrl,
+    this.unread = false,
   });
 
   factory _TimelineRow.day(DateTime day) => _TimelineRow._(day: day);
+
+  factory _TimelineRow.unread() => const _TimelineRow._(unread: true);
 
   factory _TimelineRow.message({
     required Event event,
@@ -931,6 +1073,7 @@ class _TimelineRow {
   final bool showSender;
   final String? replyPreview;
   final Uri? httpMediaUrl;
+  final bool unread;
 }
 
 class _DaySeparator extends StatelessWidget {
@@ -960,6 +1103,26 @@ class _DaySeparator extends StatelessWidget {
   }
 }
 
+class _UnreadSeparator extends StatelessWidget {
+  const _UnreadSeparator({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = Theme.of(context).extension<HighLifeTokens>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: tokens.muted),
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageTile extends StatelessWidget {
   const _MessageTile({
     required this.event,
@@ -980,6 +1143,9 @@ class _MessageTile extends StatelessWidget {
     this.onEdit,
     this.onRedact,
     this.onOpenMedia,
+    this.onPin,
+    this.onForward,
+    this.onOpenProfile,
     this.feedback,
   });
 
@@ -1000,6 +1166,9 @@ class _MessageTile extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onRedact;
   final VoidCallback? onOpenMedia;
+  final VoidCallback? onPin;
+  final VoidCallback? onForward;
+  final VoidCallback? onOpenProfile;
   final String? feedback;
   final AppStrings strings;
 
@@ -1049,7 +1218,9 @@ class _MessageTile extends StatelessWidget {
                 if (showSender)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
+                    child: GestureDetector(
+                      onTap: onOpenProfile,
+                      child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         MatrixAvatar(
@@ -1064,14 +1235,13 @@ class _MessageTile extends StatelessWidget {
                           child: Text(
                             event.senderFromMemoryOrFallback.displayName ??
                                 event.senderId,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 12,
-                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
+                    ),
                     ),
                   ),
                 if (replyPreview != null)
@@ -1280,6 +1450,17 @@ class _MessageTile extends StatelessWidget {
           PopupMenuItem(value: 'redact', child: Text(strings.delete)),
         if (onOpenMedia != null)
           PopupMenuItem(value: 'open', child: Text(strings.openMedia)),
+        if (onPin != null)
+          PopupMenuItem(
+            value: 'pin',
+            child: Text(
+              event.room.pinnedEventIds.contains(event.eventId)
+                  ? strings.unpinMessage
+                  : strings.pinMessage,
+            ),
+          ),
+        if (onForward != null)
+          PopupMenuItem(value: 'forward', child: Text(strings.forwardMessage)),
       ],
     );
     if (action == null) return;
@@ -1296,6 +1477,10 @@ class _MessageTile extends StatelessWidget {
         onRedact?.call();
       case 'open':
         onOpenMedia?.call();
+      case 'pin':
+        onPin?.call();
+      case 'forward':
+        onForward?.call();
     }
   }
 }

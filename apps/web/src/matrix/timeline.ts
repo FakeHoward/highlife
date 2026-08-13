@@ -8,6 +8,7 @@ import type {
 } from "@highlife/ui-contracts";
 import { readStoredLocale, translate, type MessageKey, type MessageParams } from "../i18n/messages";
 import { resolveDisplayBody } from "../protocol/aiomatrix";
+import { isVoiceMessageContent } from "./messengerExtras";
 import { encryptedFileFromContent } from "./encryptedMedia";
 import {
   isPollEndType,
@@ -113,6 +114,8 @@ function mediaFor(content: Record<string, unknown>): MediaDescriptor | undefined
           },
         }
       : {}),
+    ...(isVoiceMessageContent(content) ? { voice: true } : {}),
+    ...(typeof info.duration === "number" ? { durationMs: info.duration } : {}),
   };
 }
 

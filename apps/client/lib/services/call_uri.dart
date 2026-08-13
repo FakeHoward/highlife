@@ -56,23 +56,39 @@ bool hasActiveCallMemberStates(
   final nowMs = clock.millisecondsSinceEpoch;
   for (final content in memberContents) {
     if (content.isEmpty) continue;
+    if (_slotMembershipActive(content, nowMs)) return true;
     final memberships = content['memberships'];
     if (memberships is! List || memberships.isEmpty) continue;
     for (final raw in memberships) {
       if (raw is! Map) continue;
-      final membership = Map<String, dynamic>.from(raw);
-      final expires = membership['expires_ts'] ?? membership['expires'];
-      if (expires is num && expires.toInt() > 0 && expires.toInt() <= nowMs) {
-        continue;
-      }
-      final kind = '${membership['membership'] ?? ''}'.toLowerCase();
-      if (kind.isEmpty ||
-          kind == 'join' ||
-          kind == 'call' ||
-          kind == 'connected') {
+      if (_slotMembershipActive(Map<String, dynamic>.from(raw), nowMs)) {
         return true;
       }
     }
   }
   return false;
+}
+
+bool _slotMembershipActive(Map<String, dynamic> membership, int nowMs) {
+  final expires = membership['expires_ts'] ?? membership['expires'];
+  if (expires is num && expires.toInt() > 0 && expires.toInt() <= nowMs) {
+    return false;
+  }
+  final kind = '${membership['membership'] ?? ''}'.toLowerCase();
+  if (kind == 'leave' || kind == 'hangup') return false;
+  final application = membership['application'];
+  if (application is String && application.isNotEmpty) return true;
+  final deviceId = membership['device_id'];
+  if (deviceId is String && deviceId.isNotEmpty) {
+    return kind.isEmpty ||
+        kind == 'join' ||
+        kind == 'call' ||
+        kind == 'connected';
+  }
+  return false;
+}
+
+String userIdFromCallMemberStateKey(String stateKey, String sender) {
+  final match = RegExp(r'(@[^:]+:[^_]+)').firstMatch(stateKey);
+  return match?.group(1) ?? sender;
 }

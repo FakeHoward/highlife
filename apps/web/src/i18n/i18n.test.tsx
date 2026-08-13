@@ -48,6 +48,12 @@ describe("i18n messages", () => {
     expect(translate("en", "call.fallback")).toBe("Use Element Call");
     expect(translate("ru", "call.participants", { count: 3 })).toBe("В звонке: 3");
     expect(translate("en", "call.micBlocked")).toMatch(/Windows/i);
+    expect(translate("en", "profile.title")).toBe("Profile");
+    expect(translate("ru", "profile.sessions")).toBe("Сессии");
+    expect(translate("en", "timeline.pin")).toBe("Pin");
+    expect(translate("ru", "timeline.forward")).toBe("Переслать");
+    expect(translate("en", "composer.record")).toBe("Record voice message");
+    expect(translate("ru", "chat.mute")).toBe("Выключить уведомления");
     expect(translate("ru", "timeline.systemCallInvite", { name: "Ada" })).toBe(
       "Ada начал(а) голосовой звонок",
     );

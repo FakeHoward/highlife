@@ -38,6 +38,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
   Room? _selectedSpace;
   String _query = '';
   KeyVerification? _shownVerification;
+  var _showProfile = false;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +63,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
         AdaptiveMessengerShell.breakpoint;
 
     return AdaptiveMessengerShell(
-      showMasterOnCompact: _selected == null,
+      showMasterOnCompact: _selected == null && !_showProfile,
       rail: _SpacesRail(
         spaces: spaces,
         selectedSpaceId: _selectedSpace?.id,
@@ -84,6 +85,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
               onOpenRoom: (room) => setState(() {
                 _selected = room;
                 _selectedSpace = null;
+                _showProfile = false;
               }),
             ),
       master: Scaffold(
@@ -192,7 +194,10 @@ class _RoomListScreenState extends State<RoomListScreen> {
                                     _selectedSpace?.id == space.id ? null : space;
                               }),
                               onOpenRoom: (room) =>
-                                  setState(() => _selected = room),
+                                  setState(() {
+                                    _selected = room;
+                                    _showProfile = false;
+                                  }),
                               selectedRoomId: _selected?.id,
                               emptySubtitle: s.noMessagesYet,
                             ),
@@ -221,22 +226,47 @@ class _RoomListScreenState extends State<RoomListScreen> {
                             room: room,
                             selected: room.id == _selected?.id,
                             emptySubtitle: s.noMessagesYet,
-                            onTap: () => setState(() => _selected = room),
+                            onTap: () => setState(() {
+                              _selected = room;
+                              _showProfile = false;
+                            }),
                           ),
                       ],
                     ),
             ),
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: ListTile(
+                leading: MatrixAvatar(
+                  name: session.userId ?? 'H',
+                  client: session.client,
+                  radius: 18,
+                ),
+                title: Text(s.profile),
+                subtitle: Text(
+                  session.userId ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => setState(() {
+                  _showProfile = true;
+                  _selected = null;
+                }),
+              ),
+            ),
           ],
         ),
       ),
-      detail: _selected == null
-          ? const EmptyConversation()
-          : ChatScreen(
-              key: ValueKey(_selected!.id),
-              room: _selected!,
-              embedded: wide,
-              onBack: () => setState(() => _selected = null),
-            ),
+      detail: _showProfile
+          ? ProfilePage(onClose: () => setState(() => _showProfile = false))
+          : _selected == null
+              ? const EmptyConversation()
+              : ChatScreen(
+                  key: ValueKey(_selected!.id),
+                  room: _selected!,
+                  embedded: wide,
+                  onBack: () => setState(() => _selected = null),
+                ),
     );
   }
 
@@ -265,7 +295,10 @@ class _RoomListScreenState extends State<RoomListScreen> {
     String action,
   ) async {
     if (action == 'settings') {
-      await showSettingsDialog(context);
+      setState(() {
+        _showProfile = true;
+        _selected = null;
+      });
       return;
     }
 
@@ -713,8 +746,20 @@ class _RoomTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(color: tokens.muted),
         ),
-        trailing: room.notificationCount > 0
-            ? Badge(label: Text('${room.notificationCount}'))
+        trailing: room.pushRuleState == PushRuleState.dontNotify ||
+                room.notificationCount > 0
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (room.pushRuleState == PushRuleState.dontNotify)
+                    Icon(Icons.notifications_off_outlined, size: 16, color: tokens.muted),
+                  if (room.notificationCount > 0) ...[
+                    if (room.pushRuleState == PushRuleState.dontNotify)
+                      const SizedBox(width: 6),
+                    Badge(label: Text('${room.notificationCount}')),
+                  ],
+                ],
+              )
             : null,
         onTap: onTap,
       ),

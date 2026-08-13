@@ -96,6 +96,11 @@ interface Props {
   history: { loading: boolean; exhausted: boolean; error: string | null };
   onLoadOlder: () => Promise<void>;
   highlightEventId?: string | null;
+  unreadEventId?: string | null;
+  pinnedIds?: string[];
+  onPin?: (item: TimelineItem) => void;
+  onForward?: (item: TimelineItem) => void;
+  onOpenProfile?: (item: TimelineItem) => void;
 }
 
 export function MessageTimeline({
@@ -106,6 +111,11 @@ export function MessageTimeline({
   history,
   onLoadOlder,
   highlightEventId,
+  unreadEventId,
+  pinnedIds = [],
+  onPin,
+  onForward,
+  onOpenProfile,
 }: Props) {
   const { t } = useI18n();
   const end = useRef<HTMLDivElement>(null);
@@ -232,6 +242,9 @@ export function MessageTimeline({
         return (
           <Fragment key={item.eventId}>
             {dateChip}
+            {unreadEventId === item.eventId && (
+              <div className="unread-chip" role="separator">{t("timeline.unread")}</div>
+            )}
             <article
             data-event-id={item.eventId}
             className={`message ${item.isOwn ? "own" : ""} ${grouped ? "grouped" : ""} ${highlightEventId === item.eventId ? "highlight" : ""}`}
@@ -239,13 +252,20 @@ export function MessageTimeline({
             {!item.isOwn && (
               grouped
                 ? <span className="message-avatar-spacer" aria-hidden="true" />
-                : <Avatar
-                    className="message-avatar"
-                    id={item.senderId}
-                    name={item.senderName}
-                    src={item.senderAvatarUrl}
-                    size="small"
-                  />
+                : <button
+                    type="button"
+                    className="message-avatar-button"
+                    onClick={() => onOpenProfile?.(item)}
+                    aria-label={item.senderName}
+                  >
+                    <Avatar
+                      className="message-avatar"
+                      id={item.senderId}
+                      name={item.senderName}
+                      src={item.senderAvatarUrl}
+                      size="small"
+                    />
+                  </button>
             )}
             <div className="message-stack">
               {!grouped && !item.isOwn && <header><strong>{item.senderName}</strong></header>}
@@ -352,6 +372,14 @@ export function MessageTimeline({
                       {t("timeline.remove")}
                     </button>
                   )}
+                  {onPin && (
+                    <button type="button" onClick={() => onPin(item)}>
+                      {pinnedIds.includes(item.eventId) ? t("timeline.unpin") : t("timeline.pin")}
+                    </button>
+                  )}
+                  {onForward && (
+                    <button type="button" onClick={() => onForward(item)}>{t("timeline.forward")}</button>
+                  )}
                 </div>
               )}
             </div>
@@ -442,7 +470,15 @@ function Media({ item }: { item: TimelineItem }) {
     return <img className="message-media" src={source} alt={item.media?.name ?? t("timeline.image")} loading="lazy" />;
   }
   if (item.kind === "video") return <video className="message-media" src={source} controls preload="metadata" />;
-  if (item.kind === "audio") return <audio src={source} controls preload="metadata" />;
+  if (item.kind === "audio") {
+    const seconds = item.media?.durationMs != null ? Math.round(item.media.durationMs / 1000) : null;
+    return (
+      <div className={item.media?.voice ? "voice-note" : undefined}>
+        {item.media?.voice && <span className="voice-label">{t("timeline.voice")}{seconds != null ? ` · ${seconds}s` : ""}</span>}
+        <audio src={source} controls preload="metadata" />
+      </div>
+    );
+  }
   return (
     <a className="file-card" href={source} target="_blank" rel="noreferrer">
       <IconDownload /> <span><strong>{item.media?.name}</strong><small>{formatBytes(item.media?.size, t("timeline.attachment"))}</small></span>

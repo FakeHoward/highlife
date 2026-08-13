@@ -86,6 +86,24 @@ export function IconCall(props: IconProps) {
   );
 }
 
+export function IconMic(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="9" y="2" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v4" />
+    </Icon>
+  );
+}
+
+export function IconStop(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
 export function IconSend(props: IconProps) {
   return (
     <Icon {...props}>

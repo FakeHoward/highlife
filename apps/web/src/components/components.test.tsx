@@ -37,6 +37,15 @@ vi.mock("../matrix/service", () => ({
   setCanonicalAlias: vi.fn(),
   removeRoomAlias: vi.fn(),
   setRoomAvatar: vi.fn(),
+  listRoomMedia: () => [],
+  togglePinnedEvent: vi.fn(),
+  forwardMessage: vi.fn(),
+  getUserProfileInfo: (userId: string) => ({ userId, displayName: userId }),
+  getUserPresence: () => ({ presence: "offline" }),
+  isUserIgnored: () => false,
+  setUserIgnored: vi.fn(),
+  startDirectMessage: vi.fn(),
+  getSessionIdentity: () => ({ userId: "@me:example.org", deviceId: "DEV", baseUrl: "https://example.org" }),
 }));
 
 vi.mock("../matrix/oidc", () => ({
@@ -158,6 +167,27 @@ describe("responsive room navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close Work" }));
     expect(selectSpace).toHaveBeenCalledWith(null);
   });
+
+  it("opens profile from the sidebar chip", () => {
+    const openProfile = vi.fn();
+    wrap(
+      <RoomSidebar
+        rooms={[room]}
+        activeId={null}
+        query=""
+        onQuery={vi.fn()}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onNewSpace={vi.fn()}
+        onSettings={vi.fn()}
+        onProfile={openProfile}
+        profileId="@me:example.org"
+        profileName="Ada"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Profile" }));
+    expect(openProfile).toHaveBeenCalled();
+  });
 });
 
 describe("avatars", () => {
@@ -265,6 +295,30 @@ describe("message actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reply" }));
     expect(compose).toHaveBeenCalledWith({ type: "reply", item: message });
+  });
+
+  it("exposes pin, forward, and an unread divider", () => {
+    const pin = vi.fn();
+    const forward = vi.fn();
+    wrap(
+      <MessageTimeline
+        items={[message]}
+        roomId={room.roomId}
+        onComposeMode={vi.fn()}
+        onMiniApp={vi.fn()}
+        history={{ loading: false, exhausted: true, error: null }}
+        onLoadOlder={vi.fn()}
+        unreadEventId={message.eventId}
+        pinnedIds={[]}
+        onPin={pin}
+        onForward={forward}
+      />,
+    );
+    expect(screen.getByRole("separator")).toHaveTextContent("Unread messages");
+    fireEvent.click(screen.getByRole("button", { name: "Pin" }));
+    expect(pin).toHaveBeenCalledWith(message);
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(forward).toHaveBeenCalledWith(message);
   });
 
   it("renders foreign thread relations as replies without thread controls", () => {

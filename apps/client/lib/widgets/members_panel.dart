@@ -5,6 +5,7 @@ import '../l10n/messages.dart';
 import '../services/session.dart';
 import 'hl_button.dart';
 import 'matrix_avatar.dart';
+import 'user_profile_sheet.dart';
 
 Future<void> showMembersPanel(
   BuildContext context, {
@@ -158,6 +159,12 @@ class _MembersPanelState extends State<MembersPanel> {
                           ),
                           title: Text(user.calcDisplayname()),
                           subtitle: Text(user.id),
+                          onTap: () => showUserProfileSheet(
+                            context,
+                            userId: user.id,
+                            session: widget.session,
+                            strings: widget.strings,
+                          ),
                           trailing: user.canKick
                               ? HlButton.text(
                                   onPressed: () => _kick(user),

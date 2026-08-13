@@ -4,6 +4,11 @@ import {
   type LivekitTransport,
   type MatrixRTCSession,
 } from "matrix-js-sdk/lib/matrixrtc";
+import {
+  MSC3401_MEMBER_EVENT,
+  remoteLivekitFocusFromEvents,
+  type CallMemberEventLike,
+} from "./rtcMembership";
 
 export type MatrixRtcPhase = "idle" | "connecting" | "connected" | "ended" | "error";
 
@@ -146,7 +151,10 @@ export class MatrixRtcController {
     const room = this.client.getRoom(roomId);
     const userId = this.client.getUserId();
     const deviceId = this.client.getDeviceId();
-    const focus = discoverLivekitFocus(this.client.getClientWellKnown(), this.fallbackUrl);
+    const remoteFocus = userId
+      ? remoteLivekitFocusFromEvents(callMemberEventsFromRoom(room), userId)
+      : null;
+    const focus = remoteFocus ?? discoverLivekitFocus(this.client.getClientWellKnown(), this.fallbackUrl);
     if (!room || !userId || !deviceId || !focus) {
       this.publish({
         ...EMPTY,
@@ -254,6 +262,18 @@ export class MatrixRtcController {
     this.current = next;
     for (const listener of this.listeners) listener();
   }
+}
+
+function callMemberEventsFromRoom(room: Room | null): CallMemberEventLike[] {
+  const getter = room?.currentState?.getStateEvents?.bind(room.currentState);
+  if (!getter) return [];
+  const raw = getter(MSC3401_MEMBER_EVENT);
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return list.map((event) => ({
+    stateKey: event.getStateKey() ?? "",
+    sender: event.getSender() ?? "",
+    content: event.getContent() as Record<string, unknown>,
+  }));
 }
 
 export async function fetchLivekitJson(url: string, body: unknown): Promise<unknown> {

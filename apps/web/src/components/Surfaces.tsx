@@ -15,6 +15,7 @@ import {
   getKeyBackupDetails,
   getOwnDisplayName,
   getOwnAvatarUrl,
+  getOwnPresence,
   getRoomAliases,
   getSessionIdentity,
   invite,
@@ -26,12 +27,15 @@ import {
   addRoomToSpace,
   rememberRecoveryKey,
   requestDeviceVerification,
+  requestDesktopNotifications,
+  browserNotificationPermission,
   resetKeyBackup,
   respondToIncomingVerification,
   restoreFromKeyBackup,
   searchMessages,
   sendMiniAppData,
   sendWidgetRoomEvent,
+  setOwnPresence,
   setupRecoveryAndKeyBackup,
   startDirectMessage,
   subscribeIncomingVerification,
@@ -40,6 +44,12 @@ import {
   removeRoomAlias,
   setRoomAvatar,
   createPoll,
+  getUserPresence,
+  getUserProfileInfo,
+  isUserIgnored,
+  listRoomMedia,
+  mediaUrl,
+  setUserIgnored,
   type SearchHit,
   type EncryptionDevice,
   type KeyBackupDetails,
@@ -54,6 +64,7 @@ import {
 } from "../protocol/aiomatrix";
 import { Avatar } from "./Avatar";
 import { applyTheme, THEME_STORAGE_KEY, type Theme } from "../theme";
+import { formatPresenceLabel } from "../matrix/messengerExtras";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -325,6 +336,11 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [newRecoveryKey, setNewRecoveryKey] = useState<string | null>(null);
   const [cryptoBusy, setCryptoBusy] = useState(false);
   const [cryptoMessage, setCryptoMessage] = useState<string | null>(null);
+  const [presence, setPresence] = useState(getOwnPresence);
+  const [copiedMxid, setCopiedMxid] = useState(false);
+  const [copiedHs, setCopiedHs] = useState(false);
+  const [notif, setNotif] = useState(browserNotificationPermission);
+  const identity = getSessionIdentity();
   const crypto = getCryptoStatus();
   const incoming = useSyncExternalStore(subscribeIncomingVerification, getIncomingVerification, () => null);
 
@@ -374,7 +390,37 @@ export function Settings({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title={t("settings.title")} onClose={onClose}>
+    <section className="profile-page" aria-label={t("profile.title")}>
+      <header className="profile-head">
+        <button className="icon-button" type="button" onClick={onClose} aria-label={t("chat.back")}>
+          ←
+        </button>
+        <strong>{t("profile.title")}</strong>
+      </header>
+      <div className="profile-body">
+      <div className="profile-hero">
+        <Avatar
+          id={identity?.userId ?? displayName}
+          name={displayName || t("settings.profile")}
+          src={avatarUrl}
+          size="large"
+        />
+        <strong>{displayName || t("settings.profile")}</strong>
+        {identity?.userId && (
+          <button
+            type="button"
+            className="profile-mxid"
+            onClick={() => {
+              void navigator.clipboard.writeText(identity.userId).then(() => {
+                setCopiedMxid(true);
+                window.setTimeout(() => setCopiedMxid(false), 1600);
+              });
+            }}
+          >
+            {copiedMxid ? t("profile.copied") : identity.userId}
+          </button>
+        )}
+      </div>
       <div className="settings-section">
         <p className="eyebrow">{t("settings.profile")}</p>
         <form className="profile-form" onSubmit={(event) => {
@@ -384,12 +430,6 @@ export function Settings({ onClose }: { onClose: () => void }) {
             setAvatarUrl(getOwnAvatarUrl());
           });
         }}>
-          <Avatar
-            id={getSessionIdentity()?.userId ?? displayName}
-            name={displayName || t("settings.profile")}
-            src={avatarUrl}
-            size="large"
-          />
           <div>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("settings.displayNamePlaceholder")} aria-label={t("settings.displayName")} />
             <label className="button file-button">
@@ -400,6 +440,64 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
           <button className="button" type="submit">{t("settings.save")}</button>
         </form>
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("profile.account")}</p>
+        <dl className="status-list">
+          {identity?.userId && (
+            <div>
+              <dt>{t("login.userId")}</dt>
+              <dd>{identity.userId}</dd>
+            </div>
+          )}
+          {identity?.baseUrl && (
+            <div>
+              <dt>{t("profile.homeserver")}</dt>
+              <dd>
+                <button
+                  type="button"
+                  className="profile-mxid"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(identity.baseUrl).then(() => {
+                      setCopiedHs(true);
+                      window.setTimeout(() => setCopiedHs(false), 1600);
+                    });
+                  }}
+                >
+                  {copiedHs ? t("profile.copied") : identity.baseUrl}
+                </button>
+              </dd>
+            </div>
+          )}
+          {identity?.deviceId && (
+            <div>
+              <dt>{t("settings.device")}</dt>
+              <dd>{identity.deviceId}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("profile.presence")}</p>
+        <div className="segmented">
+          {([
+            ["online", "profile.online"],
+            ["unavailable", "profile.away"],
+            ["offline", "profile.offline"],
+          ] as const).map(([value, key]) => (
+            <button
+              key={value}
+              type="button"
+              className={presence === value ? "active" : ""}
+              onClick={() => {
+                setPresence(value);
+                void setOwnPresence(value);
+              }}
+            >
+              {t(key)}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="settings-section">
         <p className="eyebrow">{t("settings.appearance")}</p>
@@ -422,11 +520,30 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <button type="button" className={locale === "ru" ? "active" : ""} onClick={() => setLocale("ru")}>{t("settings.languageRu")}</button>
         </div>
       </div>
-      <details className="settings-section settings-advanced">
-        <summary>
-          <span className="eyebrow">{t("settings.encryption")}</span>
-          <span className="muted small">{t("settings.encryptionSummary")}</span>
-        </summary>
+      <div className="settings-section">
+        <p className="eyebrow">{t("profile.notifications")}</p>
+        {notif === "unsupported" ? (
+          <p className="muted small">{t("profile.notificationsUnsupported")}</p>
+        ) : notif === "granted" ? (
+          <p className="muted small">{t("profile.notificationsOn")}</p>
+        ) : notif === "denied" ? (
+          <p className="muted small">{t("profile.notificationsBlocked")}</p>
+        ) : (
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              void requestDesktopNotifications().then(setNotif);
+            }}
+          >
+            {t("profile.notificationsEnable")}
+          </button>
+        )}
+        <p className="muted small">{t("profile.notificationsHint")}</p>
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("settings.encryption")}</p>
+        <p className="muted small">{t("settings.encryptionSummary")}</p>
         <dl className="status-list">
           <div><dt>{t("settings.rustCrypto")}</dt><dd>{crypto.enabled ? t("settings.ready") : t("settings.unavailable")}</dd></div>
           <div><dt>{t("settings.device")}</dt><dd>{crypto.deviceId ?? t("settings.unknown")}</dd></div>
@@ -489,6 +606,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {cryptoMessage && <p className="muted small" role="status">{cryptoMessage}</p>}
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("profile.sessions")}</p>
         {incoming && (
           <div className="incoming-verification">
             <strong>{t("settings.incomingVerification")}</strong>
@@ -533,13 +653,28 @@ export function Settings({ onClose }: { onClose: () => void }) {
             <button className="button danger" type="button" onClick={() => { sas.mismatch(); setSas(null); }}>{t("settings.theyDoNotMatch")}</button>
           </div>
         </div>}
-      </details>
-      <button className="button danger" type="button" onClick={() => void logout()}>{t("settings.signOut")}</button>
-    </Modal>
+      </div>
+      <div className="settings-section settings-section-last">
+        <button className="button danger" type="button" onClick={() => void logout()}>{t("settings.signOut")}</button>
+      </div>
+      </div>
+    </section>
   );
 }
 
-export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onClose: () => void; onLeft: () => void }) {
+export function RoomDetails({
+  room,
+  onClose,
+  onLeft,
+  onJump,
+  onOpenUser,
+}: {
+  room: RoomListItem;
+  onClose: () => void;
+  onLeft: () => void;
+  onJump?: (eventId: string) => void;
+  onOpenUser?: (userId: string) => void;
+}) {
   const { t } = useI18n();
   const [userId, setUserId] = useState("");
   const [spaceId, setSpaceId] = useState("");
@@ -548,6 +683,7 @@ export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onC
   const [alias, setAlias] = useState("");
   const [aliases, setAliases] = useState(() => getRoomAliases(room.roomId));
   const [roomAvatar, setRoomAvatarFile] = useState<File | undefined>();
+  const media = listRoomMedia(room.roomId);
   const spaces = listSpaces().filter((space) => space.roomId !== room.roomId);
 
   useEffect(() => {
@@ -648,11 +784,17 @@ export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onC
           {members.length === 0 && <p className="muted small">{t("rooms.noMembers")}</p>}
           {members.map((member) => (
             <article key={member.userId}>
-              <Avatar id={member.userId} name={member.displayName} src={member.avatarUrl} size="small" />
-              <div>
-                <strong>{member.displayName}</strong>
-                <small>{member.userId}</small>
-              </div>
+              <button
+                type="button"
+                className="member-open"
+                onClick={() => onOpenUser?.(member.userId)}
+              >
+                <Avatar id={member.userId} name={member.displayName} src={member.avatarUrl} size="small" />
+                <div>
+                  <strong>{member.displayName}</strong>
+                  <small>{member.userId}</small>
+                </div>
+              </button>
               <span>{t("rooms.power", { level: member.powerLevel })}</span>
             </article>
           ))}
@@ -714,6 +856,26 @@ export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onC
           )}
         </div>
       )}
+      <div className="settings-section">
+        <p className="eyebrow">{t("rooms.sharedMedia")}</p>
+        {media.length === 0 ? (
+          <p className="muted small">{t("rooms.noSharedMedia")}</p>
+        ) : (
+          <ul className="shared-media-list">
+            {media.map((item) => (
+              <li key={item.eventId}>
+                <button type="button" onClick={() => onJump?.(item.eventId)}>
+                  {item.kind === "image" && item.media && !item.media.encrypted ? (
+                    <img src={mediaUrl(item.media.mxcUrl)} alt={item.media.name} />
+                  ) : (
+                    <span>{item.media?.voice ? t("timeline.voice") : item.media?.name || item.body}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {status && <p className="muted" role="status">{status}</p>}
       <div className="settings-section settings-section-last">
         <button
@@ -959,6 +1121,110 @@ export function GroupCallSurface({ roomId, onClose }: { roomId: string; onClose:
           />
         </>
       )}
+    </Modal>
+  );
+}
+
+export function UserProfile({
+  userId,
+  onClose,
+  onOpenedDm,
+}: {
+  userId: string;
+  onClose: () => void;
+  onOpenedDm: (roomId: string) => void;
+}) {
+  const { t } = useI18n();
+  const profile = getUserProfileInfo(userId);
+  const presence = getUserPresence(userId);
+  const self = getSessionIdentity()?.userId;
+  const ignored = isUserIgnored(userId);
+  const [status, setStatus] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const presenceLabel = formatPresenceLabel(
+    presence.presence,
+    presence.lastActiveAgo,
+    presence.currentlyActive,
+    {
+      online: t("profile.online"),
+      away: t("profile.away"),
+      offline: t("user.offline"),
+      lastSeen: (when) => t("user.lastSeen", { when }),
+    },
+  );
+
+  return (
+    <Modal title={t("user.profile")} onClose={onClose}>
+      <div className="room-profile">
+        <Avatar id={userId} name={profile.displayName} src={profile.avatarUrl} size="large" />
+        <div>
+          <strong>{profile.displayName}</strong>
+          <button
+            type="button"
+            className="profile-mxid"
+            onClick={() => {
+              void navigator.clipboard.writeText(userId).then(() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              });
+            }}
+          >
+            {copied ? t("profile.copied") : userId}
+          </button>
+          <span className="muted small">{presenceLabel}</span>
+        </div>
+      </div>
+      {status && <p className="muted small" role="status">{status}</p>}
+      {self !== userId && (
+        <div className="settings-section">
+          <button
+            className="button primary"
+            type="button"
+            onClick={() => {
+              void startDirectMessage(userId)
+                .then(onOpenedDm)
+                .catch((error: Error) => setStatus(error.message));
+            }}
+          >
+            {t("user.startDm")}
+          </button>
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              void setUserIgnored(userId, !ignored)
+                .then(() => setStatus(ignored ? t("user.unignore") : t("user.ignore")))
+                .catch((error: Error) => setStatus(error.message));
+            }}
+          >
+            {ignored ? t("user.unignore") : t("user.ignore")}
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+export function ForwardPicker({
+  rooms,
+  onClose,
+  onPick,
+}: {
+  rooms: RoomListItem[];
+  onClose: () => void;
+  onPick: (roomId: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Modal title={t("forward.title")} onClose={onClose}>
+      <nav className="forward-list">
+        {rooms.map((room) => (
+          <button key={room.roomId} type="button" onClick={() => onPick(room.roomId)}>
+            <Avatar id={room.roomId} name={room.name} src={room.avatarUrl} size="small" />
+            <span>{room.name}</span>
+          </button>
+        ))}
+      </nav>
     </Modal>
   );
 }
