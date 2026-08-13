@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:provider/provider.dart';
 
 import '../l10n/highlife_locales.dart';

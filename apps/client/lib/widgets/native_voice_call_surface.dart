@@ -1,9 +1,7 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
+import '../hl_kit.dart';
 
 import '../services/native_call_service.dart';
+import 'call_stage.dart';
 
 @immutable
 class NativeVoiceCallLabels {
@@ -34,10 +32,6 @@ class NativeVoiceCallLabels {
   final String hangup;
 }
 
-/// Presentation-only first-party voice call controls.
-///
-/// Labels are supplied by the host localization layer. The hidden renderer is
-/// intentional: `RTCVideoRenderer` is also the cross-platform remote audio sink.
 class NativeVoiceCallSurface extends StatelessWidget {
   const NativeVoiceCallSurface({
     super.key,
@@ -68,118 +62,29 @@ class NativeVoiceCallSurface extends StatelessWidget {
         labels.connecting,
     };
 
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              if (snapshot.remoteStream != null)
-                _RemoteAudioSink(stream: snapshot.remoteStream),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      snapshot.peerName ??
-                          snapshot.peerUserId ??
-                          labels.unknownPeer,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(status),
-                  ],
-                ),
-              ),
-              if (incoming) ...[
-                IconButton.filled(
-                  tooltip: labels.answer,
-                  onPressed: () => unawaited(actions.answer()),
-                  icon: const Icon(Icons.call),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filledTonal(
-                  tooltip: labels.reject,
-                  onPressed: () => unawaited(actions.reject()),
-                  icon: const Icon(Icons.call_end),
-                ),
-              ] else if (snapshot.callId != null) ...[
-                IconButton(
-                  tooltip:
-                      snapshot.microphoneMuted ? labels.unmute : labels.mute,
-                  onPressed: () => unawaited(actions.toggleMicrophone()),
-                  icon: Icon(
-                    snapshot.microphoneMuted ? Icons.mic_off : Icons.mic,
-                  ),
-                ),
-                IconButton.filledTonal(
-                  tooltip: labels.hangup,
-                  onPressed: () => unawaited(actions.hangup()),
-                  icon: const Icon(Icons.call_end),
-                ),
-              ],
-            ],
-          ),
-        ),
+    return CallStage(
+      title: snapshot.peerName ?? snapshot.peerUserId ?? labels.unknownPeer,
+      status: status,
+      connected: snapshot.phase == NativeCallPhase.connected,
+      failed: snapshot.phase == NativeCallPhase.error,
+      incoming: incoming,
+      muted: snapshot.microphoneMuted,
+      remoteStream: snapshot.remoteStream,
+      onHangup: actions.hangup,
+      onToggleMicrophone: actions.toggleMicrophone,
+      onAnswer: incoming ? () => actions.answer() : null,
+      onDecline: incoming ? () => actions.reject() : null,
+      labels: CallStageLabels(
+        connecting: labels.connecting,
+        connected: labels.connected,
+        failed: labels.failed,
+        mute: labels.mute,
+        unmute: labels.unmute,
+        hangup: labels.hangup,
+        incoming: labels.incoming,
+        answer: labels.answer,
+        decline: labels.reject,
       ),
-    );
-  }
-}
-
-class _RemoteAudioSink extends StatefulWidget {
-  const _RemoteAudioSink({required this.stream});
-
-  final MediaStream? stream;
-
-  @override
-  State<_RemoteAudioSink> createState() => _RemoteAudioSinkState();
-}
-
-class _RemoteAudioSinkState extends State<_RemoteAudioSink> {
-  final RTCVideoRenderer _renderer = RTCVideoRenderer();
-  var _initialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_initialize());
-  }
-
-  @override
-  void didUpdateWidget(covariant _RemoteAudioSink oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.stream != widget.stream && _initialized) {
-      _renderer.srcObject = widget.stream;
-    }
-  }
-
-  Future<void> _initialize() async {
-    await _renderer.initialize();
-    if (!mounted) {
-      await _renderer.dispose();
-      return;
-    }
-    _renderer.srcObject = widget.stream;
-    setState(() => _initialized = true);
-  }
-
-  @override
-  void dispose() {
-    _renderer.srcObject = null;
-    unawaited(_renderer.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_initialized || widget.stream == null) {
-      return const SizedBox.shrink();
-    }
-    return SizedBox(
-      width: 1,
-      height: 1,
-      child: IgnorePointer(child: RTCVideoView(_renderer)),
     );
   }
 }

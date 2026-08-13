@@ -24,6 +24,7 @@ import {
   respondToIncomingVerification,
   setRoomMuted,
   showLocalToast,
+  scrubHostCapabilitiesForRoom,
   startOutgoingCall,
   startMatrixRtc,
   subscribeIncomingVerification,
@@ -173,6 +174,7 @@ export function Workspace() {
     setMode(null);
     setHighlightEventId(null);
     if (surface === "settings") setSurface(null);
+    scrubHostCapabilitiesForRoom(roomId);
   }
 
   return (

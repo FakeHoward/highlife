@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -139,7 +138,7 @@ class HighLifeSession extends ChangeNotifier {
             status.status == SyncStatus.cleaningUp) {
           final first = !_initialSyncDone;
           _initialSyncDone = true;
-          if (first) unawaited(advertiseHostCapabilities());
+          if (first) unawaited(scrubHostCapabilityLeftovers());
         }
         notifyListeners();
       }),
@@ -237,51 +236,64 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Advertise aiomatrix host caps only in rooms that have a bot. Once per session.
-  Future<void> advertiseHostCapabilities({Room? room}) async {
+  /// Remove leftover `dev.aiomatrix.host` state so Element X does not show
+  /// "Custom host event". Aware bots already default to the toast profile.
+  Future<void> scrubHostCapabilityLeftovers({Room? room}) async {
     final client = _client;
     final self = client?.userID;
     if (client == null || self == null || !client.isLogged()) return;
     if (_hostCapsBusy || (room == null && _hostCapsRan)) return;
     _hostCapsBusy = true;
-    final content = buildHostCapabilitiesContent();
     final targets = room != null
         ? <Room>[room]
         : rooms.where((r) => r.membership == Membership.join);
     try {
       for (final target in targets) {
-        final commandStates = target.states[commandsStateEventType];
-        final needed = roomNeedsHostHandshake(
-          memberUserIds:
-              target.getParticipants([Membership.join]).map((user) => user.id),
-          hasCommandsState: commandStates?.values.any(
-                (event) => hasActiveCommandsState(
-                  Map<String, dynamic>.from(event.content),
-                ),
-              ) ==
-              true,
-        );
-        if (!needed) continue;
-        final existing =
-            target.getState(hostCapabilitiesStateEventType, self);
-        if (existing != null &&
-            jsonEncode(existing.content) == jsonEncode(content)) {
-          continue;
-        }
+        final existing = target.getState(hostCapabilitiesStateEventType, self);
+        if (existing == null || existing.content.isEmpty) continue;
+        final eventId = existing.eventId;
+        if (eventId.isEmpty) continue;
         try {
-          await client.setRoomStateWithKey(
-            target.id,
-            hostCapabilitiesStateEventType,
-            self,
-            content,
-          );
+          await target.redactEvent(eventId);
         } catch (_) {
-          // Needs power level; stock rooms stay on aware bot defaults.
+          /* power level or 429 — retry when the room is opened */
+        }
+        if (room == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 2500));
         }
       }
       if (room == null) _hostCapsRan = true;
     } finally {
       _hostCapsBusy = false;
+    }
+  }
+
+  Future<void> deleteOtherDevice(String deviceId, {String? password}) async {
+    final client = _client;
+    if (client == null || !client.isLogged()) {
+      throw StateError('not_logged_in');
+    }
+    if (deviceId == client.deviceID) {
+      throw StateError('cannot_delete_current');
+    }
+    Future<void> send(Map<String, dynamic>? auth) {
+      return client.request(
+        RequestType.DELETE,
+        '/client/v3/devices/${Uri.encodeComponent(deviceId)}',
+        data: auth == null ? <String, dynamic>{} : {'auth': auth},
+      );
+    }
+
+    try {
+      await send(null);
+    } on MatrixException catch (error) {
+      if (password == null || password.isEmpty) rethrow;
+      await send({
+        'type': 'm.login.password',
+        'identifier': {'type': 'm.id.user', 'user': client.userID},
+        'password': password,
+        'session': error.session,
+      });
     }
   }
 
@@ -704,6 +716,7 @@ class HighLifeSession extends ChangeNotifier {
     try {
       await client.updateUserDeviceKeys();
     } catch (_) {}
+    unawaited(_crypto?.ensureOwnDeviceSigned());
   }
 
   Future<String?> startDirectChat(

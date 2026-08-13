@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'hl_kit.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/highlife_locales.dart';
@@ -63,7 +63,7 @@ class _HighLifeBootstrapState extends State<HighLifeBootstrap> {
   Widget build(BuildContext context) {
     final error = _error;
     if (error != null) {
-      return MaterialApp(
+      return ShadcnApp(
         debugShowCheckedModeBanner: false,
         theme: buildHighLifeTheme(Brightness.light),
         home: Scaffold(
@@ -112,7 +112,7 @@ class _HighLifeBootstrapState extends State<HighLifeBootstrap> {
     final session = _session;
     final locales = _locales;
     if (session == null || locales == null) {
-      return MaterialApp(
+      return ShadcnApp(
         debugShowCheckedModeBanner: false,
         theme: buildHighLifeTheme(Brightness.light),
         home: const Scaffold(
@@ -144,7 +144,7 @@ class HighLifeApp extends StatelessWidget {
       ],
       child: Consumer<HighLifeLocales>(
         builder: (context, locales, _) {
-          return MaterialApp(
+          return ShadcnApp(
             title: 'HighLife',
             debugShowCheckedModeBanner: false,
             locale: locales.materialLocale,

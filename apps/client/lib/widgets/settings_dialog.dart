@@ -1,5 +1,5 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
@@ -486,19 +486,44 @@ class _ProfilePageState extends State<ProfilePage> {
                           device.deviceDisplayName ?? device.deviceId ?? '?',
                         ),
                         subtitle: Text(device.deviceId ?? ''),
-                        trailing: HlButton.text(
-                          onPressed: () async {
-                            final request =
-                                await crypto.startDeviceVerification(device);
-                            if (!context.mounted) return;
-                            Navigator.pop(context);
-                            await VerificationDialog.show(
-                              context,
-                              request: request,
-                              strings: s,
-                            );
-                          },
-                          label: Text(s.verify),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            HlButton.text(
+                              onPressed: () async {
+                                final request =
+                                    await crypto.startDeviceVerification(device);
+                                if (!context.mounted) return;
+                                Navigator.pop(context);
+                                await VerificationDialog.show(
+                                  context,
+                                  request: request,
+                                  strings: s,
+                                );
+                              },
+                              label: Text(s.verify),
+                            ),
+                            HlButton.text(
+                              onPressed: () async {
+                                final password = await _askPassword(context, s);
+                                if (!context.mounted) return;
+                                try {
+                                  await session.deleteOtherDevice(
+                                    device.deviceId ?? '',
+                                    password: password,
+                                  );
+                                  if (!context.mounted) return;
+                                  Navigator.pop(context);
+                                } catch (error) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('$error')),
+                                  );
+                                }
+                              },
+                              label: Text(s.signOutDevice),
+                            ),
+                          ],
                         ),
                       ),
                   ],
@@ -512,6 +537,35 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
+  }
+
+  Future<String?> _askPassword(BuildContext context, AppStrings s) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.signOutDevice),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          autofocus: true,
+          decoration: InputDecoration(labelText: s.passwordToConfirm),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          HlButton.text(
+            onPressed: () => Navigator.pop(context),
+            label: Text(s.cancel),
+          ),
+          HlButton.primary(
+            onPressed: () => Navigator.pop(context, controller.text),
+            label: Text(s.signOutDevice),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Future<void> _openBackup(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:provider/provider.dart';
@@ -57,37 +57,19 @@ class _RoomListScreenState extends State<RoomListScreen> {
       (room) => room.membership.name,
     );
     final invites = partitioned.invites;
-    final joined = partitioned.joined;
+    final joinedAll = partitioned.joined;
     final spaces = session.spaces.where(matches).toList(growable: false);
+    final joined = _selectedSpace == null
+        ? joinedAll
+        : session
+            .roomsInSpace(_selectedSpace!)
+            .where((room) => !room.isSpace && matches(room))
+            .toList(growable: false);
     final wide = MediaQuery.sizeOf(context).width >=
         AdaptiveMessengerShell.breakpoint;
 
     return AdaptiveMessengerShell(
       showMasterOnCompact: _selected == null && !_showProfile,
-      rail: _SpacesRail(
-        spaces: spaces,
-        selectedSpaceId: _selectedSpace?.id,
-        onSelect: (space) => setState(() {
-          _selectedSpace = _selectedSpace?.id == space.id ? null : space;
-        }),
-        onCreate: () => _roomAction(session, s, 'space'),
-        createTooltip: s.createSpace,
-      ),
-      spacePanel: _selectedSpace == null
-          ? null
-          : _SpacePanel(
-              space: _selectedSpace!,
-              rooms: session.roomsInSpace(_selectedSpace!),
-              selectedRoomId: _selected?.id,
-              emptyLabel: s.noRoomsInSpace,
-              emptySubtitle: s.noMessagesYet,
-              onClose: () => setState(() => _selectedSpace = null),
-              onOpenRoom: (room) => setState(() {
-                _selected = room;
-                _selectedSpace = null;
-                _showProfile = false;
-              }),
-            ),
       master: Scaffold(
         appBar: AppBar(
           title: Text(s.appName),
@@ -122,7 +104,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
             const CryptoStatusBanner(),
             const SyncStatusBanner(),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
               child: TextField(
                 key: const ValueKey('room-search'),
                 onChanged: (value) => setState(() => _query = value),
@@ -131,6 +113,17 @@ class _RoomListScreenState extends State<RoomListScreen> {
                   prefixIcon: const Icon(Icons.search, size: 20),
                 ),
               ),
+            ),
+            _FolderTabs(
+              allLabel: s.allChats,
+              spaces: spaces,
+              selectedSpaceId: _selectedSpace?.id,
+              onSelectAll: () => setState(() => _selectedSpace = null),
+              onSelectSpace: (space) => setState(() {
+                _selectedSpace = _selectedSpace?.id == space.id ? null : space;
+              }),
+              onCreate: () => _roomAction(session, s, 'space'),
+              createTooltip: s.createSpace,
             ),
             Expanded(
               child: invites.isEmpty && joined.isEmpty && spaces.isEmpty
@@ -142,66 +135,6 @@ class _RoomListScreenState extends State<RoomListScreen> {
                     )
                   : ListView(
                       children: [
-                        if (!wide) Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 8),
-                                  child: Text(
-                                    s.spaces,
-                                    style:
-                                        Theme.of(context).textTheme.titleSmall,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: s.createSpace,
-                                onPressed: () =>
-                                    _roomAction(session, s, 'space'),
-                                icon: const Icon(
-                                  Icons.create_new_folder_outlined,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!wide && spaces.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: Text(
-                              s.spacesFolderHint,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .extension<HighLifeTokens>()
-                                        ?.muted,
-                                  ),
-                            ),
-                          )
-                        else if (!wide)
-                          for (final space in spaces)
-                            _SpaceTile(
-                              space: space,
-                              expanded: false,
-                              emptyChildLabel: s.noRoomsInSpace,
-                              children: session.roomsInSpace(space),
-                              onToggle: () => setState(() {
-                                _selectedSpace =
-                                    _selectedSpace?.id == space.id ? null : space;
-                              }),
-                              onOpenRoom: (room) =>
-                                  setState(() {
-                                    _selected = room;
-                                    _showProfile = false;
-                                  }),
-                              selectedRoomId: _selected?.id,
-                              emptySubtitle: s.noMessagesYet,
-                            ),
-                        if (!wide) const Divider(height: 1),
                         if (invites.isNotEmpty) ...[
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -444,219 +377,87 @@ class _RoomListScreenState extends State<RoomListScreen> {
   }
 }
 
-class _SpacesRail extends StatelessWidget {
-  const _SpacesRail({
+class _FolderTabs extends StatelessWidget {
+  const _FolderTabs({
+    required this.allLabel,
     required this.spaces,
     required this.selectedSpaceId,
-    required this.onSelect,
+    required this.onSelectAll,
+    required this.onSelectSpace,
     required this.onCreate,
     required this.createTooltip,
   });
 
+  final String allLabel;
   final List<Room> spaces;
   final String? selectedSpaceId;
-  final ValueChanged<Room> onSelect;
+  final VoidCallback onSelectAll;
+  final ValueChanged<Room> onSelectSpace;
   final VoidCallback onCreate;
   final String createTooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      clipBehavior: Clip.hardEdge,
-      child: SafeArea(
-        child: SizedBox(
-          width: AdaptiveMessengerShell.railWidth,
-          child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                clipBehavior: Clip.hardEdge,
-                itemCount: spaces.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final space = spaces[index];
-                  final selected = selectedSpaceId == space.id;
-                  return Center(
-                    child: Tooltip(
-                    message: space.getLocalizedDisplayname(),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () => onSelect(space),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: selected
-                              ? colors.primary.withValues(alpha: 0.16)
-                              : null,
-                        ),
-                        child: MatrixAvatar(
-                          name: space.getLocalizedDisplayname(),
-                          mxc: space.avatar,
-                          client: space.client,
-                          radius: 16,
-                          fallbackIcon: Icons.workspaces_outline,
-                        ),
-                      ),
-                    ),
-                  ),
-                  );
-                },
-              ),
-            ),
-            Center(
-              child: IconButton(
-                tooltip: createTooltip,
-                onPressed: onCreate,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                icon: const Icon(Icons.add, size: 20),
-              ),
-            ),
-            const SizedBox(height: 4),
-          ],
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
+        children: [
+          _chip(
+            context,
+            label: allLabel,
+            selected: selectedSpaceId == null,
+            onTap: onSelectAll,
           ),
-        ),
+          for (final space in spaces)
+            _chip(
+              context,
+              label: space.getLocalizedDisplayname(),
+              selected: selectedSpaceId == space.id,
+              onTap: () => onSelectSpace(space),
+            ),
+          IconButton(
+            tooltip: createTooltip,
+            onPressed: onCreate,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.add, size: 18, color: colors.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }
-}
 
-class _SpacePanel extends StatelessWidget {
-  const _SpacePanel({
-    required this.space,
-    required this.rooms,
-    required this.selectedRoomId,
-    required this.emptyLabel,
-    required this.emptySubtitle,
-    required this.onClose,
-    required this.onOpenRoom,
-  });
-
-  final Room space;
-  final List<Room> rooms;
-  final String? selectedRoomId;
-  final String emptyLabel;
-  final String emptySubtitle;
-  final VoidCallback onClose;
-  final ValueChanged<Room> onOpenRoom;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          leading: MatrixAvatar(
-            name: space.getLocalizedDisplayname(),
-            mxc: space.avatar,
-            client: space.client,
-            radius: 18,
-            fallbackIcon: Icons.workspaces_outline,
-          ),
-          title: Text(
-            space.getLocalizedDisplayname(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: IconButton(
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            onPressed: onClose,
-            icon: const Icon(Icons.close, size: 18),
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: rooms.isEmpty
-              ? Center(child: Text(emptyLabel))
-              : ListView(
-                  children: [
-                    for (final room in rooms)
-                      _RoomTile(
-                        room: room,
-                        selected: room.id == selectedRoomId,
-                        emptySubtitle: emptySubtitle,
-                        onTap: () => onOpenRoom(room),
-                      ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SpaceTile extends StatelessWidget {
-  const _SpaceTile({
-    required this.space,
-    required this.expanded,
-    required this.children,
-    required this.emptyChildLabel,
-    required this.onToggle,
-    required this.onOpenRoom,
-    required this.selectedRoomId,
-    required this.emptySubtitle,
-  });
-
-  final Room space;
-  final bool expanded;
-  final List<Room> children;
-  final String emptyChildLabel;
-  final VoidCallback onToggle;
-  final ValueChanged<Room> onOpenRoom;
-  final String? selectedRoomId;
-  final String emptySubtitle;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _chip(
+    BuildContext context, {
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     final colors = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        ListTile(
-          leading: MatrixAvatar(
-            name: space.getLocalizedDisplayname(),
-            mxc: space.avatar,
-            client: space.client,
-            radius: 22,
-            backgroundColor: colors.secondaryContainer,
-            fallbackIcon: Icons.workspaces_outlined,
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected ? colors.primary.withValues(alpha: 0.12) : null,
+            borderRadius: BorderRadius.circular(6),
           ),
-          title: Text(
-            space.getLocalizedDisplayname(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            children.isEmpty
-                ? emptyChildLabel
-                : '${children.length}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Icon(
-            expanded ? Icons.expand_less : Icons.expand_more,
-          ),
-          onTap: onToggle,
-        ),
-        if (expanded)
-          for (final room in children)
-            Padding(
-              padding: const EdgeInsets.only(left: 24),
-              child: _RoomTile(
-                room: room,
-                selected: room.id == selectedRoomId,
-                emptySubtitle: emptySubtitle,
-                onTap: () => onOpenRoom(room),
-              ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
             ),
-      ],
+          ),
+        ),
+      ),
     );
   }
 }

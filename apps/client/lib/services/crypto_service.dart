@@ -66,7 +66,17 @@ class CryptoService {
         'Key backup restore requires a native crypto backend (not available on web)',
       );
     }
-    return client.restoreCryptoIdentity(keyOrPassphrase);
+    return client.restoreCryptoIdentity(keyOrPassphrase).then((_) {
+      return ensureOwnDeviceSigned();
+    });
+  }
+
+  /// Sign this device so Element X does not warn that the owner has not verified it.
+  Future<void> ensureOwnDeviceSigned() async {
+    if (!available) return;
+    try {
+      await client.encryption?.crossSigning.selfSign();
+    } catch (_) {}
   }
 
   static String unavailableReason({required bool isWeb}) {

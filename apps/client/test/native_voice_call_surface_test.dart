@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:highlife_client/hl_kit.dart';
 import 'package:highlife_client/services/native_call_service.dart';
 import 'package:highlife_client/widgets/native_voice_call_surface.dart';
 
@@ -42,7 +42,7 @@ void main() {
   ) async {
     final actions = _Actions();
     await tester.pumpWidget(
-      MaterialApp(
+      highLifeTestApp(
         home: NativeVoiceCallSurface(
           snapshot: const NativeCallSnapshot(
             callId: 'call',
@@ -58,11 +58,11 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Answer'));
+    await tester.tap(find.text('Answer'));
     await tester.pump();
     expect(actions.answered, isTrue);
 
-    await tester.tap(find.byTooltip('Decline'));
+    await tester.tap(find.text('Decline'));
     await tester.pump();
     expect(actions.rejected, isTrue);
   });
@@ -70,7 +70,7 @@ void main() {
   testWidgets('connected call exposes mute and hangup controls', (tester) async {
     final actions = _Actions();
     await tester.pumpWidget(
-      MaterialApp(
+      highLifeTestApp(
         home: NativeVoiceCallSurface(
           snapshot: const NativeCallSnapshot(
             callId: 'call',
@@ -86,8 +86,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('Mute'));
-    await tester.tap(find.byTooltip('Hang up'));
+    await tester.tap(find.text('Mute'));
+    await tester.tap(find.text('Hang up'));
     await tester.pump();
 
     expect(actions.muted, isTrue);
@@ -96,7 +96,7 @@ void main() {
 
   testWidgets('hides an ended call with no retained session', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      highLifeTestApp(
         home: NativeVoiceCallSurface(
           snapshot: const NativeCallSnapshot(
             phase: NativeCallPhase.ended,

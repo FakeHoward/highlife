@@ -27,15 +27,17 @@ void main() {
       livekitAlias: '!room:example.org',
       now: DateTime.utc(2026, 1, 1),
     );
-    final memberships = content['memberships'] as List;
-    final membership = memberships.single as Map;
-    expect(membership['application'], 'm.call');
-    expect(membership['device_id'], 'DEVICE');
+    expect(content['application'], 'm.call');
+    expect(content['device_id'], 'DEVICE');
+    expect(content.containsKey('memberships'), isFalse);
     expect(
-      ((membership['foci_preferred'] as List).first as Map)['type'],
+      ((content['foci_preferred'] as List).first as Map)['type'],
       'livekit',
     );
-    expect(msc3401StateKey('@me:example.org', 'DEVICE'), '_@me:example.org_DEVICE');
+    expect(
+      msc3401StateKey('@me:example.org', 'DEVICE'),
+      '_@me:example.org_DEVICE_m.call',
+    );
   });
 
   test('parses lk-jwt-service responses', () {

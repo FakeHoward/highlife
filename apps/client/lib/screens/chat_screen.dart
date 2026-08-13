@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:matrix/matrix.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -68,6 +68,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final readUpTo = widget.room.fullyRead;
     _unreadAnchor = readUpTo.isEmpty ? null : readUpTo;
     _loadTimeline();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        context.read<HighLifeSession>().scrubHostCapabilityLeftovers(
+              room: widget.room,
+            ),
+      );
+    });
   }
 
   Future<void> _loadTimeline() async {
@@ -227,8 +235,10 @@ class _ChatScreenState extends State<ChatScreen> {
         rows.add(_TimelineRow.day(group.day));
         lastDay = group.day;
       }
-      var first = true;
-      for (final item in group.items) {
+      var previousSender = '';
+      var previousTs = DateTime.fromMillisecondsSinceEpoch(0);
+      for (var i = 0; i < group.items.length; i++) {
+        final item = group.items[i];
         final event = byId[item.eventId];
         if (event == null) continue;
         if (unreadId == item.eventId) {
@@ -241,12 +251,21 @@ class _ChatScreenState extends State<ChatScreen> {
         final replyPreview = replyRaw == null
             ? null
             : markdownToPlain(replyRaw);
+        final grouped = previousSender == event.senderId &&
+            item.timestamp.difference(previousTs).inMinutes < 5;
+        final next = i + 1 < group.items.length ? group.items[i + 1] : null;
+        final nextEvent = next == null ? null : byId[next.eventId];
+        final lastInGroup = nextEvent == null ||
+            nextEvent.senderId != event.senderId ||
+            next!.timestamp.difference(item.timestamp).inMinutes >= 5;
         rows.add(
           _TimelineRow.message(
             event: event,
             item: item,
             own: event.senderId == session.userId,
-            showSender: first && event.senderId != session.userId,
+            showSender: !grouped && event.senderId != session.userId,
+            grouped: grouped,
+            lastInGroup: lastInGroup,
             replyPreview: (replyPreview == null || replyPreview.isEmpty)
                 ? null
                 : replyPreview,
@@ -255,7 +274,8 @@ class _ChatScreenState extends State<ChatScreen> {
             httpMediaUrl: event.getAttachmentUrl(),
           ),
         );
-        first = false;
+        previousSender = event.senderId;
+        previousTs = item.timestamp;
       }
     }
     return rows;
@@ -467,6 +487,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     item: row.item!,
                     own: row.own,
                     showSender: row.showSender,
+                    grouped: row.grouped,
+                    lastInGroup: row.lastInGroup,
                     highlighted: event.eventId == _highlightEventId,
                     replyPreview: row.replyPreview,
                     httpMediaUrl: row.httpMediaUrl,
@@ -1039,6 +1061,8 @@ class _TimelineRow {
     this.item,
     this.own = false,
     this.showSender = false,
+    this.grouped = false,
+    this.lastInGroup = true,
     this.replyPreview,
     this.httpMediaUrl,
     this.unread = false,
@@ -1053,6 +1077,8 @@ class _TimelineRow {
     required TimelineItem item,
     required bool own,
     required bool showSender,
+    bool grouped = false,
+    bool lastInGroup = true,
     String? replyPreview,
     Uri? httpMediaUrl,
   }) {
@@ -1061,6 +1087,8 @@ class _TimelineRow {
       item: item,
       own: own,
       showSender: showSender,
+      grouped: grouped,
+      lastInGroup: lastInGroup,
       replyPreview: replyPreview,
       httpMediaUrl: httpMediaUrl,
     );
@@ -1071,6 +1099,8 @@ class _TimelineRow {
   final TimelineItem? item;
   final bool own;
   final bool showSender;
+  final bool grouped;
+  final bool lastInGroup;
   final String? replyPreview;
   final Uri? httpMediaUrl;
   final bool unread;
@@ -1129,6 +1159,8 @@ class _MessageTile extends StatelessWidget {
     required this.item,
     required this.own,
     required this.showSender,
+    required this.grouped,
+    required this.lastInGroup,
     required this.highlighted,
     required this.onButton,
     required this.onMiniApp,
@@ -1153,6 +1185,8 @@ class _MessageTile extends StatelessWidget {
   final TimelineItem item;
   final bool own;
   final bool showSender;
+  final bool grouped;
+  final bool lastInGroup;
   final bool highlighted;
   final String? replyPreview;
   final void Function(ReactionSummary summary) onToggleReaction;
@@ -1200,17 +1234,29 @@ class _MessageTile extends StatelessWidget {
           onLongPressStart: (details) =>
               _showActions(context, details.globalPosition),
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 3),
-            padding: const EdgeInsets.fromLTRB(11, 8, 9, 6),
+            margin: EdgeInsets.only(top: grouped ? 1 : 6, bottom: lastInGroup ? 6 : 1),
+            padding: const EdgeInsets.fromLTRB(10, 7, 9, 5),
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: highlighted
-                    ? Theme.of(context).colorScheme.primary
-                    : tokens.hairline,
-                width: highlighted ? 2 : 1,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(own || grouped ? 14 : 14),
+                topRight: Radius.circular(own && grouped ? 5 : 14),
+                bottomLeft: Radius.circular(!own && lastInGroup ? 5 : 14),
+                bottomRight: Radius.circular(own && lastInGroup ? 5 : 14),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 1,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+              border: highlighted
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    )
+                  : null,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

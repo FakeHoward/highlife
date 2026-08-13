@@ -1,5 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:moon_design/moon_design.dart';
+import '../hl_kit.dart';
 
 import '../aiomatrix/protocol.dart';
 import 'hl_button.dart';
@@ -63,7 +62,6 @@ class _KeyboardButton extends StatelessWidget {
         label: label,
         isFullWidth: true,
         height: 34,
-        buttonSize: MoonButtonSize.sm,
       );
     }
     if (button.style == 'danger') {
@@ -72,7 +70,6 @@ class _KeyboardButton extends StatelessWidget {
         label: label,
         isFullWidth: true,
         height: 34,
-        buttonSize: MoonButtonSize.sm,
       );
     }
     return HlButton.secondary(
@@ -80,7 +77,6 @@ class _KeyboardButton extends StatelessWidget {
       label: label,
       isFullWidth: true,
       height: 34,
-      buttonSize: MoonButtonSize.sm,
     );
   }
 }

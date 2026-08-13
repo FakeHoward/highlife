@@ -39,48 +39,8 @@ export function RoomSidebar({
   onSelectSpace,
 }: Props) {
   const { t } = useI18n();
-  const selectedSpace = spaces.find((space) => space.roomId === selectedSpaceId) ?? null;
   return (
-    <>
-      {onSelectSpace && (
-        <nav className="space-rail" aria-label={t("sidebar.spaces")}>
-          <button
-            type="button"
-            className={`space-rail-button all-spaces ${selectedSpaceId === null ? "active" : ""}`}
-            onClick={() => onSelectSpace(null)}
-            aria-label={t("sidebar.allRooms")}
-            aria-pressed={selectedSpaceId === null}
-            title={t("sidebar.allRooms")}
-          >
-            H
-          </button>
-          <div className="space-rail-list">
-            {spaces.map((space) => (
-              <button
-                key={space.roomId}
-                type="button"
-                className={`space-rail-button ${selectedSpaceId === space.roomId ? "active" : ""}`}
-                onClick={() => onSelectSpace(space.roomId)}
-                aria-label={space.name}
-                aria-pressed={selectedSpaceId === space.roomId}
-                title={space.name}
-              >
-                <Avatar id={space.roomId} name={space.name} src={space.avatarUrl} size="small" />
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="space-rail-button"
-            onClick={onNewSpace}
-            aria-label={t("spaces.createTitle")}
-            title={t("spaces.createTitle")}
-          >
-            <IconFolderPlus />
-          </button>
-        </nav>
-      )}
-      <aside className={`sidebar ${activeId ? "has-room" : ""}`} aria-label={t("sidebar.rooms")}>
+    <aside className={`sidebar ${activeId ? "has-room" : ""}`} aria-label={t("sidebar.rooms")}>
       <header className="sidebar-head">
         <strong className="sidebar-title">HighLife</strong>
         <div className="head-actions">
@@ -92,28 +52,6 @@ export function RoomSidebar({
           </button>
         </div>
       </header>
-      {selectedSpace && (
-        <section className="selected-space-panel" role="complementary" aria-label={selectedSpace.name}>
-          <Avatar
-            id={selectedSpace.roomId}
-            name={selectedSpace.name}
-            src={selectedSpace.avatarUrl}
-            size="small"
-          />
-          <div>
-            <strong>{selectedSpace.name}</strong>
-            <span>{selectedSpace.topic ?? t("spaces.selectedHint")}</span>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => onSelectSpace?.(null)}
-            aria-label={t("common.closeNamed", { title: selectedSpace.name })}
-          >
-            ×
-          </button>
-        </section>
-      )}
       <label className="search-field">
         <IconSearch />
         <input
@@ -123,6 +61,38 @@ export function RoomSidebar({
           aria-label={t("sidebar.search")}
         />
       </label>
+      {onSelectSpace && (
+        <nav className="folder-tabs" aria-label={t("sidebar.spaces")}>
+          <button
+            type="button"
+            className={`folder-tab ${selectedSpaceId === null ? "active" : ""}`}
+            onClick={() => onSelectSpace(null)}
+            aria-pressed={selectedSpaceId === null}
+          >
+            {t("sidebar.allRooms")}
+          </button>
+          {spaces.map((space) => (
+            <button
+              key={space.roomId}
+              type="button"
+              className={`folder-tab ${selectedSpaceId === space.roomId ? "active" : ""}`}
+              onClick={() => onSelectSpace(space.roomId)}
+              aria-pressed={selectedSpaceId === space.roomId}
+            >
+              {space.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="folder-tab add"
+            onClick={onNewSpace}
+            aria-label={t("spaces.createTitle")}
+            title={t("spaces.createTitle")}
+          >
+            <IconFolderPlus />
+          </button>
+        </nav>
+      )}
       <nav className="room-list">
         {rooms.length === 0 && (
           <div className="empty-small">
@@ -172,7 +142,6 @@ export function RoomSidebar({
           </span>
         </button>
       )}
-      </aside>
-    </>
+    </aside>
   );
 }

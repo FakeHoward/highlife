@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:moon_design/moon_design.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 enum _HlVariant { primary, secondary, outline, text, danger }
 
-/// HighLife button wrappers over Moon Design, tuned toward React `.button`.
+/// HighLife buttons on shadcn_flutter, matching web `.button` density.
 class HlButton extends StatelessWidget {
   const HlButton._({
     super.key,
@@ -13,7 +12,6 @@ class HlButton extends StatelessWidget {
     this.leading,
     this.isFullWidth = false,
     this.height,
-    this.buttonSize,
   });
 
   factory HlButton.primary({
@@ -23,7 +21,7 @@ class HlButton extends StatelessWidget {
     Widget? leading,
     bool isFullWidth = false,
     double? height,
-    MoonButtonSize? buttonSize,
+    Object? buttonSize,
   }) =>
       HlButton._(
         key: key,
@@ -33,7 +31,6 @@ class HlButton extends StatelessWidget {
         leading: leading,
         isFullWidth: isFullWidth,
         height: height,
-        buttonSize: buttonSize,
       );
 
   factory HlButton.secondary({
@@ -43,7 +40,7 @@ class HlButton extends StatelessWidget {
     Widget? leading,
     bool isFullWidth = false,
     double? height,
-    MoonButtonSize? buttonSize,
+    Object? buttonSize,
   }) =>
       HlButton._(
         key: key,
@@ -53,7 +50,6 @@ class HlButton extends StatelessWidget {
         leading: leading,
         isFullWidth: isFullWidth,
         height: height,
-        buttonSize: buttonSize,
       );
 
   factory HlButton.outline({
@@ -63,7 +59,7 @@ class HlButton extends StatelessWidget {
     Widget? leading,
     bool isFullWidth = false,
     double? height,
-    MoonButtonSize? buttonSize,
+    Object? buttonSize,
   }) =>
       HlButton._(
         key: key,
@@ -73,7 +69,6 @@ class HlButton extends StatelessWidget {
         leading: leading,
         isFullWidth: isFullWidth,
         height: height,
-        buttonSize: buttonSize,
       );
 
   factory HlButton.text({
@@ -83,7 +78,7 @@ class HlButton extends StatelessWidget {
     Widget? leading,
     bool isFullWidth = false,
     double? height,
-    MoonButtonSize? buttonSize,
+    Object? buttonSize,
   }) =>
       HlButton._(
         key: key,
@@ -93,7 +88,6 @@ class HlButton extends StatelessWidget {
         leading: leading,
         isFullWidth: isFullWidth,
         height: height,
-        buttonSize: buttonSize,
       );
 
   factory HlButton.danger({
@@ -103,7 +97,7 @@ class HlButton extends StatelessWidget {
     Widget? leading,
     bool isFullWidth = false,
     double? height,
-    MoonButtonSize? buttonSize,
+    Object? buttonSize,
   }) =>
       HlButton._(
         key: key,
@@ -113,7 +107,6 @@ class HlButton extends StatelessWidget {
         leading: leading,
         isFullWidth: isFullWidth,
         height: height,
-        buttonSize: buttonSize,
       );
 
   final _HlVariant variant;
@@ -122,79 +115,47 @@ class HlButton extends StatelessWidget {
   final Widget? leading;
   final bool isFullWidth;
   final double? height;
-  final MoonButtonSize? buttonSize;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).extension<MoonTheme>()?.tokens.colors;
-    final radius = BorderRadius.circular(6);
-    final size = buttonSize ?? MoonButtonSize.md;
-    final h = height ?? 40;
-    final accent = colors?.piccolo ?? const Color(0xFF1263D6);
-    final line = colors?.beerus ?? const Color(0xFFDFE3E9);
-    final accentBorder = Color.alphaBlend(accent.withValues(alpha: 0.35), line);
-
+    final h = height ?? 40.0;
+    late final Widget button;
     switch (variant) {
       case _HlVariant.primary:
-        return MoonFilledButton(
-          onTap: onPressed,
-          label: label,
+        button = Button.primary(
+          onPressed: onPressed,
           leading: leading,
-          isFullWidth: isFullWidth,
-          height: h,
-          buttonSize: size,
-          borderRadius: radius,
-          backgroundColor: accent,
+          child: label,
         );
       case _HlVariant.secondary:
-        return MoonButton(
-          onTap: onPressed,
-          label: label,
+        button = Button.secondary(
+          onPressed: onPressed,
           leading: leading,
-          isFullWidth: isFullWidth,
-          height: h,
-          buttonSize: size,
-          borderRadius: radius,
-          showBorder: true,
-          backgroundColor: colors?.gohan ?? Colors.white,
-          borderColor: accentBorder,
-          textColor: colors?.popo ?? accent,
+          child: label,
         );
       case _HlVariant.outline:
-        return MoonOutlinedButton(
-          onTap: onPressed,
-          label: label,
+        button = Button.outline(
+          onPressed: onPressed,
           leading: leading,
-          isFullWidth: isFullWidth,
-          height: h,
-          buttonSize: size,
-          borderRadius: radius,
-          borderColor: accentBorder,
+          child: label,
         );
       case _HlVariant.text:
-        return MoonTextButton(
-          onTap: onPressed,
-          label: label,
+        button = Button.text(
+          onPressed: onPressed,
           leading: leading,
-          isFullWidth: isFullWidth,
-          height: h,
-          buttonSize: size,
+          child: label,
         );
       case _HlVariant.danger:
-        final danger = colors?.chichi ?? const Color(0xFFB33A2B);
-        return MoonButton(
-          onTap: onPressed,
-          label: label,
+        button = Button.destructive(
+          onPressed: onPressed,
           leading: leading,
-          isFullWidth: isFullWidth,
-          height: h,
-          buttonSize: size,
-          borderRadius: radius,
-          showBorder: true,
-          backgroundColor: colors?.chichi10 ?? const Color(0xFFF8E8E5),
-          borderColor: Color.alphaBlend(danger.withValues(alpha: 0.3), line),
-          textColor: danger,
+          child: label,
         );
     }
+    return SizedBox(
+      width: isFullWidth ? double.infinity : null,
+      height: h,
+      child: button,
+    );
   }
 }

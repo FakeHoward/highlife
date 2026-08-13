@@ -225,6 +225,13 @@ export function MessageTimeline({
           && previous.kind !== "system"
           && !showDate
           && item.timestamp - previous.timestamp < 300_000;
+        const next = items[index + 1];
+        const nextNewDay = next != null && !sameCalendarDay(item.timestamp, next.timestamp);
+        const lastInGroup = !next
+          || next.kind === "system"
+          || next.senderId !== item.senderId
+          || nextNewDay
+          || next.timestamp - item.timestamp >= 300_000;
         const bot = parseAiomatrixPayload(item.rawContent);
         const html = displayHtml(item, bot);
         const keyboardRows = bot.keyboard
@@ -247,7 +254,7 @@ export function MessageTimeline({
             )}
             <article
             data-event-id={item.eventId}
-            className={`message ${item.isOwn ? "own" : ""} ${grouped ? "grouped" : ""} ${highlightEventId === item.eventId ? "highlight" : ""}`}
+            className={`message ${item.isOwn ? "own" : ""} ${grouped ? "grouped" : ""} ${lastInGroup ? "last-in-group" : ""} ${highlightEventId === item.eventId ? "highlight" : ""}`}
           >
             {!item.isOwn && (
               grouped

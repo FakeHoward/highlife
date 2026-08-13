@@ -138,7 +138,7 @@ describe("responsive room navigation", () => {
     expect(select).toHaveBeenCalledWith(room.roomId);
   });
 
-  it("uses a narrow space rail and exposes a dismissible selected-space panel", () => {
+  it("puts folder tabs under search instead of a side rail", () => {
     const selectSpace = vi.fn();
     wrap(
       <RoomSidebar
@@ -163,8 +163,7 @@ describe("responsive room navigation", () => {
 
     expect(screen.getByRole("navigation", { name: "Spaces" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("complementary", { name: "Work" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close Work" }));
+    fireEvent.click(screen.getByRole("button", { name: "All chats" }));
     expect(selectSpace).toHaveBeenCalledWith(null);
   });
 

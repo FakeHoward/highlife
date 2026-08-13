@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MatrixRtcSnapshot } from "../matrix/matrixRtc";
 
 export interface MatrixRtcLabels {
@@ -21,6 +21,23 @@ interface Props {
   labels: MatrixRtcLabels;
 }
 
+function useCallElapsed(active: boolean): string {
+  const started = useRef<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) {
+      started.current = null;
+      return;
+    }
+    started.current ??= Date.now();
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  if (!active || started.current == null) return "";
+  const seconds = Math.max(0, Math.floor((now - started.current) / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export function MatrixRtcSurface({
   snapshot,
   onHangup,
@@ -29,6 +46,7 @@ export function MatrixRtcSurface({
   labels,
 }: Props) {
   const remoteAudio = useRef<HTMLAudioElement>(null);
+  const elapsed = useCallElapsed(snapshot.phase === "connected");
 
   useEffect(() => {
     const element = remoteAudio.current;
@@ -44,34 +62,35 @@ export function MatrixRtcSurface({
 
   const status =
     snapshot.phase === "connected"
-      ? labels.connected
+      ? elapsed || labels.connected
       : snapshot.phase === "error"
         ? labels.failed
         : labels.connecting;
 
   return (
-    <section className="direct-call" role="dialog" aria-label={labels.dialog}>
+    <section className={`call-stage${snapshot.phase === "error" ? " is-error" : ""}`} role="dialog" aria-label={labels.dialog}>
       <audio ref={remoteAudio} autoPlay />
-      <div className="direct-call-copy">
+      <div className="call-stage-mark" aria-hidden="true">☎</div>
+      <div className="call-stage-copy">
         <strong>{labels.participants.replace("{count}", String(snapshot.participantCount))}</strong>
         <span>{status}</span>
       </div>
-      <div className="direct-call-actions">
+      <div className="call-stage-actions">
         {snapshot.phase !== "error" && (
           <button
             type="button"
-            className="button"
+            className={`call-round mute${snapshot.microphoneMuted ? " is-on" : ""}`}
             onClick={onToggleMicrophone}
             aria-label={snapshot.microphoneMuted ? labels.unmute : labels.mute}
           >
             {snapshot.microphoneMuted ? labels.unmute : labels.mute}
           </button>
         )}
-        <button type="button" className="button danger" onClick={onHangup} aria-label={labels.hangup}>
+        <button type="button" className="call-round hangup" onClick={onHangup} aria-label={labels.hangup}>
           {labels.hangup}
         </button>
         {snapshot.fallbackAvailable && snapshot.phase === "error" && (
-          <button type="button" className="button" onClick={onFallback} aria-label={labels.fallback}>
+          <button type="button" className="call-round fallback" onClick={onFallback} aria-label={labels.fallback}>
             {labels.fallback}
           </button>
         )}

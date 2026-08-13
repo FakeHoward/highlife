@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Strip a small Markdown subset down to plain text (room-list previews).

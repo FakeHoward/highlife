@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 /// Native WebView for aiomatrix MiniApps with postMessage bridge.

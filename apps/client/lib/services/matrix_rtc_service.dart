@@ -55,6 +55,7 @@ class MatrixRtcService {
   lk.BaseKeyProvider? _keyProvider;
   Room? _room;
   Timer? _membershipKeepAlive;
+  Timer? _keyShareTimer;
   StreamSubscription<dynamic>? _toDeviceSub;
   Uint8List? _outboundKey;
   var _outboundIndex = 0;
@@ -145,6 +146,10 @@ class MatrixRtcService {
           unawaited(_shareOutboundKey(room, userId, deviceId));
         },
       );
+      _keyShareTimer?.cancel();
+      _keyShareTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        unawaited(_shareOutboundKey(room, userId, deviceId));
+      });
       _publish(
         MatrixRtcSnapshot(
           roomId: room.id,
@@ -227,7 +232,7 @@ class MatrixRtcService {
       room.id,
       MatrixRtcBoundary.msc3401MemberEventType,
       msc3401StateKey(userId, deviceId),
-      const {'memberships': <Map<String, Object?>>[]},
+      msc3401MembershipLeaveContent(),
     );
   }
 
@@ -296,6 +301,8 @@ class MatrixRtcService {
   Future<void> _cleanup() async {
     _membershipKeepAlive?.cancel();
     _membershipKeepAlive = null;
+    _keyShareTimer?.cancel();
+    _keyShareTimer = null;
     await _toDeviceSub?.cancel();
     _toDeviceSub = null;
     _outboundKey = null;

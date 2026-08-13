@@ -1,9 +1,7 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
+import '../hl_kit.dart';
 
 import '../services/matrix_rtc_service.dart';
+import 'call_stage.dart';
 
 @immutable
 class MatrixRtcCallLabels {
@@ -57,118 +55,31 @@ class MatrixRtcCallSurface extends StatelessWidget {
       MatrixRtcPhase.connecting =>
         labels.connecting,
     };
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              if (snapshot.remoteStream != null)
-                _RemoteAudioSink(stream: snapshot.remoteStream),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      labels.participants.replaceAll(
-                        '{count}',
-                        '${snapshot.participantCount}',
-                      ),
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    Text(status),
-                  ],
-                ),
-              ),
-              if (snapshot.phase != MatrixRtcPhase.error) ...[
-                IconButton(
-                  tooltip: snapshot.microphoneMuted ? labels.unmute : labels.mute,
-                  onPressed: () => unawaited(onToggleMicrophone()),
-                  icon: Icon(
-                    snapshot.microphoneMuted ? Icons.mic_off : Icons.mic,
-                  ),
-                ),
-                IconButton.filledTonal(
-                  tooltip: labels.hangup,
-                  onPressed: () => unawaited(onHangup()),
-                  icon: const Icon(Icons.call_end),
-                ),
-              ] else ...[
-                IconButton.filledTonal(
-                  tooltip: labels.hangup,
-                  onPressed: () => unawaited(onHangup()),
-                  icon: const Icon(Icons.close),
-                ),
-                if (snapshot.fallbackAvailable)
-                  IconButton.filled(
-                    tooltip: labels.fallback,
-                    onPressed: onFallback,
-                    icon: const Icon(Icons.open_in_new),
-                  ),
-              ],
-            ],
-          ),
-        ),
+    return CallStage(
+      title: labels.participants.replaceAll(
+        '{count}',
+        '${snapshot.participantCount}',
       ),
-    );
-  }
-}
-
-class _RemoteAudioSink extends StatefulWidget {
-  const _RemoteAudioSink({required this.stream});
-
-  final MediaStream? stream;
-
-  @override
-  State<_RemoteAudioSink> createState() => _RemoteAudioSinkState();
-}
-
-class _RemoteAudioSinkState extends State<_RemoteAudioSink> {
-  final RTCVideoRenderer _renderer = RTCVideoRenderer();
-  var _initialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_initialize());
-  }
-
-  @override
-  void didUpdateWidget(covariant _RemoteAudioSink oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.stream != widget.stream && _initialized) {
-      _renderer.srcObject = widget.stream;
-    }
-  }
-
-  Future<void> _initialize() async {
-    await _renderer.initialize();
-    if (!mounted) {
-      await _renderer.dispose();
-      return;
-    }
-    _renderer.srcObject = widget.stream;
-    setState(() => _initialized = true);
-  }
-
-  @override
-  void dispose() {
-    _renderer.srcObject = null;
-    unawaited(_renderer.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_initialized || widget.stream == null) {
-      return const SizedBox.shrink();
-    }
-    return SizedBox(
-      width: 1,
-      height: 1,
-      child: IgnorePointer(child: RTCVideoView(_renderer)),
+      status: status,
+      connected: snapshot.phase == MatrixRtcPhase.connected,
+      failed: snapshot.phase == MatrixRtcPhase.error,
+      incoming: false,
+      muted: snapshot.microphoneMuted,
+      remoteStream: snapshot.remoteStream,
+      onHangup: onHangup,
+      onToggleMicrophone: onToggleMicrophone,
+      onFallback: onFallback,
+      fallbackAvailable: snapshot.fallbackAvailable,
+      labels: CallStageLabels(
+        connecting: labels.connecting,
+        connected: labels.connected,
+        failed: labels.failed,
+        mute: labels.mute,
+        unmute: labels.unmute,
+        hangup: labels.hangup,
+        fallback: labels.fallback,
+        participants: labels.participants,
+      ),
     );
   }
 }

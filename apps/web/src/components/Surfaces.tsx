@@ -5,8 +5,10 @@ import { JoinRoomFailure } from "../matrix/roomAddress";
 import { callWidgetId } from "../matrix/callUrl";
 import {
   createRoom,
+  deleteOtherDevice,
   deleteServerKeyBackup,
   enableExistingKeyBackup,
+  ensureOwnDeviceCrossSigned,
   fetchOpenIdToken,
   getCryptoStatus,
   getGroupCallUrl,
@@ -358,6 +360,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [copiedMxid, setCopiedMxid] = useState(false);
   const [copiedHs, setCopiedHs] = useState(false);
   const [notif, setNotif] = useState(browserNotificationPermission);
+  const [sessionPassword, setSessionPassword] = useState("");
   const identity = getSessionIdentity();
   const crypto = getCryptoStatus();
   const incoming = useSyncExternalStore(subscribeIncomingVerification, getIncomingVerification, () => null);
@@ -657,10 +660,49 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 </div>
                 <span>{device.verified ? t("settings.verified") : device.dehydrated ? t("settings.dehydrated") : t("settings.unverified")}</span>
                 {!device.current && !device.verified && <button className="button" type="button" onClick={() => beginVerification(device.deviceId)}>{t("settings.verify")}</button>}
+                {!device.current && (
+                  <button
+                    className="text-button danger-text"
+                    type="button"
+                    onClick={() => void runCrypto(async () => {
+                      await deleteOtherDevice(device.deviceId, sessionPassword || undefined);
+                      setSessionPassword("");
+                      setCryptoMessage(t("settings.deviceSignedOut"));
+                    })}
+                  >
+                    {t("settings.signOutDevice")}
+                  </button>
+                )}
               </article>
             ))
           )}
         </div>
+        {devices.some((device) => device.current && !device.signedByOwner) && (
+          <p className="muted small">{t("settings.thisDeviceUnsigned")}</p>
+        )}
+        <label>
+          <span className="muted small">{t("settings.passwordToConfirm")}</span>
+          <input
+            type="password"
+            value={sessionPassword}
+            onChange={(event) => setSessionPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+        <p className="muted small">{t("settings.signOutDeviceHint")}</p>
+        {devices.some((device) => device.current && !device.signedByOwner) && (
+          <button
+            className="button"
+            type="button"
+            disabled={cryptoBusy || !crypto.enabled}
+            onClick={() => void runCrypto(async () => {
+              await ensureOwnDeviceCrossSigned(sessionPassword || undefined);
+              setSessionPassword("");
+            })}
+          >
+            {t("settings.signThisDevice")}
+          </button>
+        )}
         {devices.some((device) => !device.current) && <button className="button" type="button" onClick={() => beginVerification()}>{t("settings.verifyOther")}</button>}
         {verification && <p className="muted small" role="status">{verification}</p>}
         {sas && <div className="sas-panel">

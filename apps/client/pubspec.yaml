@@ -26,8 +26,8 @@ dependencies:
   sqflite_common_ffi: ^2.3.5
   sqlite3_flutter_libs: ^0.5.32
   webview_flutter: ^4.13.0
-  moon_design: ^1.1.0
   unifiedpush: ^6.0.0
+  shadcn_flutter: ^0.0.53
 
 dev_dependencies:
   flutter_test:

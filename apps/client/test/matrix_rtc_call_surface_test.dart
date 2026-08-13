@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:highlife_client/hl_kit.dart';
 import 'package:highlife_client/services/matrix_rtc_service.dart';
 import 'package:highlife_client/widgets/matrix_rtc_call_surface.dart';
 
@@ -20,7 +20,7 @@ void main() {
   ) async {
     var fallback = false;
     await tester.pumpWidget(
-      MaterialApp(
+      highLifeTestApp(
         home: MatrixRtcCallSurface(
           snapshot: const MatrixRtcSnapshot(
             roomId: '!room:example.org',
@@ -37,14 +37,14 @@ void main() {
     );
 
     expect(find.text('LiveKit failed'), findsOneWidget);
-    await tester.tap(find.byTooltip('Use Element Call'));
+    await tester.tap(find.text('Use Element Call'));
     expect(fallback, isTrue);
   });
 
   testWidgets('keeps mute and leave while LiveKit is connected', (tester) async {
     var hungUp = false;
     await tester.pumpWidget(
-      MaterialApp(
+      highLifeTestApp(
         home: MatrixRtcCallSurface(
           snapshot: const MatrixRtcSnapshot(
             roomId: '!room:example.org',
@@ -61,8 +61,8 @@ void main() {
     );
 
     expect(find.text('3 in call'), findsOneWidget);
-    expect(find.byTooltip('Use Element Call'), findsNothing);
-    await tester.tap(find.byTooltip('Hang up'));
+    expect(find.text('Use Element Call'), findsNothing);
+    await tester.tap(find.text('Hang up'));
     expect(hungUp, isTrue);
   });
 }

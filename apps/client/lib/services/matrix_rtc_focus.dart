@@ -73,31 +73,33 @@ Map<String, dynamic> msc3401MembershipContent({
   final expires = (now ?? DateTime.now())
       .add(const Duration(hours: 1))
       .millisecondsSinceEpoch;
+  // MSC4143 slot format used by matrix-js-sdk / Element X. Nested
+  // `memberships[]` is ignored by HighLife web's MatrixRTC session, so
+  // Android ↔ web calls never exchanged media keys.
   return {
-    'memberships': [
+    'application': 'm.call',
+    'call_id': '',
+    'device_id': deviceId,
+    'expires_ts': expires,
+    'scope': 'm.room',
+    'foci_preferred': [
       {
-        'application': 'm.call',
-        'call_id': '',
-        'device_id': deviceId,
-        'expires_ts': expires,
-        'scope': 'm.room',
-        'foci_preferred': [
-          {
-            'type': 'livekit',
-            'livekit_service_url': livekitServiceUrl,
-            'livekit_alias': livekitAlias,
-          },
-        ],
-        'focus_active': {
-          'type': 'livekit',
-          'focus_selection': 'oldest_membership',
-        },
+        'type': 'livekit',
+        'livekit_service_url': livekitServiceUrl,
+        'livekit_alias': livekitAlias,
       },
     ],
+    'focus_active': {
+      'type': 'livekit',
+      'focus_selection': 'oldest_membership',
+    },
   };
 }
 
-String msc3401StateKey(String userId, String deviceId) => '_${userId}_$deviceId';
+String msc3401StateKey(String userId, String deviceId) =>
+    '_${userId}_${deviceId}_m.call';
+
+Map<String, dynamic> msc3401MembershipLeaveContent() => <String, dynamic>{};
 
 LivekitFocus? livekitFocusFromCallMemberContent(Map<String, dynamic> content) {
   for (final key in const ['foci_preferred', 'foci_active', 'foci']) {

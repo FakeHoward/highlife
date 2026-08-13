@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 
 import '../l10n/messages.dart';
 import 'hl_button.dart';

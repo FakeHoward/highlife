@@ -11,7 +11,6 @@ import {
   AIOMATRIX_HOST_STATE_EVENT_TYPE,
   AIOMATRIX_PROGRESS_EVENT_TYPE,
   AIOMATRIX_TOAST_EVENT_TYPE,
-  buildHostCapabilitiesContent,
 } from "@highlife/ui-contracts";
 import {
   ClientEvent,
@@ -90,7 +89,6 @@ import {
   togglePinnedIds,
 } from "./messengerExtras";
 import { DIRECT_CALL_CRYPTO_UNAVAILABLE } from "./directCallErrors";
-import { roomNeedsHostHandshake, hasActiveCommandsState } from "./hostHandshake";
 import { assertCryptoForEncryptedRoom } from "./cryptoGuard";
 import { outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
@@ -134,6 +132,7 @@ export interface EncryptionDevice {
   fingerprint: string | null;
   current: boolean;
   verified: boolean;
+  signedByOwner: boolean;
   dehydrated: boolean;
 }
 
@@ -366,7 +365,16 @@ export function showLocalToast(text: string, alert = false): void {
 }
 
 /** Advertise aiomatrix host caps only in rooms that have a bot. Bulk once, then per new join. */
-async function advertiseHostCapabilities(targetRoom?: Room): Promise<void> {
+function leftoverHostStateEvent(room: Room, userId: string): MatrixEvent | null {
+  const existing = room.currentState.getStateEvents(AIOMATRIX_HOST_STATE_EVENT_TYPE, userId);
+  if (!existing) return null;
+  const content = existing.getContent() as Record<string, unknown> | undefined;
+  if (!content || Object.keys(content).length === 0) return null;
+  return existing;
+}
+
+/** Element X renders unknown `dev.aiomatrix.host` state as "Custom host event". */
+async function scrubHostCapabilityLeftovers(targetRoom?: Room): Promise<void> {
   if (!client || hostCapsBusy) return;
   if (!targetRoom && hostCapsRan) return;
   hostCapsBusy = true;
@@ -375,39 +383,31 @@ async function advertiseHostCapabilities(targetRoom?: Room): Promise<void> {
     hostCapsBusy = false;
     return;
   }
-  const content = buildHostCapabilitiesContent();
   const rooms = targetRoom ? [targetRoom] : client.getRooms();
   try {
     for (const room of rooms) {
       if (room.getMyMembership() !== "join") continue;
-      const commandEvents = room.currentState.getStateEvents("dev.aiomatrix.commands");
-      const commandList = Array.isArray(commandEvents) ? commandEvents : commandEvents ? [commandEvents] : [];
-      const needed = roomNeedsHostHandshake({
-        isDirect: Boolean(room.getDMInviter() || room.guessDMUserId()),
-        memberUserIds: room.getJoinedMembers().map((member) => member.userId),
-        hasCommandsState: hasActiveCommandsState(
-          commandList.map((event) => event.getContent() as Record<string, unknown>),
-        ),
-      });
-      if (!needed) continue;
-      const existing = room.currentState.getStateEvents(AIOMATRIX_HOST_STATE_EVENT_TYPE, userId);
-      const previous = existing?.getContent() ?? {};
-      if (JSON.stringify(previous) === JSON.stringify(content)) continue;
+      const existing = leftoverHostStateEvent(room, userId);
+      const eventId = existing?.getId();
+      if (!existing || !eventId) continue;
       try {
-        await client.sendStateEvent(
-          room.roomId,
-          AIOMATRIX_HOST_STATE_EVENT_TYPE as typeof EventType.RoomTopic,
-          content as never,
-          userId,
-        );
+        await client.redactEvent(room.roomId, eventId);
       } catch {
-        // Needs power level; aware bots already use toast profile.
+        /* power level or 429 — retry when the room is opened */
+      }
+      if (!targetRoom) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
       }
     }
     if (!targetRoom) hostCapsRan = true;
   } finally {
     hostCapsBusy = false;
   }
+}
+
+export function scrubHostCapabilitiesForRoom(roomId: string): void {
+  const room = client?.getRoom(roomId);
+  if (room) void scrubHostCapabilityLeftovers(room);
 }
 
 export function subscribe(listener: () => void): () => void {
@@ -470,12 +470,12 @@ async function start(session: StoredSession): Promise<void> {
       connection: state === "SYNCING" || state === "PREPARED" ? "online" : state === "ERROR" ? "error" : "syncing",
     });
     if (state === "PREPARED") {
-      void advertiseHostCapabilities();
+      void scrubHostCapabilityLeftovers();
     }
   });
   client.on(RoomEvent.MyMembership, (room, membership) => {
     if (membership === "join" && hostCapsRan) {
-      void advertiseHostCapabilities(room);
+      void scrubHostCapabilityLeftovers(room);
     }
   });
   client.on(RoomEvent.Timeline, (event, room, toStartOfTimeline) => {
@@ -518,6 +518,7 @@ async function start(session: StoredSession): Promise<void> {
     if (cachedSecretStorageKey) {
       void restoreFromKeyBackup().catch(() => undefined);
     }
+    void ensureOwnDeviceCrossSigned().catch(() => undefined);
   } catch (error) {
     publish({ error: `Encryption unavailable: ${messageOf(error)}` });
   }
@@ -1664,6 +1665,7 @@ export async function restoreFromKeyBackup(): Promise<{ imported: number; total:
     }
   }
   const result = await crypto.restoreKeyBackup();
+  await ensureOwnDeviceCrossSigned();
   return { imported: result.imported, total: result.total };
 }
 
@@ -1747,9 +1749,85 @@ export async function listOwnDevices(): Promise<EncryptionDevice[]> {
       fingerprint: device.getFingerprint() ?? null,
       current: device.deviceId === active.getDeviceId(),
       verified: status?.isVerified() ?? false,
+      signedByOwner: status?.signedByOwner ?? false,
       dehydrated: device.dehydrated,
     };
   }));
+}
+
+function signingKeyUploader(password?: string) {
+  return async (makeRequest: (auth: Record<string, unknown> | null) => Promise<unknown>) => {
+    try {
+      await makeRequest(null);
+    } catch (error) {
+      const session = uiaSessionFromError(error);
+      if (password) {
+        await makeRequest({
+          type: "m.login.password",
+          identifier: { type: "m.id.user", user: requiredClient().getUserId() },
+          password,
+          session,
+        });
+        return;
+      }
+      if (session && uiaAllowsDummy(error)) {
+        await makeRequest({ type: "m.login.dummy", session });
+        return;
+      }
+      throw error;
+    }
+  };
+}
+
+/**
+ * Sign this device with the account's cross-signing key so Element X stops
+ * warning "encrypted by a device not verified by its owner".
+ */
+export async function ensureOwnDeviceCrossSigned(password?: string): Promise<void> {
+  const active = client;
+  const crypto = active?.getCrypto();
+  const deviceId = active?.getDeviceId();
+  if (!active || !crypto || !deviceId) return;
+  const userId = active.getSafeUserId();
+  const status = await crypto.getDeviceVerificationStatus(userId, deviceId);
+  if (status?.signedByOwner) return;
+  const crossSigning = await crypto.getCrossSigningStatus();
+  const hasLocalMaster = Boolean(crossSigning.privateKeysCachedLocally.masterKey);
+  const hasPublicKeys = crossSigning.publicKeysOnDevice;
+  try {
+    await crypto.bootstrapCrossSigning({
+      setupNewCrossSigning: !hasPublicKeys && !hasLocalMaster,
+      authUploadDeviceSigningKeys: signingKeyUploader(password),
+    });
+  } catch {
+    /* needs recovery key, password UIA, or another verified device */
+  }
+}
+
+export async function deleteOtherDevice(deviceId: string, password?: string): Promise<void> {
+  const active = requiredClient();
+  if (deviceId === active.getDeviceId()) {
+    throw new Error("Cannot sign out the current session here");
+  }
+  const auth = password
+    ? {
+        type: "m.login.password",
+        identifier: { type: "m.id.user", user: active.getUserId() },
+        password,
+      }
+    : undefined;
+  try {
+    await active.deleteDevice(deviceId, auth);
+  } catch (error) {
+    const session = uiaSessionFromError(error);
+    if (!password) throw error;
+    await active.deleteDevice(deviceId, {
+      type: "m.login.password",
+      identifier: { type: "m.id.user", user: active.getUserId() },
+      password,
+      session,
+    });
+  }
 }
 
 export async function requestDeviceVerification(

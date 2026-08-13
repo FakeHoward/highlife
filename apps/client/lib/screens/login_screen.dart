@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../hl_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -69,62 +69,110 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     shrinkWrap: true,
                     children: [
-                Text(
-                  s.appName,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        color: Theme.of(context).colorScheme.primary,
+                        child: const Text(
+                          'H',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  registering ? s.registerHint : s.loginTagline,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: tokens.muted,
+                      const SizedBox(height: 16),
+                      Text(
+                        s.appName,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
-                ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SegmentedButton<AppLocale>(
-                    segments: [
-                      ButtonSegment(
-                        value: AppLocale.en,
-                        label: Text(s.languageEnglish),
-                      ),
-                      ButtonSegment(
-                        value: AppLocale.ru,
-                        label: Text(s.languageRussian),
+                      const SizedBox(height: 6),
+                      Text(
+                        registering ? s.registerHint : s.loginTagline,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: tokens.muted,
+                            ),
                       ),
                     ],
-                    selected: {context.watch<HighLifeLocales>().locale},
-                    onSelectionChanged: (value) {
-                      context.read<HighLifeLocales>().setLocale(value.first);
-                    },
                   ),
                 ),
-                const SizedBox(height: 14),
-                SegmentedButton<_AuthMode>(
-                  segments: [
-                    ButtonSegment(
-                      value: _AuthMode.login,
-                      label: Text(s.signIn),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () =>
+                          context.read<HighLifeLocales>().setLocale(AppLocale.en),
+                      child: Text(s.languageEnglish),
                     ),
-                    ButtonSegment(
-                      value: _AuthMode.register,
-                      label: Text(s.registerTitle),
+                    TextButton(
+                      onPressed: () =>
+                          context.read<HighLifeLocales>().setLocale(AppLocale.ru),
+                      child: Text(s.languageRussian),
                     ),
                   ],
-                  selected: {_mode},
-                  onSelectionChanged: session.busy
-                      ? null
-                      : (value) {
-                          session.clearError();
-                          setState(() {
-                            _mode = value.first;
-                            _localError = null;
-                            _showTokenField = false;
-                          });
-                        },
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: session.busy
+                            ? null
+                            : () {
+                                session.clearError();
+                                setState(() {
+                                  _mode = _AuthMode.login;
+                                  _localError = null;
+                                  _showTokenField = false;
+                                });
+                              },
+                        child: Text(
+                          s.signIn,
+                          style: TextStyle(
+                            fontWeight: !registering
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            decoration: !registering
+                                ? TextDecoration.underline
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: session.busy
+                            ? null
+                            : () {
+                                session.clearError();
+                                setState(() {
+                                  _mode = _AuthMode.register;
+                                  _localError = null;
+                                  _showTokenField = false;
+                                });
+                              },
+                        child: Text(
+                          s.registerTitle,
+                          style: TextStyle(
+                            fontWeight: registering
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            decoration: registering
+                                ? TextDecoration.underline
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 TextField(

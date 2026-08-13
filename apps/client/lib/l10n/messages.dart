@@ -171,6 +171,7 @@ class AppStrings {
   String get startDirectMessage => _('startDirectMessage');
   String get startDmAction => _('startDmAction');
   String get spaces => _('spaces');
+  String get allChats => _('allChats');
   String get noRoomsInSpace => _('noRoomsInSpace');
   String get createSpace => _('createSpace');
   String get spaceName => _('spaceName');
@@ -215,6 +216,9 @@ class AppStrings {
   String get devicesTitle => _('devicesTitle');
   String get noDevices => _('noDevices');
   String get verify => _('verify');
+  String get thisDevice => _('thisDevice');
+  String get signOutDevice => _('signOutDevice');
+  String get passwordToConfirm => _('passwordToConfirm');
   String get incomingVerification => _('incomingVerification');
   String get cryptoAccept => _('cryptoAccept');
   String get cryptoReject => _('cryptoReject');
@@ -666,6 +670,7 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Начать чат',
   },
   'spaces': {AppLocale.en: 'Spaces', AppLocale.ru: 'Пространства'},
+  'allChats': {AppLocale.en: 'All', AppLocale.ru: 'Все'},
   'noRoomsInSpace': {
     AppLocale.en: 'No joined rooms in this space yet',
     AppLocale.ru: 'В этом пространстве пока нет комнат',
@@ -819,6 +824,12 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Другие устройства пока не найдены.',
   },
   'verify': {AppLocale.en: 'Verify', AppLocale.ru: 'Проверить'},
+  'thisDevice': {AppLocale.en: 'This device', AppLocale.ru: 'Это устройство'},
+  'signOutDevice': {
+    AppLocale.en: 'End session',
+    AppLocale.ru: 'Завершить сессию',
+  },
+  'passwordToConfirm': {AppLocale.en: 'Password', AppLocale.ru: 'Пароль'},
   'incomingVerification': {
     AppLocale.en: 'Incoming verification',
     AppLocale.ru: 'Входящая проверка',
