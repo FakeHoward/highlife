@@ -95,7 +95,6 @@ class _CreatePollDialogState extends State<_CreatePollDialog> {
                 controller: _question,
                 autofocus: true,
                 decoration: InputDecoration(labelText: s.pollQuestion),
-                textCapitalization: TextCapitalization.sentences,
               ),
               const SizedBox(height: 12),
               for (var i = 0; i < _answers.length; i++)

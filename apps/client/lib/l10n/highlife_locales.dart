@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'messages.dart';
@@ -75,7 +76,7 @@ class HighLifeLocales extends ChangeNotifier {
     final name = switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
+      _ => 'system',
     };
     await prefs.setString(_themeKey, name);
   }

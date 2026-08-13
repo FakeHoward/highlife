@@ -6,13 +6,13 @@ export 'package:shadcn_flutter/shadcn_flutter.dart'
         IconButton,
         Tooltip,
         AlertDialog,
-        Badge,
         CircularProgressIndicator,
         VerticalDivider,
         LinearProgressIndicator,
         SelectableText,
         TextButton,
-        MaterialPageRoute;
+        MaterialPageRoute,
+        Timeline;
 
 export 'theme.dart';
 export 'widgets/hl_button.dart';

@@ -1120,7 +1120,7 @@ class _DaySeparator extends StatelessWidget {
     final target = DateTime(day.year, day.month, day.day);
     final label = target == today
         ? strings.today
-        : MaterialLocalizations.of(context).formatMediumDate(day);
+        : '${day.day}.${day.month.toString().padLeft(2, '0')}.${day.year}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Center(

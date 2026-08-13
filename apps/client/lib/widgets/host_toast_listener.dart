@@ -27,19 +27,16 @@ class _HostToastListenerState extends State<HostToastListener> {
         final messenger = ScaffoldMessenger.maybeOf(context);
         if (messenger == null) return;
         messenger.clearSnackBars();
-        messenger
-            .showSnackBar(
-              SnackBar(
-                content: Text(toast.text),
-                backgroundColor: toast.alert
-                    ? Theme.of(context).colorScheme.error
-                    : null,
-                duration: Duration(milliseconds: toast.alert ? 6000 : 3200),
-                behavior: SnackBarBehavior.floating,
-              ),
-            )
-            .closed
-            .then((_) {
+        final bar = SnackBar(
+          content: Text(toast.text),
+          backgroundColor: toast.alert
+              ? Theme.of(context).colorScheme.error
+              : null,
+          duration: Duration(milliseconds: toast.alert ? 6000 : 3200),
+          behavior: SnackBarBehavior.floating,
+        );
+        messenger.showSnackBar(bar);
+        Future<void>.delayed(bar.duration, () {
           if (mounted) session.dismissHostToast(toast.id);
         });
       });

@@ -631,6 +631,92 @@ class PopupMenuButton<T> extends StatelessWidget {
   }
 }
 
+class SimpleDialog extends StatelessWidget {
+  const SimpleDialog({super.key, this.title, this.children});
+
+  final Widget? title;
+  final List<Widget>? children;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: title,
+      content: SizedBox(
+        width: 360,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children ?? const [],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SimpleDialogOption extends StatelessWidget {
+  const SimpleDialogOption({super.key, this.onPressed, this.child});
+
+  final VoidCallback? onPressed;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class RelativeRect {
+  const RelativeRect.fromLTRB(this.left, this.top, this.right, this.bottom);
+
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+}
+
+Future<T?> showMenu<T>({
+  required BuildContext context,
+  required RelativeRect position,
+  required List<PopupMenuEntry<T>> items,
+}) {
+  return showDialog<T>(
+    context: context,
+    builder: (context) => AlertDialog(
+      content: SizedBox(
+        width: 240,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final item in items)
+              if (item is PopupMenuItem<T>)
+                GestureDetector(
+                  onTap: () => Navigator.pop(context, item.value),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
+                    child: item.child,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class CircularProgressIndicator extends StatefulWidget {
   const CircularProgressIndicator({super.key, this.color, this.strokeWidth});
 

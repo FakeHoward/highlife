@@ -251,7 +251,7 @@ class HighLifeSession extends ChangeNotifier {
       for (final target in targets) {
         final existing = target.getState(hostCapabilitiesStateEventType, self);
         if (existing == null || existing.content.isEmpty) continue;
-        final eventId = existing.eventId;
+        final eventId = existing is Event ? existing.eventId : '';
         if (eventId.isEmpty) continue;
         try {
           await target.redactEvent(eventId);
