@@ -36,6 +36,17 @@ describe("i18n messages", () => {
     expect(translate("ru", "chat.inviteTitle", { name: "QA" })).toBe(
       "Вас пригласили в QA",
     );
+    expect(translate("en", "rooms.copyAlias")).toBe("Copy address");
+    expect(translate("ru", "rooms.copyAlias")).toBe("Копировать адрес");
+    expect(translate("ru", "timeline.systemAliasSet", {
+      name: "Alice",
+      alias: "#team:example.org",
+    })).toBe("Alice установил(а) адрес комнаты #team:example.org");
+    expect(translate("en", "call.answer")).toBe("Answer");
+    expect(translate("ru", "call.hangup")).toBe("Завершить");
+    expect(translate("en", "call.dialog")).toBe("Voice call");
+    expect(translate("en", "call.fallback")).toBe("Use Element Call");
+    expect(translate("ru", "call.participants", { count: 3 })).toBe("В звонке: 3");
   });
 
   it("persists locale switches through the provider", () => {

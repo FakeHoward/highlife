@@ -33,6 +33,7 @@ interface NormalizeContext {
   roomId: string;
   ownUserId: string;
   memberNames: Record<string, string>;
+  memberAvatars?: Record<string, string>;
 }
 
 type Relation = {
@@ -142,6 +143,12 @@ function systemBody(event: RawTimelineEvent, names: Record<string, string>): str
   }
   if (event.type === "m.room.encryption") return t("timeline.systemEncryption", { name: sender });
   if (event.type === "m.room.avatar") return t("timeline.systemAvatar", { name: sender });
+  if (event.type === "m.room.canonical_alias") {
+    const alias = text(content.alias);
+    return alias
+      ? t("timeline.systemAliasSet", { name: sender, alias })
+      : t("timeline.systemAliasCleared", { name: sender });
+  }
   if (event.type === "m.space.child") return t("timeline.systemSpace", { name: sender });
   return t("timeline.systemState", { name: sender });
 }
@@ -208,6 +215,9 @@ export function normalizeTimeline(
           roomId: context.roomId,
           senderId: event.sender,
           senderName: context.memberNames[event.sender] ?? event.sender,
+          ...(context.memberAvatars?.[event.sender]
+            ? { senderAvatarUrl: context.memberAvatars[event.sender] }
+            : {}),
           timestamp: event.timestamp,
           body: t("timeline.decryptFailed"),
           kind: "notice",
@@ -226,6 +236,9 @@ export function normalizeTimeline(
           roomId: context.roomId,
           senderId: event.sender,
           senderName: context.memberNames[event.sender] ?? event.sender,
+          ...(context.memberAvatars?.[event.sender]
+            ? { senderAvatarUrl: context.memberAvatars[event.sender] }
+            : {}),
           timestamp: event.timestamp,
           body: systemBody(event, context.memberNames),
           kind: "system",
@@ -264,6 +277,9 @@ export function normalizeTimeline(
           roomId: context.roomId,
           senderId: event.sender,
           senderName: context.memberNames[event.sender] ?? event.sender,
+          ...(context.memberAvatars?.[event.sender]
+            ? { senderAvatarUrl: context.memberAvatars[event.sender] }
+            : {}),
           timestamp: event.timestamp,
           body: start?.question ?? text(event.content.body) ?? "Poll",
           kind: "poll",
@@ -299,6 +315,9 @@ export function normalizeTimeline(
         roomId: context.roomId,
         senderId: event.sender,
         senderName: context.memberNames[event.sender] ?? event.sender,
+        ...(context.memberAvatars?.[event.sender]
+          ? { senderAvatarUrl: context.memberAvatars[event.sender] }
+          : {}),
         timestamp: event.timestamp,
         body: redacted ? t("timeline.messageRemoved") : resolveDisplayBody(editedContent),
         kind: kindFor(msgtype),
@@ -313,7 +332,8 @@ export function normalizeTimeline(
       if (!redacted && formatted && !miniAppDataish(editedContent)) {
         item.formattedBody = formatted;
       }
-      const reply = originalRelation["m.in_reply_to"]?.event_id;
+      const reply = originalRelation["m.in_reply_to"]?.event_id
+        ?? (originalRelation.rel_type === "m.thread" ? originalRelation.event_id : undefined);
       if (reply) {
         item.replyToEventId = reply;
         const target = eventIndex.get(reply);
@@ -330,9 +350,6 @@ export function normalizeTimeline(
               : resolveDisplayBody(targetContent) || t("timeline.attachment"),
           };
         }
-      }
-      if (originalRelation.rel_type === "m.thread" && originalRelation.event_id) {
-        item.threadRootId = originalRelation.event_id;
       }
       const media = redacted ? undefined : mediaFor(editedContent);
       if (media) item.media = media;

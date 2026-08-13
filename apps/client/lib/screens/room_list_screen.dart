@@ -19,6 +19,13 @@ import '../widgets/sync_status_banner.dart';
 import '../widgets/verification_dialog.dart';
 import 'chat_screen.dart';
 
+class _RoomDialogValue {
+  const _RoomDialogValue(this.value, this.alias);
+
+  final String value;
+  final String alias;
+}
+
 class RoomListScreen extends StatefulWidget {
   const RoomListScreen({super.key});
 
@@ -28,9 +35,9 @@ class RoomListScreen extends StatefulWidget {
 
 class _RoomListScreenState extends State<RoomListScreen> {
   Room? _selected;
+  Room? _selectedSpace;
   String _query = '';
   KeyVerification? _shownVerification;
-  final Set<String> _expandedSpaces = {};
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +63,29 @@ class _RoomListScreenState extends State<RoomListScreen> {
 
     return AdaptiveMessengerShell(
       showMasterOnCompact: _selected == null,
+      rail: _SpacesRail(
+        spaces: spaces,
+        selectedSpaceId: _selectedSpace?.id,
+        onSelect: (space) => setState(() {
+          _selectedSpace = _selectedSpace?.id == space.id ? null : space;
+        }),
+        onCreate: () => _roomAction(session, s, 'space'),
+        createTooltip: s.createSpace,
+      ),
+      spacePanel: _selectedSpace == null
+          ? null
+          : _SpacePanel(
+              space: _selectedSpace!,
+              rooms: session.roomsInSpace(_selectedSpace!),
+              selectedRoomId: _selected?.id,
+              emptyLabel: s.noRoomsInSpace,
+              emptySubtitle: s.noMessagesYet,
+              onClose: () => setState(() => _selectedSpace = null),
+              onOpenRoom: (room) => setState(() {
+                _selected = room;
+                _selectedSpace = null;
+              }),
+            ),
       master: Scaffold(
         appBar: AppBar(
           title: Text(s.appName),
@@ -110,7 +140,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                     )
                   : ListView(
                       children: [
-                        Padding(
+                        if (!wide) Padding(
                           padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
                           child: Row(
                             children: [
@@ -135,7 +165,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                             ],
                           ),
                         ),
-                        if (spaces.isEmpty)
+                        if (!wide && spaces.isEmpty)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             child: Text(
@@ -150,24 +180,23 @@ class _RoomListScreenState extends State<RoomListScreen> {
                                   ),
                             ),
                           )
-                        else
+                        else if (!wide)
                           for (final space in spaces)
                             _SpaceTile(
                               space: space,
-                              expanded: _expandedSpaces.contains(space.id),
+                              expanded: false,
                               emptyChildLabel: s.noRoomsInSpace,
                               children: session.roomsInSpace(space),
                               onToggle: () => setState(() {
-                                if (!_expandedSpaces.add(space.id)) {
-                                  _expandedSpaces.remove(space.id);
-                                }
+                                _selectedSpace =
+                                    _selectedSpace?.id == space.id ? null : space;
                               }),
                               onOpenRoom: (room) =>
                                   setState(() => _selected = room),
                               selectedRoomId: _selected?.id,
                               emptySubtitle: s.noMessagesYet,
                             ),
-                        const Divider(height: 1),
+                        if (!wide) const Divider(height: 1),
                         if (invites.isNotEmpty) ...[
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -241,12 +270,13 @@ class _RoomListScreenState extends State<RoomListScreen> {
     }
 
     final controller = TextEditingController();
+    final aliasController = TextEditingController();
     var encrypt = session.cryptoAvailable;
     final isDm = action == 'dm';
     final isCreate = action == 'create';
     final isSpace = action == 'space';
     final colors = Theme.of(context).colorScheme;
-    final value = await showDialog<String>(
+    final result = await showDialog<_RoomDialogValue>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
@@ -282,8 +312,21 @@ class _RoomListScreenState extends State<RoomListScreen> {
                       ? s.userIdHint
                       : (isCreate || isSpace ? null : s.roomAliasHint),
                 ),
-                onSubmitted: (value) => Navigator.pop(context, value),
+                onSubmitted: (value) => Navigator.pop(
+                  context,
+                  _RoomDialogValue(value, aliasController.text),
+                ),
               ),
+              if (isCreate) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: aliasController,
+                  decoration: InputDecoration(
+                    labelText: s.optionalRoomAlias,
+                    hintText: s.roomAliasHint,
+                  ),
+                ),
+              ],
               if ((isCreate || isDm) && session.cryptoAvailable)
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -300,7 +343,10 @@ class _RoomListScreenState extends State<RoomListScreen> {
               label: Text(s.cancel),
             ),
             HlButton.primary(
-              onPressed: () => Navigator.pop(context, controller.text),
+              onPressed: () => Navigator.pop(
+                context,
+                _RoomDialogValue(controller.text, aliasController.text),
+              ),
               label: Text(
                 isSpace
                     ? s.createSpace
@@ -314,6 +360,8 @@ class _RoomListScreenState extends State<RoomListScreen> {
       ),
     );
     controller.dispose();
+    aliasController.dispose();
+    final value = result?.value;
     if (value == null || value.trim().isEmpty) return;
     try {
       if (isDm) {
@@ -334,6 +382,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
         await session.createRoom(
           value,
           enableEncryption: session.cryptoAvailable ? encrypt : false,
+          alias: result?.alias,
         );
       } else {
         await session.joinRoom(value);
@@ -359,6 +408,142 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
       );
     }
+  }
+}
+
+class _SpacesRail extends StatelessWidget {
+  const _SpacesRail({
+    required this.spaces,
+    required this.selectedSpaceId,
+    required this.onSelect,
+    required this.onCreate,
+    required this.createTooltip,
+  });
+
+  final List<Room> spaces;
+  final String? selectedSpaceId;
+  final ValueChanged<Room> onSelect;
+  final VoidCallback onCreate;
+  final String createTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                itemCount: spaces.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final space = spaces[index];
+                  final selected = selectedSpaceId == space.id;
+                  return Tooltip(
+                    message: space.getLocalizedDisplayname(),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => onSelect(space),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: selected
+                              ? Border.all(color: colors.primary, width: 2)
+                              : null,
+                        ),
+                        child: MatrixAvatar(
+                          name: space.getLocalizedDisplayname(),
+                          mxc: space.avatar,
+                          client: space.client,
+                          radius: 17,
+                          fallbackIcon: Icons.workspaces_outline,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            IconButton(
+              tooltip: createTooltip,
+              onPressed: onCreate,
+              icon: const Icon(Icons.add, size: 20),
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SpacePanel extends StatelessWidget {
+  const _SpacePanel({
+    required this.space,
+    required this.rooms,
+    required this.selectedRoomId,
+    required this.emptyLabel,
+    required this.emptySubtitle,
+    required this.onClose,
+    required this.onOpenRoom,
+  });
+
+  final Room space;
+  final List<Room> rooms;
+  final String? selectedRoomId;
+  final String emptyLabel;
+  final String emptySubtitle;
+  final VoidCallback onClose;
+  final ValueChanged<Room> onOpenRoom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          leading: MatrixAvatar(
+            name: space.getLocalizedDisplayname(),
+            mxc: space.avatar,
+            client: space.client,
+            radius: 18,
+            fallbackIcon: Icons.workspaces_outline,
+          ),
+          title: Text(
+            space.getLocalizedDisplayname(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: onClose,
+            icon: const Icon(Icons.close, size: 18),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: rooms.isEmpty
+              ? Center(child: Text(emptyLabel))
+              : ListView(
+                  children: [
+                    for (final room in rooms)
+                      _RoomTile(
+                        room: room,
+                        selected: room.id == selectedRoomId,
+                        emptySubtitle: emptySubtitle,
+                        onTap: () => onOpenRoom(room),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
   }
 }
 

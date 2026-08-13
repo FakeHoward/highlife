@@ -8,13 +8,19 @@ class AdaptiveMessengerShell extends StatelessWidget {
     super.key,
     required this.master,
     required this.detail,
+    this.rail,
+    this.spacePanel,
     this.showMasterOnCompact = false,
   });
 
   static const breakpoint = 840.0;
+  static const railWidth = 52.0;
+  static const masterWidth = 292.0;
 
   final Widget master;
   final Widget detail;
+  final Widget? rail;
+  final Widget? spacePanel;
   final bool showMasterOnCompact;
 
   @override
@@ -22,11 +28,58 @@ class AdaptiveMessengerShell extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < breakpoint) {
-          return showMasterOnCompact ? master : detail;
+          if (!showMasterOnCompact) return detail;
+          return Row(
+            children: [
+              if (rail != null)
+                SizedBox(
+                  key: const ValueKey('spaces-rail'),
+                  width: railWidth,
+                  child: rail,
+                ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: master),
+                    if (spacePanel != null)
+                      Positioned.fill(
+                        child: Material(
+                          elevation: 8,
+                          color: Theme.of(context).colorScheme.surface,
+                          child: spacePanel,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
         }
         return Row(
           children: [
-            SizedBox(width: 344, child: master),
+            if (rail != null)
+              SizedBox(
+                key: const ValueKey('spaces-rail'),
+                width: railWidth,
+                child: rail,
+              ),
+            SizedBox(
+              key: const ValueKey('rooms-master'),
+              width: masterWidth,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: master),
+                  if (spacePanel != null)
+                    Positioned.fill(
+                      child: Material(
+                        elevation: 8,
+                        color: Theme.of(context).colorScheme.surface,
+                        child: spacePanel,
+                      ),
+                    ),
+                ],
+              ),
+            ),
             const VerticalDivider(width: 1),
             Expanded(child: detail),
           ],

@@ -157,6 +157,23 @@ describe("normalizeTimeline", () => {
     );
   });
 
+  it("includes the sender avatar URL in normalized timeline items", () => {
+    const events = [{
+      eventId: "$avatar",
+      type: "m.room.message",
+      sender: "@bot:example.org",
+      timestamp: 1,
+      content: { msgtype: "m.text", body: "Hello" },
+    }];
+
+    expect(normalizeTimeline(events, {
+      ...base,
+      memberAvatars: { "@bot:example.org": "https://example.org/bot.png" },
+    })[0]).toEqual(expect.objectContaining({
+      senderAvatarUrl: "https://example.org/bot.png",
+    }));
+  });
+
   it("ignores https MiniApp launch URLs as media attachments", () => {
     const events = [
       {
@@ -204,8 +221,15 @@ describe("normalizeTimeline", () => {
     expect(normalizeTimeline(events, base)[0]?.body).toBe("Published RSVP: Event RSVP");
   });
 
-  it("normalizes media and thread metadata", () => {
+  it("treats foreign thread events as ordinary timeline replies", () => {
     const events = [
+      {
+        eventId: "$root",
+        type: "m.room.message",
+        sender: "@bot:example.org",
+        timestamp: 0,
+        content: { msgtype: "m.text", body: "Root message" },
+      },
       {
         eventId: "$image",
         type: "m.room.message",
@@ -226,10 +250,35 @@ describe("normalizeTimeline", () => {
     ];
 
     expect(normalizeTimeline(events, base)[0]).toEqual(
+      expect.objectContaining({ eventId: "$root" }),
+    );
+    expect(normalizeTimeline(events, base)[1]).toEqual(
       expect.objectContaining({
         kind: "image",
         media: expect.objectContaining({ mxcUrl: "mxc://example.org/media" }),
-        threadRootId: "$root",
+        replyToEventId: "$root",
+        replyPreview: {
+          senderId: "@bot:example.org",
+          senderName: "HighLife Bot",
+          body: "Root message",
+        },
+      }),
+    );
+  });
+
+  it("describes canonical alias changes with dedicated timeline text", () => {
+    const events = [{
+      eventId: "$alias",
+      type: "m.room.canonical_alias",
+      sender: "@bot:example.org",
+      timestamp: 1,
+      content: { alias: "#highlife:example.org" },
+    }];
+
+    expect(normalizeTimeline(events, base)[0]).toEqual(
+      expect.objectContaining({
+        kind: "system",
+        body: "HighLife Bot set the room address to #highlife:example.org",
       }),
     );
   });

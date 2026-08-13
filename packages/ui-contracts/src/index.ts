@@ -101,6 +101,7 @@ export interface TimelineItem {
   roomId: string;
   senderId: string;
   senderName: string;
+  senderAvatarUrl?: string;
   timestamp: number;
   body: string;
   formattedBody?: string;
@@ -114,7 +115,6 @@ export interface TimelineItem {
     senderName: string;
     body: string;
   };
-  threadRootId?: string;
   media?: MediaDescriptor;
   poll?: PollDescriptor;
   deliveryStatus?: DeliveryStatus;
@@ -127,6 +127,7 @@ export interface RoomListItem {
   name: string;
   topic?: string;
   avatarUrl?: string;
+  canonicalAlias?: string;
   lastMessage?: string;
   unread: number;
   highlight: number;

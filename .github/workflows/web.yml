@@ -40,3 +40,4 @@ jobs:
           VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
           VITE_MINIAPP_ALLOWED_ORIGINS: https://testhighlife.strangled.net
           VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net
+          VITE_LIVEKIT_JWT_URL: https://rtc.testhighlife.strangled.net/livekit/jwt

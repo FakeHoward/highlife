@@ -1,6 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:matrix/matrix.dart';
 
+const _avatarPalette = <Color>[
+  Color(0xFF2A9D8F),
+  Color(0xFFE76F51),
+  Color(0xFF457B9D),
+  Color(0xFF8A5A44),
+  Color(0xFF6D597A),
+  Color(0xFF3A7D44),
+  Color(0xFFC44536),
+  Color(0xFF577590),
+];
+
+Color deterministicAvatarColor(String identity) {
+  var hash = 0;
+  for (final unit in identity.trim().toLowerCase().codeUnits) {
+    hash = ((hash * 31) + unit) & 0x7fffffff;
+  }
+  return _avatarPalette[hash % _avatarPalette.length];
+}
+
 /// Compact Matrix room / user avatar with letter fallback.
 class MatrixAvatar extends StatefulWidget {
   const MatrixAvatar({
@@ -82,8 +101,8 @@ class _MatrixAvatarState extends State<MatrixAvatar> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final bg = widget.backgroundColor ?? colors.primaryContainer;
-    final fg = widget.foregroundColor ?? colors.onPrimaryContainer;
+    final bg = widget.backgroundColor ?? deterministicAvatarColor(widget.name);
+    final fg = widget.foregroundColor ?? colors.surface;
     final future = _httpUriFuture;
     if (future == null) {
       return _fallback(bg, fg);

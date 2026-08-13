@@ -48,6 +48,20 @@ import {
   formatMessagePreview,
 } from "../protocol/aiomatrix";
 import { decryptAttachment, encryptAttachment } from "./encryptedMedia";
+import { buildElementCallUrl } from "./callUrl";
+import {
+  DirectCallController,
+  type DirectCallClient,
+  type DirectCallSnapshot,
+} from "./directCall";
+import { BrowserLivekitMedia } from "./livekitMedia";
+import {
+  DEFAULT_LIVEKIT_JWT_URL,
+  MatrixRtcController,
+  createBrowserMatrixRtcClient,
+  fetchLivekitJson,
+  type MatrixRtcSnapshot,
+} from "./matrixRtc";
 import {
   buildPollEndContent,
   buildPollResponseContent,
@@ -116,6 +130,7 @@ export interface SasChallenge {
 export interface RoomMemberInfo {
   userId: string;
   displayName: string;
+  avatarUrl?: string;
   membership: string;
   powerLevel: number;
 }
@@ -146,11 +161,70 @@ let toastSeq = 0;
 let hostCapsAdvertised = false;
 const listeners = new Set<() => void>();
 const historyStates = new Map<string, HistoryState>();
-const threadTimelines = new Map<string, Awaited<ReturnType<MatrixClient["getThreadTimeline"]>>>();
 const secretStorageKeys = new Map<string, Uint8Array<ArrayBuffer>>();
 let cachedSecretStorageKey: { keyId: string; privateKey: Uint8Array<ArrayBuffer> } | null = null;
 let pendingIncomingVerification: VerificationRequest | null = null;
 const verificationListeners = new Set<() => void>();
+let directCallController: DirectCallController | null = null;
+let detachDirectCall: (() => void) | null = null;
+const directCallListeners = new Set<() => void>();
+const idleDirectCall: DirectCallSnapshot = {
+  call: null,
+  roomId: null,
+  direction: null,
+  phase: "idle",
+  peerName: "",
+  peerUserId: null,
+  microphoneMuted: false,
+  remoteStream: null,
+  localStream: null,
+  error: null,
+};
+let matrixRtcController: MatrixRtcController | null = null;
+let detachMatrixRtc: (() => void) | null = null;
+const matrixRtcListeners = new Set<() => void>();
+const idleMatrixRtc: MatrixRtcSnapshot = {
+  roomId: null,
+  phase: "idle",
+  participantCount: 0,
+  microphoneMuted: false,
+  remoteStream: null,
+  error: null,
+  fallbackAvailable: false,
+};
+
+function disposeCallControllers(): void {
+  detachDirectCall?.();
+  detachDirectCall = null;
+  directCallController?.dispose();
+  directCallController = null;
+  detachMatrixRtc?.();
+  detachMatrixRtc = null;
+  matrixRtcController?.dispose();
+  matrixRtcController = null;
+}
+
+function livekitFallbackUrl(): string {
+  return (import.meta.env.VITE_LIVEKIT_JWT_URL as string | undefined)?.trim() || DEFAULT_LIVEKIT_JWT_URL;
+}
+
+function attachCallControllers(active: MatrixClient): void {
+  directCallController = new DirectCallController(active as unknown as DirectCallClient);
+  detachDirectCall = directCallController.subscribe(() => {
+    for (const listener of directCallListeners) listener();
+  });
+  matrixRtcController = new MatrixRtcController(
+    createBrowserMatrixRtcClient(active),
+    new BrowserLivekitMedia(),
+    fetchLivekitJson,
+    livekitFallbackUrl(),
+  );
+  detachMatrixRtc = matrixRtcController.subscribe(() => {
+    for (const listener of matrixRtcListeners) listener();
+  });
+  for (const listener of directCallListeners) listener();
+  for (const listener of matrixRtcListeners) listener();
+}
 
 /**
  * Zero and drop in-memory secret-storage / recovery key material.
@@ -310,6 +384,7 @@ function attachIncomingVerification(active: MatrixClient): void {
 }
 
 async function start(session: StoredSession): Promise<void> {
+  disposeCallControllers();
   if (client) client.stopClient();
   pendingIncomingVerification = null;
   client = createClient({
@@ -321,6 +396,7 @@ async function start(session: StoredSession): Promise<void> {
     verificationMethods: ["m.sas.v1"],
     cryptoCallbacks,
   });
+  attachCallControllers(client);
   publish({ connection: navigator.onLine ? "syncing" : "offline", error: null, toast: null });
   hostCapsAdvertised = false;
   client.on(ClientEvent.Sync, (state) => {
@@ -386,6 +462,7 @@ export async function restoreSession(): Promise<boolean> {
     return true;
   } catch (error) {
     await clearSession();
+    disposeCallControllers();
     client = null;
     publish({ connection: "error", error: messageOf(error) });
     return false;
@@ -417,6 +494,7 @@ async function establishSession(session: StoredSession): Promise<void> {
     await start(session);
   } catch (error) {
     client?.stopClient();
+    disposeCallControllers();
     client = null;
     await clearSession();
     publish({ connection: "error", error: messageOf(error) });
@@ -549,6 +627,9 @@ export async function logout(): Promise<void> {
       active.stopClient();
     }
   }
+  disposeCallControllers();
+  for (const listener of directCallListeners) listener();
+  for (const listener of matrixRtcListeners) listener();
   client = null;
   pendingIncomingVerification = null;
   clearRecoveryKeyCache();
@@ -597,6 +678,11 @@ export function listRooms(query = ""): RoomListItem[] {
         name,
         topic: room.currentState.getStateEvents(EventType.RoomTopic, "")?.getContent().topic as string | undefined,
         avatarUrl: room.getAvatarUrl(active.baseUrl, 72, 72, "crop") ?? undefined,
+        canonicalAlias: (
+          room.currentState
+            .getStateEvents(EventType.RoomCanonicalAlias, "")
+            ?.getContent().alias as string | undefined
+        ) ?? undefined,
         lastMessage: last ? formatMessagePreview(lastContent) || undefined : undefined,
         unread: room.getUnreadNotificationCount(NotificationCountType.Total),
         highlight: room.getUnreadNotificationCount(NotificationCountType.Highlight),
@@ -691,12 +777,18 @@ export function roomTimeline(roomId: string): TimelineItem[] {
   const names = Object.fromEntries(
     room.getJoinedMembers().map((member) => [member.userId, member.name || member.userId]),
   );
+  const avatars: Record<string, string> = {};
+  for (const member of room.getJoinedMembers()) {
+    const avatar = member.getAvatarUrl(active.baseUrl, 64, 64, "crop", false, false);
+    if (avatar) avatars[member.userId] = avatar;
+  }
   return normalizeTimeline(
     room.getLiveTimeline().getEvents().map((event) => rawEvent(event, room, ownUserId)),
     {
       roomId,
       ownUserId,
       memberNames: names,
+      memberAvatars: avatars,
     },
   );
 }
@@ -731,57 +823,16 @@ export async function paginateRoomHistory(roomId: string): Promise<void> {
   }
 }
 
-export async function loadThread(roomId: string, rootEventId: string): Promise<TimelineItem[]> {
-  const active = requiredClient();
-  const room = active.getRoom(roomId);
-  if (!room) throw new Error("Room is not available");
-  const key = `${roomId}|${rootEventId}`;
-  let timeline = threadTimelines.get(key);
-  if (!timeline) {
-    timeline = await active.getThreadTimeline(room.getUnfilteredTimelineSet(), rootEventId);
-    threadTimelines.set(key, timeline);
-  }
-  const thread = room.getThread(rootEventId);
-  const events = thread?.events ?? timeline?.getEvents() ?? [];
-  const root = room.findEventById(rootEventId);
-  const complete = root && !events.some((event) => event.getId() === rootEventId)
-    ? [root, ...events]
-    : events;
-  const names = Object.fromEntries(
-    room.getJoinedMembers().map((member) => [member.userId, member.name || member.userId]),
-  );
-  const ownUserId = active.getUserId() ?? "";
-  return normalizeTimeline(complete.map((event) => rawEvent(event, room, ownUserId)), {
-    roomId,
-    ownUserId,
-    memberNames: names,
-  });
-}
-
-export async function paginateThread(roomId: string, rootEventId: string): Promise<boolean> {
-  const active = requiredClient();
-  const key = `${roomId}|${rootEventId}`;
-  const timeline = threadTimelines.get(key);
-  if (!timeline) {
-    await loadThread(roomId, rootEventId);
-  }
-  const current = threadTimelines.get(key);
-  if (!current) return false;
-  return active.paginateEventTimeline(current, { backwards: true, limit: 30 });
-}
-
 export async function sendMessage(
   roomId: string,
   body: string,
-  options: { editEventId?: string; replyEventId?: string; threadRootId?: string } = {},
+  options: { editEventId?: string; replyEventId?: string } = {},
 ): Promise<void> {
   const content: Record<string, unknown> = { msgtype: "m.text", body };
   if (options.editEventId) {
     content.body = `* ${body}`;
     content["m.new_content"] = { msgtype: "m.text", body };
     content["m.relates_to"] = { rel_type: "m.replace", event_id: options.editEventId };
-  } else if (options.threadRootId) {
-    content["m.relates_to"] = { rel_type: "m.thread", event_id: options.threadRootId };
   } else if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
   }
@@ -791,7 +842,7 @@ export async function sendMessage(
 export async function uploadFile(
   roomId: string,
   file: File,
-  options: { replyEventId?: string; threadRootId?: string; onProgress?: (ratio: number) => void } = {},
+  options: { replyEventId?: string; onProgress?: (ratio: number) => void } = {},
 ): Promise<void> {
   const active = requiredClient();
   const room = active.getRoom(roomId);
@@ -840,9 +891,7 @@ export async function uploadFile(
     };
   }
 
-  if (options.threadRootId) {
-    content["m.relates_to"] = { rel_type: "m.thread", event_id: options.threadRootId };
-  } else if (options.replyEventId) {
+  if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
   }
   options.onProgress?.(0.98);
@@ -937,6 +986,7 @@ export function getTypingUsers(roomId: string): string[] {
 export async function createRoom(input: {
   name: string;
   topic?: string;
+  alias?: string;
   invite?: string[];
   encrypted?: boolean;
   isSpace?: boolean;
@@ -944,6 +994,7 @@ export async function createRoom(input: {
   const response = await requiredClient().createRoom({
     name: input.name,
     topic: input.topic,
+    room_alias_name: input.alias?.trim().replace(/^#/, "").split(":")[0] || undefined,
     invite: input.invite,
     preset: Preset.PrivateChat,
     room_version: input.isSpace ? "11" : undefined,
@@ -1058,13 +1109,15 @@ export async function invite(roomId: string, userId: string): Promise<void> {
 }
 
 export function getJoinedMembers(roomId: string): RoomMemberInfo[] {
-  const room = client?.getRoom(roomId);
-  if (!room) return [];
+  const active = client;
+  const room = active?.getRoom(roomId);
+  if (!active || !room) return [];
   return room
     .getJoinedMembers()
     .map((member) => ({
       userId: member.userId,
       displayName: member.name || member.userId,
+      avatarUrl: member.getAvatarUrl(active.baseUrl, 64, 64, "crop", false, false) ?? undefined,
       membership: member.membership ?? "join",
       powerLevel: member.powerLevel,
     }))
@@ -1097,6 +1150,14 @@ export function getOwnDisplayName(): string {
   return active.getUser(userId)?.displayName ?? "";
 }
 
+export function getOwnAvatarUrl(): string | undefined {
+  const active = requiredClient();
+  const userId = active.getUserId();
+  if (!userId) return undefined;
+  const mxc = active.getUser(userId)?.avatarUrl;
+  return mxc ? active.mxcUrlToHttp(mxc, 96, 96, "crop", true) ?? undefined : undefined;
+}
+
 export async function updateProfile(displayName: string, avatar?: File): Promise<void> {
   const active = requiredClient();
   await active.setDisplayName(displayName);
@@ -1104,6 +1165,74 @@ export async function updateProfile(displayName: string, avatar?: File): Promise
     const result = await active.uploadContent(avatar, { name: avatar.name, type: avatar.type });
     await active.setAvatarUrl(result.content_uri);
   }
+  publish();
+}
+
+export async function setRoomAvatar(roomId: string, avatar: File): Promise<void> {
+  const active = requiredClient();
+  const result = await active.uploadContent(avatar, { name: avatar.name, type: avatar.type });
+  await active.sendStateEvent(
+    roomId,
+    EventType.RoomAvatar,
+    { url: result.content_uri } as never,
+    "",
+  );
+  publish();
+}
+
+export function getRoomAliases(roomId: string): {
+  canonicalAlias: string | null;
+  aliases: string[];
+} {
+  const room = client?.getRoom(roomId);
+  const content = room?.currentState
+    .getStateEvents(EventType.RoomCanonicalAlias, "")
+    ?.getContent() as { alias?: unknown; alt_aliases?: unknown } | undefined;
+  const canonicalAlias = typeof content?.alias === "string" ? content.alias : null;
+  const alternatives = Array.isArray(content?.alt_aliases)
+    ? content.alt_aliases.filter((alias): alias is string => typeof alias === "string")
+    : [];
+  return {
+    canonicalAlias,
+    aliases: [...new Set([...(canonicalAlias ? [canonicalAlias] : []), ...alternatives])],
+  };
+}
+
+export async function setCanonicalAlias(roomId: string, alias: string): Promise<void> {
+  const active = requiredClient();
+  const normalized = alias.trim();
+  if (!/^#[^:\s]+:[^:\s]+$/.test(normalized)) {
+    throw new Error("Use a full room address like #room:server");
+  }
+  const current = getRoomAliases(roomId);
+  if (!current.aliases.includes(normalized)) await active.createAlias(normalized, roomId);
+  await active.sendStateEvent(
+    roomId,
+    EventType.RoomCanonicalAlias,
+    {
+      alias: normalized,
+      alt_aliases: current.aliases.filter((item) => item !== normalized),
+    } as never,
+    "",
+  );
+  publish();
+}
+
+export async function removeRoomAlias(roomId: string, alias: string): Promise<void> {
+  const active = requiredClient();
+  const current = getRoomAliases(roomId);
+  await active.deleteAlias(alias);
+  await active.sendStateEvent(
+    roomId,
+    EventType.RoomCanonicalAlias,
+    {
+      ...(current.canonicalAlias && current.canonicalAlias !== alias
+        ? { alias: current.canonicalAlias }
+        : {}),
+      alt_aliases: current.aliases.filter((item) => item !== alias && item !== current.canonicalAlias),
+    } as never,
+    "",
+  );
   publish();
 }
 
@@ -1432,33 +1561,112 @@ export async function requestDeviceVerification(
 export function getCallCapability(roomId: string): {
   available: boolean;
   active: boolean;
+  groupActive: boolean;
   reason?: string;
 } {
   const active = client;
   const room = active?.getRoom(roomId);
-  if (!active || !room) return { available: false, active: false, reason: "Room is not available" };
-  const callUrl = import.meta.env.VITE_ELEMENT_CALL_URL as string | undefined;
-  let configured = false;
-  try {
-    const protocol = new URL(callUrl ?? "").protocol;
-    configured = protocol === "https:" || (import.meta.env.DEV && protocol === "http:");
-  } catch {
-    configured = false;
+  if (!active || !room) {
+    return { available: false, active: false, groupActive: false, reason: "Room is not available" };
   }
+  const mediaAvailable =
+    typeof RTCPeerConnection !== "undefined"
+    && typeof navigator.mediaDevices?.getUserMedia === "function";
   // matrix-js-sdk caches an empty MatrixRTC session per room after Room events;
   // Boolean(session) alone is always true. Require live memberships.
   const session = active.matrixRTC.getActiveRoomSession(room);
   const memberships = session?.memberships;
-  const callActive = Boolean(memberships && memberships.length > 0);
+  const direct = directCallController?.snapshot;
+  const groupActive = Boolean(memberships && memberships.length > 0);
+  const callActive =
+    groupActive
+    || Boolean(direct?.call && direct.roomId === roomId);
   return {
-    available: window.isSecureContext && configured,
+    available: window.isSecureContext && mediaAvailable,
     active: callActive,
+    groupActive,
     ...(!window.isSecureContext
       ? { reason: "Calls require a secure HTTPS context" }
-      : !configured
-        ? { reason: "No trusted Element Call deployment is configured" }
+      : !mediaAvailable
+        ? { reason: "This browser does not expose WebRTC media devices" }
         : {}),
   };
+}
+
+export function subscribeMatrixRtc(listener: () => void): () => void {
+  matrixRtcListeners.add(listener);
+  return () => matrixRtcListeners.delete(listener);
+}
+
+export function getMatrixRtcSnapshot(): MatrixRtcSnapshot {
+  return matrixRtcController?.snapshot ?? idleMatrixRtc;
+}
+
+export function startMatrixRtc(roomId: string): Promise<void> {
+  const capability = getCallCapability(roomId);
+  if (!capability.available) {
+    return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
+  }
+  if (!matrixRtcController) return Promise.reject(new Error("Sign in to call"));
+  return matrixRtcController.join(roomId);
+}
+
+export function leaveMatrixRtc(): Promise<void> {
+  return matrixRtcController?.leave() ?? Promise.resolve();
+}
+
+export function toggleMatrixRtcMicrophone(): Promise<void> {
+  if (!matrixRtcController) return Promise.reject(new Error("No active call"));
+  return matrixRtcController.toggleMicrophone();
+}
+
+export function getGroupCallUrl(roomId: string): string | null {
+  return buildElementCallUrl({
+    baseUrl: (import.meta.env.VITE_ELEMENT_CALL_URL as string | undefined)?.trim(),
+    parentUrl: (import.meta.env.VITE_ELEMENT_CALL_PARENT_URL as string | undefined)?.trim(),
+    roomId,
+    identity: getSessionIdentity(),
+    allowHttpInDev: Boolean(import.meta.env.DEV),
+    windowOrigin: typeof window === "undefined" ? undefined : window.location.origin,
+  });
+}
+
+export function subscribeDirectCall(listener: () => void): () => void {
+  directCallListeners.add(listener);
+  return () => directCallListeners.delete(listener);
+}
+
+export function getDirectCallSnapshot(): DirectCallSnapshot {
+  return directCallController?.snapshot ?? idleDirectCall;
+}
+
+export function startDirectCall(roomId: string): Promise<void> {
+  const capability = getCallCapability(roomId);
+  if (!capability.available) {
+    return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
+  }
+  if (!directCallController) return Promise.reject(new Error("Sign in to call"));
+  return directCallController.start(roomId);
+}
+
+export function acceptDirectCall(): Promise<void> {
+  if (!directCallController) return Promise.reject(new Error("No incoming call"));
+  return directCallController.accept();
+}
+
+export function rejectDirectCall(): void {
+  directCallController?.reject();
+}
+
+export function hangupDirectCall(): void {
+  if (!directCallController) return;
+  if (directCallController.snapshot.call) directCallController.hangup();
+  else directCallController.clearEnded();
+}
+
+export function toggleDirectCallMicrophone(): Promise<void> {
+  if (!directCallController) return Promise.reject(new Error("No active call"));
+  return directCallController.toggleMicrophone();
 }
 
 export function getSessionIdentity(): {

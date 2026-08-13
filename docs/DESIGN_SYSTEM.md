@@ -30,8 +30,9 @@ implementations differ.
 | danger | `#C83E4D` | `#F06A76` |
 | divider | `#D9E0E5` | `#2B3740` |
 
-- Body typography: a highly legible system sans stack. Avoid branding the
-  product with a generic display-font hero inside the app shell.
+- Typography uses the platform system sans stack everywhere, including login,
+  headings, empty states, and utility surfaces. Do not load remote or display
+  fonts.
 - Utility and event IDs: a platform monospace face with tabular figures.
 - Space scale: 4, 8, 12, 16, 24, 32.
 - Corner scale: 6 for controls, 10 for panels, 14 for message bubbles. Message
@@ -44,7 +45,9 @@ implementations differ.
 - Compact: room list and conversation are separate routes with an explicit
   back action.
 - Medium: room list and conversation appear side by side.
-- Expanded: an optional thread or room-info panel may join the two-pane shell.
+- Expanded: a 52-pixel space rail, room sidebar, and conversation form the
+  desktop shell. Selecting a space may reveal a compact, dismissible context
+  panel above the room list; spaces never become a vertical sidebar section.
 - Breakpoints are based on available width, never device labels.
 - Conversation text is constrained for readability; background space belongs
   outside the timeline, not inside oversized cards.
@@ -55,8 +58,9 @@ implementations differ.
   minutes and no system/date boundary intervenes.
 - Show sender identity once per group. Keep timestamps and delivery state
   available without adding a full metadata row to every bubble.
-- Replies, edits, reactions, threads, encryption state, media progress, and
-  send failures are first-class message states.
+- Replies, edits, reactions, encryption state, media progress, and send
+  failures are first-class message states. HighLife does not create thread UI;
+  thread relations received from other clients appear as ordinary replies.
 - Inline keyboards align with their parent bubble and use rectangular controls
   with restrained radii. Primary and destructive styles are semantic, not
   decorative.
@@ -73,3 +77,16 @@ implementations differ.
   how to retry.
 - Avoid persistent blur, decorative gradients, glass cards, excessive pills,
   and motion that does not communicate a state change.
+
+## Identity, addresses, and composition
+
+- Use one reusable circular avatar component for people, rooms, and spaces.
+  Missing images use initials plus a deterministic color derived from the
+  Matrix ID, so the same identity keeps the same fallback across surfaces.
+- Room details show the canonical `#alias:server` address before the opaque
+  room ID, with explicit copy and management actions. Alias state changes use
+  dedicated timeline language.
+- The composer is one fixed row: 44-pixel attachment control, flexible
+  one-line textarea, and 44-pixel send control. Poll creation belongs in the
+  room menu, not in the composer or slash-command suggestions.
+- Login is a compact, centered, single-column form with a square `H` mark.

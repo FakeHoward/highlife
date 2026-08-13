@@ -82,6 +82,7 @@ class AppStrings {
   String get ssoOpenFailed => _('ssoOpenFailed');
   String get ssoTokenRequired => _('ssoTokenRequired');
   String get displayName => _('displayName');
+  String get changeAvatar => _('changeAvatar');
   String get authForbidden => _('auth.forbidden');
   String get authUserInUse => _('auth.userInUse');
   String get authInvalidUsername => _('auth.invalidUsername');
@@ -147,6 +148,7 @@ class AppStrings {
   String get searchEmpty => _('searchEmpty');
   String get searchFailed => _('searchFailed');
   String get roomName => _('roomName');
+  String get optionalRoomAlias => _('optionalRoomAlias');
   String get roomIdOrAlias => _('roomIdOrAlias');
   String get create => _('create');
   String get join => _('join');
@@ -193,6 +195,19 @@ class AppStrings {
   String get callsUnavailable => _('callsUnavailable');
   String get callNeedsUrl => _('callNeedsUrl');
   String get couldNotOpenCall => _('couldNotOpenCall');
+  String get callIncoming => _('callIncoming');
+  String get callConnecting => _('callConnecting');
+  String get callConnected => _('callConnected');
+  String get callEnded => _('callEnded');
+  String get callFailed => _('callFailed');
+  String get callUnknownPeer => _('callUnknownPeer');
+  String get callAnswer => _('callAnswer');
+  String get callReject => _('callReject');
+  String get callMute => _('callMute');
+  String get callUnmute => _('callUnmute');
+  String get callHangup => _('callHangup');
+  String get callFallback => _('callFallback');
+  String get callParticipants => _('callParticipants');
   String get devicesVerification => _('devicesVerification');
   String get keyBackup => _('keyBackup');
   String get devicesTitle => _('devicesTitle');
@@ -223,6 +238,9 @@ class AppStrings {
   String get members => _('members');
   String get roomDetails => _('roomDetails');
   String get roomIdLabel => _('roomIdLabel');
+  String get roomAliasLabel => _('roomAliasLabel');
+  String get editRoomAlias => _('editRoomAlias');
+  String get roomAvatar => _('roomAvatar');
   String get encryptionLabel => _('encryptionLabel');
   String get encryptionOn => _('encryptionOn');
   String get encryptionOff => _('encryptionOff');
@@ -242,9 +260,6 @@ class AppStrings {
   String get editingMessage => _('editingMessage');
   String replyingTo(String userId) =>
       _('replyingTo').replaceAll('{user}', userId);
-  String get replyInThread => _('replyInThread');
-  String get threadReply => _('threadReply');
-  String get closeThread => _('closeThread');
   String get typing => _('typing');
   String typingUsers(String users) =>
       _('typingUsers').replaceAll('{users}', users);
@@ -261,6 +276,7 @@ class AppStrings {
   String get miniApp => _('miniApp');
   String get edited => _('edited');
   String get attachment => _('attachment');
+  String get roomUpdate => _('roomUpdate');
 
   // Calls surface
   String get callTitle => _('callTitle');
@@ -718,6 +734,52 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.en: 'Could not open Element Call',
     AppLocale.ru: 'Не удалось открыть Element Call',
   },
+  'callIncoming': {
+    AppLocale.en: 'Incoming call',
+    AppLocale.ru: 'Входящий звонок',
+  },
+  'callConnecting': {
+    AppLocale.en: 'Connecting',
+    AppLocale.ru: 'Подключение',
+  },
+  'callConnected': {
+    AppLocale.en: 'Connected',
+    AppLocale.ru: 'Соединение установлено',
+  },
+  'callEnded': {
+    AppLocale.en: 'Call ended',
+    AppLocale.ru: 'Звонок завершён',
+  },
+  'callFailed': {
+    AppLocale.en: 'Call failed',
+    AppLocale.ru: 'Ошибка звонка',
+  },
+  'callUnknownPeer': {
+    AppLocale.en: 'Matrix call',
+    AppLocale.ru: 'Matrix-звонок',
+  },
+  'callAnswer': {AppLocale.en: 'Answer', AppLocale.ru: 'Ответить'},
+  'callReject': {AppLocale.en: 'Reject', AppLocale.ru: 'Отклонить'},
+  'callMute': {
+    AppLocale.en: 'Mute',
+    AppLocale.ru: 'Выключить микрофон',
+  },
+  'callUnmute': {
+    AppLocale.en: 'Unmute',
+    AppLocale.ru: 'Включить микрофон',
+  },
+  'callHangup': {
+    AppLocale.en: 'Hang up',
+    AppLocale.ru: 'Завершить',
+  },
+  'callFallback': {
+    AppLocale.en: 'Use Element Call',
+    AppLocale.ru: 'Открыть Element Call',
+  },
+  'callParticipants': {
+    AppLocale.en: '{count} in call',
+    AppLocale.ru: 'В звонке: {count}',
+  },
   'devicesVerification': {
     AppLocale.en: 'Devices & verification',
     AppLocale.ru: 'Устройства и проверка',
@@ -798,6 +860,14 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Крипто-идентичность ещё не создана',
   },
   'copy': {AppLocale.en: 'Copy', AppLocale.ru: 'Копировать'},
+  'changeAvatar': {
+    AppLocale.en: 'Change avatar',
+    AppLocale.ru: 'Изменить аватар',
+  },
+  'optionalRoomAlias': {
+    AppLocale.en: 'Address (optional)',
+    AppLocale.ru: 'Адрес (необязательно)',
+  },
   'inviteMember': {
     AppLocale.en: 'Invite member',
     AppLocale.ru: 'Пригласить участника',
@@ -808,6 +878,18 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Сведения',
   },
   'roomIdLabel': {AppLocale.en: 'Room ID', AppLocale.ru: 'ID комнаты'},
+  'roomAliasLabel': {
+    AppLocale.en: 'Canonical address',
+    AppLocale.ru: 'Основной адрес',
+  },
+  'editRoomAlias': {
+    AppLocale.en: 'Edit canonical address',
+    AppLocale.ru: 'Изменить основной адрес',
+  },
+  'roomAvatar': {
+    AppLocale.en: 'Room avatar',
+    AppLocale.ru: 'Аватар комнаты',
+  },
   'encryptionLabel': {
     AppLocale.en: 'Encryption',
     AppLocale.ru: 'Шифрование',
@@ -853,12 +935,6 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.en: 'Replying to {user}',
     AppLocale.ru: 'Ответ {user}',
   },
-  'replyInThread': {
-    AppLocale.en: 'Reply in thread',
-    AppLocale.ru: 'Ответить в теме',
-  },
-  'threadReply': {AppLocale.en: 'Thread reply', AppLocale.ru: 'Ответ в теме'},
-  'closeThread': {AppLocale.en: 'Close thread', AppLocale.ru: 'Закрыть тему'},
   'typing': {AppLocale.en: 'typing…', AppLocale.ru: 'печатает…'},
   'typingUsers': {
     AppLocale.en: '{users} typing…',
@@ -886,6 +962,10 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'miniApp': {AppLocale.en: 'MiniApp', AppLocale.ru: 'Мини-приложение'},
   'edited': {AppLocale.en: 'edited', AppLocale.ru: 'изм.'},
   'attachment': {AppLocale.en: 'Attachment', AppLocale.ru: 'Вложение'},
+  'roomUpdate': {
+    AppLocale.en: 'Room update',
+    AppLocale.ru: 'Изменение комнаты',
+  },
   'callTitle': {AppLocale.en: 'Call', AppLocale.ru: 'Звонок'},
   'leaveCall': {AppLocale.en: 'Leave call', AppLocale.ru: 'Выйти из звонка'},
   'openExternally': {

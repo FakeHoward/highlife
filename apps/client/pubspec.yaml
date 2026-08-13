@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   matrix: ^9.0.0
+  flutter_webrtc: ^1.6.0
+  livekit_client: ^2.5.3
   flutter_vodozemac: ^0.6.0
   file_picker: ^11.0.3
   provider: ^6.1.5

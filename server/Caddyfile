@@ -15,7 +15,7 @@ testhighlife.strangled.net {
 		X-Frame-Options "SAMEORIGIN"
 		# Vite SPA may emit small inline bootstrapping; keep script-src unsafe-inline until nonces land.
 		# Residual: with unsafe-inline, XSS can still read in-memory recovery keys while cached (tab lifetime).
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		Permissions-Policy "camera=(self \"https://call.testhighlife.strangled.net\"), microphone=(self \"https://call.testhighlife.strangled.net\"), display-capture=(self \"https://call.testhighlife.strangled.net\"), fullscreen=(self \"https://call.testhighlife.strangled.net\"), geolocation=()"
 	}
 	encode zstd gzip
@@ -101,6 +101,13 @@ rtc.testhighlife.strangled.net {
 	}
 
 	handle /livekit/jwt* {
+		header Access-Control-Allow-Origin *
+		header Access-Control-Allow-Methods "POST, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type"
+		@jwt_options method OPTIONS
+		handle @jwt_options {
+			respond "" 204
+		}
 		uri strip_prefix /livekit/jwt
 		reverse_proxy lk-jwt-service:8080
 	}

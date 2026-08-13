@@ -8,29 +8,33 @@ import {
   getCallCapability,
   getIncomingVerification,
   getTypingUsers,
+  leaveMatrixRtc,
   listSpaces,
   markRead,
   paginateRoomHistory,
   rejectInvite,
   respondToIncomingVerification,
   showLocalToast,
+  startDirectCall,
+  startMatrixRtc,
   subscribeIncomingVerification,
   type SasChallenge,
 } from "../matrix/service";
 import { parseAiomatrixPayload, type MiniAppCard } from "../protocol/aiomatrix";
 import { Composer, type ComposeMode } from "./Composer";
+import { Avatar } from "./Avatar";
 import { IconBack, IconCall, IconMore, IconSearch } from "./Icons";
 import { MessageTimeline } from "./MessageTimeline";
 import { RoomSidebar } from "./RoomSidebar";
 import {
-  CallSurface,
   CreateSpace,
+  CreatePollSurface,
+  GroupCallSurface,
   MiniAppSurface,
   RoomActions,
   RoomDetails,
   SearchSurface,
   Settings,
-  ThreadSurface,
 } from "./Surfaces";
 
 type Surface =
@@ -39,9 +43,10 @@ type Surface =
   | "settings"
   | "details"
   | "search"
+  | "poll"
+  | "roomMenu"
   | "call"
   | { miniApp: MiniAppCard; item: TimelineItem }
-  | { thread: TimelineItem }
   | null;
 
 export function Workspace() {
@@ -237,7 +242,13 @@ export function Workspace() {
               <button className="icon-button mobile-back" type="button" onClick={() => setActiveId(null)} aria-label={t("chat.back")}>
                 <IconBack />
               </button>
-              <div className="chat-avatar" aria-hidden="true">{activeRoom.name.slice(0, 1).toUpperCase()}</div>
+              <Avatar
+                className="chat-avatar"
+                id={activeRoom.roomId}
+                name={activeRoom.name}
+                src={activeRoom.avatarUrl}
+                size="small"
+              />
               <button className="room-heading" type="button" onClick={() => setSurface("details")}>
                 <strong>{activeRoom.name}</strong>
                 <span>
@@ -257,7 +268,17 @@ export function Workspace() {
                   <button
                     className="icon-button"
                     type="button"
-                    onClick={() => setSurface("call")}
+                    onClick={() => {
+                      if (activeRoom.isDirect) {
+                        void startDirectCall(activeRoom.roomId).catch((error: Error) => showLocalToast(error.message, true));
+                        return;
+                      }
+                      void startMatrixRtc(activeRoom.roomId).catch((error: Error) => {
+                        showLocalToast(error.message, true);
+                        void leaveMatrixRtc();
+                        setSurface("call");
+                      });
+                    }}
                     aria-label={t("chat.call")}
                     title={callCapability.reason}
                   >
@@ -267,17 +288,34 @@ export function Workspace() {
                 <button
                   className="icon-button head-details"
                   type="button"
-                  onClick={() => setSurface("details")}
+                  onClick={() => setSurface((current) => current === "roomMenu" ? null : "roomMenu")}
                   aria-label={t("chat.details")}
+                  aria-expanded={surface === "roomMenu"}
                 >
                   <IconMore />
                 </button>
+                {surface === "roomMenu" && (
+                  <div className="room-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => setSurface("poll")}>
+                      {t("composer.createPoll")}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => setSurface("details")}>
+                      {t("chat.details")}
+                    </button>
+                  </div>
+                )}
               </div>
             </header>
-            {callCapability?.active && activeRoom.membership === "join" && (
+            {callCapability?.groupActive && activeRoom.membership === "join" && (
               <div className="call-banner" role="status">
                 <span>{t("call.bannerActive")}</span>
-                <button className="button" onClick={() => setSurface("call")}>{t("call.join")}</button>
+                <button className="button" onClick={() => {
+                  void startMatrixRtc(activeRoom.roomId).catch((error: Error) => {
+                    showLocalToast(error.message, true);
+                    void leaveMatrixRtc();
+                    setSurface("call");
+                  });
+                }}>{t("call.join")}</button>
               </div>
             )}
             {activeRoom.membership === "invite" ? (
@@ -298,7 +336,6 @@ export function Workspace() {
                   onMiniApp={(miniApp, item) => setSurface({ miniApp, item })}
                   history={history}
                   onLoadOlder={() => paginateRoomHistory(activeRoom.roomId)}
-                  onOpenThread={(item) => setSurface({ thread: item })}
                   highlightEventId={highlightEventId}
                 />
                 <Composer roomId={activeRoom.roomId} mode={mode} onMode={setMode} />
@@ -336,9 +373,9 @@ export function Workspace() {
           }}
         />
       )}
-      {surface === "call" && activeId && <CallSurface roomId={activeId} onClose={() => setSurface(null)} />}
+      {surface === "poll" && activeId && <CreatePollSurface roomId={activeId} onClose={() => setSurface(null)} />}
+      {surface === "call" && activeId && <GroupCallSurface roomId={activeId} onClose={() => setSurface(null)} />}
       {surface && typeof surface === "object" && "miniApp" in surface && <MiniAppSurface card={surface.miniApp} item={surface.item} onClose={() => setSurface(null)} />}
-      {surface && typeof surface === "object" && "thread" in surface && activeId && <ThreadSurface roomId={activeId} root={surface.thread} onClose={() => setSurface(null)} />}
     </div>
   );
 }

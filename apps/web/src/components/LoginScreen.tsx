@@ -104,22 +104,19 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
 
   return (
     <main className="login">
-      <section className="login-intro">
+      <section className="login-shell">
         <div className="brand-lockup">
           <span className="brand-symbol" aria-hidden="true">H</span>
           <strong>HighLife</strong>
         </div>
-        <h1>{t("login.headline")}</h1>
-        <p>{t("login.blurb")}</p>
-      </section>
-      <form className="login-form" onSubmit={submit}>
-        <div className="login-form-top">
-          <div>
-            <h2>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h2>
-            <p className="muted">
-              {mode === "register" ? t("login.registerHint") : t("login.hint")}
-            </p>
-          </div>
+        <form className="login-form" onSubmit={submit}>
+          <div className="login-form-top">
+            <div>
+              <h1>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h1>
+              <p className="muted">
+                {mode === "register" ? t("login.registerHint") : t("login.hint")}
+              </p>
+            </div>
           <div className="segmented login-locale" role="group" aria-label={t("login.language")}>
             <button
               type="button"
@@ -136,7 +133,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
               {t("settings.languageRu")}
             </button>
           </div>
-        </div>
+          </div>
         <div className="login-mode" role="tablist" aria-label={t("login.mode")}>
           <button
             type="button"
@@ -240,7 +237,8 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
           </button>
         )}
         <p className="form-note">{t("login.note")}</p>
-      </form>
+        </form>
+      </section>
     </main>
   );
 }

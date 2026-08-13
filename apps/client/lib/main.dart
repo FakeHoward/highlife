@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,8 +8,11 @@ import 'screens/login_screen.dart';
 import 'screens/room_list_screen.dart';
 import 'services/session.dart';
 import 'theme.dart';
+import 'widgets/call_surface.dart';
 import 'widgets/host_toast_listener.dart';
 import 'widgets/hl_button.dart';
+import 'widgets/matrix_rtc_call_surface.dart';
+import 'widgets/native_voice_call_surface.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -152,10 +157,77 @@ class HighLifeApp extends StatelessWidget {
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
-                return HostToastListener(
-                  child: session.isLoggedIn
-                      ? const RoomListScreen()
-                      : const LoginScreen(),
+                final content = session.isLoggedIn
+                    ? const RoomListScreen()
+                    : const LoginScreen();
+                final calls = session.nativeCalls;
+                final matrixRtc = session.matrixRtc;
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: HostToastListener(child: content),
+                    ),
+                    if (calls != null)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: NativeVoiceCallSurface(
+                          snapshot: calls.snapshot,
+                          actions: calls,
+                          labels: NativeVoiceCallLabels(
+                            incoming: locales.strings.callIncoming,
+                            connecting: locales.strings.callConnecting,
+                            connected: locales.strings.callConnected,
+                            ended: locales.strings.callEnded,
+                            failed: locales.strings.callFailed,
+                            unknownPeer: locales.strings.callUnknownPeer,
+                            answer: locales.strings.callAnswer,
+                            reject: locales.strings.callReject,
+                            mute: locales.strings.callMute,
+                            unmute: locales.strings.callUnmute,
+                            hangup: locales.strings.callHangup,
+                          ),
+                        ),
+                      ),
+                    if (matrixRtc != null)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: MatrixRtcCallSurface(
+                          snapshot: matrixRtc.snapshot,
+                          onHangup: matrixRtc.leave,
+                          onToggleMicrophone: matrixRtc.toggleMicrophone,
+                          onFallback: () {
+                            final roomId = matrixRtc.snapshot.roomId;
+                            final room = roomId == null
+                                ? null
+                                : session.client?.getRoomById(roomId);
+                            final uri = room == null
+                                ? null
+                                : session.buildCallUri(room);
+                            if (room == null || uri == null) return;
+                            unawaited(matrixRtc.leave());
+                            unawaited(
+                              CallSurface.open(
+                                context,
+                                callUri: uri,
+                                room: room,
+                                session: session,
+                                strings: locales.strings,
+                              ),
+                            );
+                          },
+                          labels: MatrixRtcCallLabels(
+                            connecting: locales.strings.callConnecting,
+                            connected: locales.strings.callConnected,
+                            failed: locales.strings.callFailed,
+                            participants: locales.strings.callParticipants,
+                            mute: locales.strings.callMute,
+                            unmute: locales.strings.callUnmute,
+                            hangup: locales.strings.callHangup,
+                            fallback: locales.strings.callFallback,
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),

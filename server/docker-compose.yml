@@ -148,6 +148,7 @@ services:
       - --fingerprint
       - --use-auth-secret
       - --static-auth-secret=${TURN_SHARED_SECRET:-local-turn-only}
+      - --stale-nonce=600
       - --realm=localhost
       - --external-ip=127.0.0.1
       - --min-port=49160
@@ -157,6 +158,7 @@ services:
     ports:
       - "3478:3478/tcp"
       - "3478:3478/udp"
+      - "49160-49200:49160-49200/tcp"
       - "49160-49200:49160-49200/udp"
     healthcheck:
       test: [CMD-SHELL, "pidof turnserver >/dev/null || exit 1"]

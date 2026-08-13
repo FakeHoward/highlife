@@ -127,7 +127,7 @@ class HlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<MoonTheme>()?.tokens.colors;
-    final radius = BorderRadius.circular(7);
+    final radius = BorderRadius.circular(6);
     final size = buttonSize ?? MoonButtonSize.md;
     final h = height ?? 40;
     final accent = colors?.piccolo ?? const Color(0xFF1263D6);

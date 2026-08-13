@@ -1,54 +1,59 @@
 import type { RoomListItem, TimelineItem } from "@highlife/ui-contracts";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { useI18n, type MessageKey, type MessageParams } from "../i18n";
-import { buildElementCallUrl, callWidgetId } from "../matrix/callUrl";
-import { attachElementCallWidgetHost } from "../matrix/widgetHost";
 import { JoinRoomFailure } from "../matrix/roomAddress";
+import { callWidgetId } from "../matrix/callUrl";
 import {
   createRoom,
   deleteServerKeyBackup,
   enableExistingKeyBackup,
   fetchOpenIdToken,
-  getCallCapability,
   getCryptoStatus,
+  getGroupCallUrl,
   getIncomingVerification,
   getJoinedMembers,
   getKeyBackupDetails,
   getOwnDisplayName,
+  getOwnAvatarUrl,
+  getRoomAliases,
   getSessionIdentity,
   invite,
   joinRoom,
   listOwnDevices,
   listSpaces,
-  loadThread,
   leaveRoom,
   logout,
   addRoomToSpace,
-  paginateThread,
   rememberRecoveryKey,
   requestDeviceVerification,
   resetKeyBackup,
   respondToIncomingVerification,
   restoreFromKeyBackup,
   searchMessages,
-  sendMessage,
   sendMiniAppData,
   sendWidgetRoomEvent,
   setupRecoveryAndKeyBackup,
   startDirectMessage,
   subscribeIncomingVerification,
   updateProfile,
+  setCanonicalAlias,
+  removeRoomAlias,
+  setRoomAvatar,
+  createPoll,
   type SearchHit,
   type EncryptionDevice,
   type KeyBackupDetails,
   type RoomMemberInfo,
   type SasChallenge,
 } from "../matrix/service";
+import { attachElementCallWidgetHost } from "../matrix/widgetHost";
 import {
   extractMiniAppInitData,
   isAllowedMiniAppUrl,
   type MiniAppCard,
 } from "../protocol/aiomatrix";
+import { Avatar } from "./Avatar";
+import { applyTheme, THEME_STORAGE_KEY, type Theme } from "../theme";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -108,6 +113,7 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
   const [tab, setTab] = useState<"join" | "create" | "dm">("join");
   const [value, setValue] = useState("");
   const [topic, setTopic] = useState("");
+  const [alias, setAlias] = useState("");
   const [encrypted, setEncrypted] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +121,7 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
     setTab(next);
     setValue("");
     setTopic("");
+    setAlias("");
     setError(null);
     setEncrypted(true);
   }
@@ -132,6 +139,7 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
         roomId = await createRoom({
           name: value.trim(),
           topic: topic.trim() || undefined,
+          alias: alias.trim() || undefined,
           encrypted,
         });
       }
@@ -201,6 +209,10 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
             <label>
               <span>{t("rooms.topic")}</span>
               <input value={topic} onChange={(event) => setTopic(event.target.value)} placeholder={t("rooms.topicPlaceholder")} />
+            </label>
+            <label>
+              <span>{t("rooms.aliasOptional")}</span>
+              <input value={alias} onChange={(event) => setAlias(event.target.value)} placeholder={t("rooms.aliasPlaceholder")} />
             </label>
             <label className="check">
               <input type="checkbox" checked={encrypted} onChange={(event) => setEncrypted(event.target.checked)} />
@@ -296,8 +308,15 @@ function backupLabel(details: KeyBackupDetails, t: Translate): string {
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const { t, locale, setLocale } = useI18n();
-  const [theme, setTheme] = useState(localStorage.getItem("highlife.theme") ?? "system");
+  const [theme, setTheme] = useState<Theme>(
+    document.documentElement.dataset.theme === "light"
+      || document.documentElement.dataset.theme === "dark"
+      ? document.documentElement.dataset.theme
+      : "system",
+  );
   const [displayName, setDisplayName] = useState(() => getOwnDisplayName());
+  const [avatar, setAvatar] = useState<File | undefined>();
+  const [avatarUrl, setAvatarUrl] = useState(() => getOwnAvatarUrl());
   const [backup, setBackup] = useState<KeyBackupDetails | null>(null);
   const [devices, setDevices] = useState<EncryptionDevice[]>([]);
   const [verification, setVerification] = useState<string | null>(null);
@@ -324,10 +343,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
     refreshCrypto();
   }, [refreshCrypto]);
 
-  function changeTheme(value: string) {
+  function changeTheme(value: Theme) {
     setTheme(value);
-    localStorage.setItem("highlife.theme", value);
-    document.documentElement.dataset.theme = value;
+    localStorage.setItem(THEME_STORAGE_KEY, value);
+    applyTheme(value);
   }
 
   function beginVerification(deviceId?: string) {
@@ -358,8 +377,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
     <Modal title={t("settings.title")} onClose={onClose}>
       <div className="settings-section">
         <p className="eyebrow">{t("settings.profile")}</p>
-        <form className="inline-form" onSubmit={(event) => { event.preventDefault(); void updateProfile(displayName); }}>
-          <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("settings.displayNamePlaceholder")} aria-label={t("settings.displayName")} />
+        <form className="profile-form" onSubmit={(event) => {
+          event.preventDefault();
+          void updateProfile(displayName, avatar).then(() => {
+            setAvatar(undefined);
+            setAvatarUrl(getOwnAvatarUrl());
+          });
+        }}>
+          <Avatar
+            id={getSessionIdentity()?.userId ?? displayName}
+            name={displayName || t("settings.profile")}
+            src={avatarUrl}
+            size="large"
+          />
+          <div>
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("settings.displayNamePlaceholder")} aria-label={t("settings.displayName")} />
+            <label className="button file-button">
+              {t("settings.chooseAvatar")}
+              <input type="file" accept="image/*" onChange={(event) => setAvatar(event.target.files?.[0])} />
+            </label>
+            {avatar && <small className="muted">{avatar.name}</small>}
+          </div>
           <button className="button" type="submit">{t("settings.save")}</button>
         </form>
       </div>
@@ -507,25 +545,110 @@ export function RoomDetails({ room, onClose, onLeft }: { room: RoomListItem; onC
   const [spaceId, setSpaceId] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [members, setMembers] = useState<RoomMemberInfo[]>([]);
+  const [alias, setAlias] = useState("");
+  const [aliases, setAliases] = useState(() => getRoomAliases(room.roomId));
+  const [roomAvatar, setRoomAvatarFile] = useState<File | undefined>();
   const spaces = listSpaces().filter((space) => space.roomId !== room.roomId);
 
   useEffect(() => {
     setMembers(getJoinedMembers(room.roomId));
+    setAliases(getRoomAliases(room.roomId));
   }, [room.roomId]);
 
   return (
     <Modal title={room.name} onClose={onClose}>
+      <div className="room-profile">
+        <Avatar id={room.roomId} name={room.name} src={room.avatarUrl} size="large" />
+        <div>
+          <strong>{room.name}</strong>
+          <span className="muted small">{aliases.canonicalAlias ?? room.roomId}</span>
+        </div>
+      </div>
       {room.topic && <p>{room.topic}</p>}
       <dl className="status-list">
         <div><dt>{t("rooms.roomId")}</dt><dd>{room.roomId}</dd></div>
+        <div>
+          <dt>{t("rooms.canonicalAlias")}</dt>
+          <dd>
+            {aliases.canonicalAlias ?? t("rooms.noAlias")}
+            {aliases.canonicalAlias && (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(aliases.canonicalAlias!)}
+              >
+                {t("rooms.copyAlias")}
+              </button>
+            )}
+          </dd>
+        </div>
         <div><dt>{t("rooms.encryption")}</dt><dd>{room.isEncrypted ? t("rooms.enabled") : t("rooms.off")}</dd></div>
       </dl>
+      <div className="settings-section">
+        <p className="eyebrow">{t("rooms.roomAvatar")}</p>
+        <form className="inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          if (!roomAvatar) return;
+          void setRoomAvatar(room.roomId, roomAvatar)
+            .then(() => {
+              setRoomAvatarFile(undefined);
+              setStatus(t("rooms.avatarUpdated"));
+            })
+            .catch((error: Error) => setStatus(error.message));
+        }}>
+          <input
+            type="file"
+            accept="image/*"
+            aria-label={t("rooms.roomAvatar")}
+            onChange={(event) => setRoomAvatarFile(event.target.files?.[0])}
+          />
+          <button className="button" disabled={!roomAvatar}>{t("settings.save")}</button>
+        </form>
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("rooms.aliases")}</p>
+        <form className="inline-form" onSubmit={(event) => {
+          event.preventDefault();
+          void setCanonicalAlias(room.roomId, alias)
+            .then(() => {
+              setAliases(getRoomAliases(room.roomId));
+              setAlias("");
+              setStatus(t("rooms.aliasUpdated"));
+            })
+            .catch((error: Error) => setStatus(error.message));
+        }}>
+          <input
+            value={alias}
+            onChange={(event) => setAlias(event.target.value)}
+            placeholder={t("rooms.aliasPlaceholder")}
+            aria-label={t("rooms.canonicalAlias")}
+            required
+          />
+          <button className="button" disabled={!alias.trim()}>{t("rooms.setAlias")}</button>
+        </form>
+        {aliases.aliases.map((item) => (
+          <div className="alias-row" key={item}>
+            <code>{item}</code>
+            <button type="button" className="text-button" onClick={() => void navigator.clipboard.writeText(item)}>
+              {t("rooms.copyAlias")}
+            </button>
+            <button type="button" className="text-button danger-text" onClick={() => {
+              void removeRoomAlias(room.roomId, item)
+                .then(() => setAliases(getRoomAliases(room.roomId)))
+                .catch((error: Error) => setStatus(error.message));
+            }}>
+              {t("rooms.removeAlias")}
+            </button>
+          </div>
+        ))}
+      </div>
       <div className="settings-section">
         <p className="eyebrow">{t("rooms.members")}</p>
         <div className="member-list" data-testid="member-list">
           {members.length === 0 && <p className="muted small">{t("rooms.noMembers")}</p>}
           {members.map((member) => (
             <article key={member.userId}>
+              <Avatar id={member.userId} name={member.displayName} src={member.avatarUrl} size="small" />
               <div>
                 <strong>{member.displayName}</strong>
                 <small>{member.userId}</small>
@@ -661,139 +784,53 @@ export function SearchSurface({
   );
 }
 
-export function CallSurface({ roomId, onClose }: { roomId: string; onClose: () => void }) {
-  const { t } = useI18n();
-  const capability = getCallCapability(roomId);
-  const base = import.meta.env.VITE_ELEMENT_CALL_URL as string | undefined;
-  const configuredParent = import.meta.env.VITE_ELEMENT_CALL_PARENT_URL as string | undefined;
-  const identity = getSessionIdentity();
-  const frame = useRef<HTMLIFrameElement>(null);
-  const [widgetReady, setWidgetReady] = useState(false);
-  const [slowLoad, setSlowLoad] = useState(false);
-  const url = useMemo(() => buildElementCallUrl({
-    baseUrl: base,
-    parentUrl: configuredParent,
-    roomId,
-    identity,
-    allowHttpInDev: import.meta.env.DEV,
-    windowOrigin: window.location.origin,
-  }), [base, configuredParent, identity, roomId]);
-  const targetOrigin = useMemo(() => {
-    if (!url) return null;
-    try { return new URL(url).origin; } catch { return null; }
-  }, [url]);
-
-  useEffect(() => {
-    if (!url || !targetOrigin) return;
-    setWidgetReady(false);
-    setSlowLoad(false);
-    const timer = window.setTimeout(() => setSlowLoad(true), 8000);
-    const detach = attachElementCallWidgetHost({
-      widgetId: callWidgetId(roomId),
-      roomId,
-      targetOrigin,
-      getContentWindow: () => frame.current?.contentWindow,
-      sendEvent: sendWidgetRoomEvent,
-      getOpenIdToken: fetchOpenIdToken,
-      onCapabilityChange: () => {
-        setWidgetReady(true);
-        window.clearTimeout(timer);
-      },
-    });
-    return () => {
-      window.clearTimeout(timer);
-      detach();
-    };
-  }, [roomId, targetOrigin, url]);
-
-  return (
-    <Modal title={t("call.title")} onClose={onClose} wide>
-      {!capability.available ? (
-        <div className="capability-error">
-          <strong>{t("call.unavailableTitle")}</strong>
-          <p>{capability.reason}</p>
-        </div>
-      ) : !url ? (
-        <div className="capability-error">
-          <strong>{t("call.configTitle")}</strong>
-          <p>{t("call.configBody", { state: capability.active ? t("call.active") : t("call.idle") })}</p>
-        </div>
-      ) : (
-        <>
-          <div className="call-toolbar">
-            <p className="call-notice">
-              {t("call.notice")}
-              {widgetReady ? ` · ${t("call.widgetReady")}` : slowLoad ? ` · ${t("call.stillLoading")}` : ""}
-            </p>
-            <a className="button" href={url} target="_blank" rel="noreferrer">
-              {t("call.openExternal")}
-            </a>
-          </div>
-          <iframe
-            ref={frame}
-            className="call-frame"
-            src={url}
-            title={t("call.frameTitle")}
-            allow="camera; microphone; fullscreen; display-capture"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
-        </>
-      )}
-    </Modal>
-  );
-}
-
-export function ThreadSurface({ roomId, root, onClose }: {
+export function CreatePollSurface({ roomId, onClose }: {
   roomId: string;
-  root: TimelineItem;
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [items, setItems] = useState<TimelineItem[]>([]);
-  const [text, setText] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [question, setQuestion] = useState("");
+  const [answers, setAnswers] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const options = answers.split("\n").map((item) => item.trim()).filter(Boolean).slice(0, 4);
+    if (!question.trim() || options.length < 2) return;
+    setBusy(true);
     setError(null);
     try {
-      setItems(await loadThread(roomId, root.threadRootId ?? root.eventId));
+      await createPoll(roomId, { question: question.trim(), answers: options });
+      onClose();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("thread.failed"));
+      setError(reason instanceof Error ? reason.message : t("composer.sendFailed"));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  }, [roomId, root.eventId, root.threadRootId, t]);
-
-  useEffect(() => { void refresh(); }, [refresh]);
+  }
 
   return (
-    <Modal title={t("thread.title")} onClose={onClose}>
-      <div className="thread-list">
-        {loading && <p className="muted">{t("thread.loading")}</p>}
+    <Modal title={t("composer.createPoll")} onClose={onClose}>
+      <form className="stack-form" onSubmit={submit}>
+        <label>
+          <span>{t("composer.pollQuestion")}</span>
+          <input value={question} onChange={(event) => setQuestion(event.target.value)} required autoFocus />
+        </label>
+        <label>
+          <span>{t("composer.pollAnswers")}</span>
+          <textarea
+            rows={4}
+            value={answers}
+            onChange={(event) => setAnswers(event.target.value)}
+            placeholder={t("composer.pollAnswersPlaceholder")}
+            required
+          />
+        </label>
         {error && <p className="error" role="alert">{error}</p>}
-        {items.map((item) => (
-          <article key={item.eventId}>
-            <strong>{item.senderName}</strong>
-            <p>{item.body}</p>
-            <time>{new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
-          </article>
-        ))}
-        {!loading && items.length === 0 && <p className="muted">{t("thread.empty")}</p>}
-      </div>
-      <button className="button" onClick={() => void paginateThread(roomId, root.threadRootId ?? root.eventId).then(refresh)}>{t("thread.loadEarlier")}</button>
-      <form className="inline-form" onSubmit={(event) => {
-        event.preventDefault();
-        const body = text.trim();
-        if (!body) return;
-        void sendMessage(roomId, body, { threadRootId: root.threadRootId ?? root.eventId }).then(() => {
-          setText("");
-          return refresh();
-        });
-      }}>
-        <input value={text} onChange={(event) => setText(event.target.value)} placeholder={t("thread.replyPlaceholder")} aria-label={t("thread.replyLabel")} />
-        <button className="button primary">{t("thread.send")}</button>
+        <button className="button primary" disabled={busy}>
+          {busy ? t("login.connecting") : t("composer.createPoll")}
+        </button>
       </form>
     </Modal>
   );
@@ -868,5 +905,60 @@ export function MiniAppSurface({ card, item, onClose }: { card: MiniAppCard; ite
         </div>
       </section>
     </div>
+  );
+}
+
+export function GroupCallSurface({ roomId, onClose }: { roomId: string; onClose: () => void }) {
+  const { t } = useI18n();
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [ready, setReady] = useState(false);
+  const url = getGroupCallUrl(roomId);
+  const targetOrigin = useMemo(() => {
+    if (!url) return "";
+    try {
+      return new URL(url).origin;
+    } catch {
+      return "";
+    }
+  }, [url]);
+
+  useEffect(() => {
+    if (!url || !targetOrigin) return;
+    return attachElementCallWidgetHost({
+      widgetId: callWidgetId(roomId),
+      roomId,
+      targetOrigin,
+      getContentWindow: () => frame.current?.contentWindow,
+      sendEvent: sendWidgetRoomEvent,
+      getOpenIdToken: fetchOpenIdToken,
+      onCapabilityChange: () => setReady(true),
+    });
+  }, [roomId, targetOrigin, url]);
+
+  return (
+    <Modal title={t("call.title")} onClose={onClose} wide>
+      {!url ? (
+        <div className="capability-error">
+          <strong>{t("call.configTitle")}</strong>
+          <p>{t("call.configBody", { state: t("call.idle") })}</p>
+        </div>
+      ) : (
+        <>
+          <p className="call-notice">{ready ? t("call.widgetReady") : t("call.stillLoading")}</p>
+          <p>
+            <a className="button" href={url} target="_blank" rel="noreferrer">
+              {t("call.openExternal")}
+            </a>
+          </p>
+          <iframe
+            ref={frame}
+            className="call-frame"
+            src={url}
+            title={t("call.frameTitle")}
+            allow="camera; microphone; display-capture; autoplay; fullscreen"
+          />
+        </>
+      )}
+    </Modal>
   );
 }

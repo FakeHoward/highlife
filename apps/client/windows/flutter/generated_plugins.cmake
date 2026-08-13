@@ -3,6 +3,9 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  connectivity_plus
+  flutter_webrtc
+  livekit_client
   screen_retriever_windows
   sqlite3_flutter_libs
   url_launcher_windows

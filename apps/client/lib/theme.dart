@@ -132,7 +132,7 @@ ThemeData buildHighLifeTheme(Brightness brightness) {
       filled: true,
       fillColor: dark ? const Color(0xFF202A32) : const Color(0xFFE9EEF2),
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: tokens.hairline),
@@ -144,14 +144,14 @@ ThemeData buildHighLifeTheme(Brightness brightness) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       ),
     ),
     dividerColor: tokens.hairline,
     listTileTheme: const ListTileThemeData(
-      minTileHeight: 64,
-      contentPadding: EdgeInsets.symmetric(horizontal: 14),
+      minTileHeight: 54,
+      contentPadding: EdgeInsets.symmetric(horizontal: 12),
     ),
   );
 }

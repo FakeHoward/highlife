@@ -87,6 +87,21 @@ void main() {
   });
 
   group('buildTimelineItems', () {
+    test('keeps room state changes as dedicated system timeline items', () {
+      final items = buildTimelineItems([
+        RawRoomEvent(
+          eventId: 'name-change',
+          type: 'm.room.name',
+          senderId: '@alice:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 9),
+          content: const {'name': 'Product'},
+        ),
+      ]);
+
+      expect(items.single.kind, TimelineItemKind.system);
+      expect(items.single.body, 'Product');
+    });
+
     test('applies edits, hides replace events, and aggregates reactions', () {
       final items = buildTimelineItems([
         RawRoomEvent(
@@ -188,6 +203,30 @@ void main() {
         ),
       ]);
 
+      expect(items.single.replyToEventId, 'root');
+    });
+
+    test('keeps foreign thread events in the normal timeline as replies', () {
+      final items = buildTimelineItems([
+        RawRoomEvent(
+          eventId: 'thread-reply',
+          type: 'm.room.message',
+          senderId: '@bob:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 11),
+          content: const {
+            'msgtype': 'm.text',
+            'body': 'answer from another client',
+            'm.relates_to': {
+              'rel_type': 'm.thread',
+              'event_id': 'root',
+              'm.in_reply_to': {'event_id': 'root'},
+            },
+          },
+        ),
+      ]);
+
+      expect(items, hasLength(1));
+      expect(items.single.body, 'answer from another client');
       expect(items.single.replyToEventId, 'root');
     });
   });

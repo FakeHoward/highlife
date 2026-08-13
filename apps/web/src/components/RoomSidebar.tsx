@@ -1,6 +1,7 @@
 import type { RoomListItem, SpaceSummary } from "@highlife/ui-contracts";
 import { useI18n } from "../i18n";
 import { IconFolderPlus, IconLock, IconPlus, IconSearch, IconSettings } from "./Icons";
+import { Avatar } from "./Avatar";
 
 interface Props {
   rooms: RoomListItem[];
@@ -30,8 +31,48 @@ export function RoomSidebar({
   onSelectSpace,
 }: Props) {
   const { t } = useI18n();
+  const selectedSpace = spaces.find((space) => space.roomId === selectedSpaceId) ?? null;
   return (
-    <aside className={`sidebar ${activeId ? "has-room" : ""}`} aria-label={t("sidebar.rooms")}>
+    <>
+      {onSelectSpace && (
+        <nav className="space-rail" aria-label={t("sidebar.spaces")}>
+          <button
+            type="button"
+            className={`space-rail-button all-spaces ${selectedSpaceId === null ? "active" : ""}`}
+            onClick={() => onSelectSpace(null)}
+            aria-label={t("sidebar.allRooms")}
+            aria-pressed={selectedSpaceId === null}
+            title={t("sidebar.allRooms")}
+          >
+            H
+          </button>
+          <div className="space-rail-list">
+            {spaces.map((space) => (
+              <button
+                key={space.roomId}
+                type="button"
+                className={`space-rail-button ${selectedSpaceId === space.roomId ? "active" : ""}`}
+                onClick={() => onSelectSpace(space.roomId)}
+                aria-label={space.name}
+                aria-pressed={selectedSpaceId === space.roomId}
+                title={space.name}
+              >
+                <Avatar id={space.roomId} name={space.name} src={space.avatarUrl} size="small" />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="space-rail-button"
+            onClick={onNewSpace}
+            aria-label={t("spaces.createTitle")}
+            title={t("spaces.createTitle")}
+          >
+            <IconFolderPlus />
+          </button>
+        </nav>
+      )}
+      <aside className={`sidebar ${activeId ? "has-room" : ""}`} aria-label={t("sidebar.rooms")}>
       <header className="sidebar-head">
         <div className="brand-lockup compact">
           <span className="brand-symbol" aria-hidden="true">H</span>
@@ -46,6 +87,28 @@ export function RoomSidebar({
           </button>
         </div>
       </header>
+      {selectedSpace && (
+        <section className="selected-space-panel" role="complementary" aria-label={selectedSpace.name}>
+          <Avatar
+            id={selectedSpace.roomId}
+            name={selectedSpace.name}
+            src={selectedSpace.avatarUrl}
+            size="small"
+          />
+          <div>
+            <strong>{selectedSpace.name}</strong>
+            <span>{selectedSpace.topic ?? t("spaces.selectedHint")}</span>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={() => onSelectSpace?.(null)}
+            aria-label={t("common.closeNamed", { title: selectedSpace.name })}
+          >
+            ×
+          </button>
+        </section>
+      )}
       <label className="search-field">
         <IconSearch />
         <input
@@ -55,54 +118,6 @@ export function RoomSidebar({
           aria-label={t("sidebar.search")}
         />
       </label>
-      {onSelectSpace && (
-        <section className="spaces-section" aria-label={t("sidebar.spaces")}>
-          <div className="spaces-head">
-            <div>
-              <p className="eyebrow">{t("sidebar.spaces")}</p>
-              <p className="muted small spaces-hint">{t("spaces.hint")}</p>
-            </div>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={onNewSpace}
-              aria-label={t("spaces.createTitle")}
-              title={t("spaces.createTitle")}
-            >
-              <IconFolderPlus />
-            </button>
-          </div>
-          <div className="space-list">
-            <button
-              type="button"
-              className={`space-row ${selectedSpaceId === null ? "active" : ""}`}
-              onClick={() => onSelectSpace(null)}
-            >
-              {t("sidebar.allRooms")}
-            </button>
-            {spaces.map((space) => (
-              <button
-                key={space.roomId}
-                type="button"
-                className={`space-row ${selectedSpaceId === space.roomId ? "active" : ""}`}
-                onClick={() => onSelectSpace(space.roomId)}
-              >
-                {space.avatarUrl ? (
-                  <img src={space.avatarUrl} className="space-avatar" alt="" />
-                ) : (
-                  <span className="space-avatar fallback" aria-hidden="true">
-                    {space.name.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-                <span>{space.name}</span>
-              </button>
-            ))}
-            {spaces.length === 0 && (
-              <p className="muted small spaces-empty">{t("spaces.empty")}</p>
-            )}
-          </div>
-        </section>
-      )}
       <nav className="room-list">
         {rooms.length === 0 && (
           <div className="empty-small">
@@ -118,13 +133,7 @@ export function RoomSidebar({
             onClick={() => onSelect(room.roomId)}
             aria-current={activeId === room.roomId ? "page" : undefined}
           >
-            {room.avatarUrl ? (
-              <img src={room.avatarUrl} className="avatar" alt="" />
-            ) : (
-              <span className="avatar fallback" aria-hidden="true">
-                {room.name.slice(0, 2).toUpperCase()}
-              </span>
-            )}
+            <Avatar id={room.roomId} name={room.name} src={room.avatarUrl} />
             <span className="room-copy">
               <span className="room-title">
                 <strong>{room.name}</strong>
@@ -143,6 +152,7 @@ export function RoomSidebar({
           </button>
         ))}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 }

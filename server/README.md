@@ -30,7 +30,7 @@ Local endpoints:
 - LiveKit JWT service: `http://localhost:8082`
 - LiveKit signalling: `ws://localhost:7880`
 - LiveKit media: TCP `7881`, UDP `50000-50100`
-- coturn: TCP/UDP `3478`, relay UDP `49160-49200`
+- coturn: TCP/UDP `3478`, relay TCP/UDP `49160-49200`
 
 Create another private account:
 
@@ -89,12 +89,24 @@ Point the React build at
 (plus `VITE_VAPID_PUBLIC_KEY` for web push). Fill `apps` in `sygnal.yaml` for
 FCM/APNs before expecting real delivery, or use an external Sygnal instead.
 
-The React client embeds Element Call from the trusted `call.` origin. The
-primary response delegates camera, microphone, and display capture only to
-that origin; Element Call allows framing only by the primary HighLife origin.
-Other public endpoints retain deny/same-origin framing policies.
+The first-party React origin is permitted to use its own camera and microphone.
+It may also delegate camera, microphone, and display capture to the trusted
+`call.` origin for foreign/Element clients. Element Call allows framing only by
+the primary HighLife origin. Other public endpoints retain deny/same-origin
+framing policies. The primary CSP serves fonts locally and has no Google Fonts
+allowlist.
 
-coturn remains useful for classic Matrix VoIP clients and difficult NATs.
+HighLife has first-party classic Matrix 1:1 voice (`matrix-js-sdk` /
+`matrix` VoIP + `flutter_webrtc`) and first-party MatrixRTC/LiveKit group
+calls. Element Call remains a last-resort fallback when the LiveKit JWT/SFU
+path fails, and for foreign clients that still embed it. MSC3401 membership
+stays compatible with Element.
+
+coturn serves classic Matrix VoIP clients and difficult NATs on UDP/TCP `3478`
+with relay ports `49160-49200` on both transports. Authentication nonces expire
+after 600 seconds. TURN/TLS is not advertised on `443`: that address belongs to
+Caddy on the same host. A future `turns:` listener should use a separately
+provisioned certificate and port such as `5349`.
 MatrixRTC media itself uses LiveKit's TCP `7881` and UDP `50000-50100` paths.
 The production HighLife bot enables Matrix E2EE and keeps its encrypted crypto
 store in the persistent `bot-data` volume.
