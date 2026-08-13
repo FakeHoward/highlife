@@ -604,7 +604,7 @@ class _EmptyRooms extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: Theme.of(context).textTheme.titleMedium.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),

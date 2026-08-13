@@ -83,7 +83,7 @@ class UserProfileSheet extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               member?.calcDisplayname() ?? userId,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: Theme.of(context).textTheme.titleMedium.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
             ),

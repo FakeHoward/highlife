@@ -89,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 16),
                       Text(
                         s.appName,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        style: Theme.of(context).textTheme.headlineSmall.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                       ),
@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         registering ? s.registerHint : s.loginTagline,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: Theme.of(context).textTheme.bodyMedium.copyWith(
                               color: tokens.muted,
                             ),
                       ),
@@ -246,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   Text(
                     s.ssoPasteTokenHint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: Theme.of(context).textTheme.bodySmall.copyWith(
                           color: tokens.muted,
                         ),
                   ),
@@ -282,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 12),
                 Text(
                   s.loginSessionNote,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: Theme.of(context).textTheme.bodySmall.copyWith(
                         color: tokens.muted,
                       ),
                 ),

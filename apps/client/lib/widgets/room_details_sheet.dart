@@ -259,7 +259,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   Expanded(
                     child: Text(
                       name,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      style: Theme.of(context).textTheme.titleLarge.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -279,7 +279,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   if (topic.isNotEmpty) ...[
                     Text(
                       topic,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      style: Theme.of(context).textTheme.bodyMedium.copyWith(
                             color: tokens.muted,
                           ),
                     ),
@@ -307,7 +307,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   const SizedBox(height: 20),
                   Text(
                     s.sharedMedia,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.titleSmall.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
@@ -316,7 +316,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                   const SizedBox(height: 20),
                   Text(
                     s.members,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.titleSmall.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
@@ -383,7 +383,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                     const SizedBox(height: 20),
                     Text(
                       s.folderSection,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      style: Theme.of(context).textTheme.titleSmall.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                     ),

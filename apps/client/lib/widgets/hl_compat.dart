@@ -1215,9 +1215,11 @@ class SelectableText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _span == null
-        ? Text(data ?? '', style: style)
-        : Text.rich(_span!, style: style);
+    final span = _span;
+    if (span == null) {
+      return Text(data ?? '', style: style);
+    }
+    return Text.rich(span, style: style);
   }
 }
 

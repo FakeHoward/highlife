@@ -67,7 +67,7 @@ class EmptyConversation extends StatelessWidget {
               Text(
                 s.selectConversationHint,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium.copyWith(
                       color: colors.onSurfaceVariant,
                     ),
               ),

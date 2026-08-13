@@ -134,7 +134,7 @@ class _CallStageState extends State<CallStage> {
               Text(
                 widget.title,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                style: Theme.of(context).textTheme.titleLarge.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
@@ -143,7 +143,7 @@ class _CallStageState extends State<CallStage> {
                 widget.connected && _elapsed.isNotEmpty
                     ? _elapsed
                     : widget.status,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium.copyWith(
                       color: widget.failed
                           ? colors.error
                           : colors.onSurfaceVariant,
