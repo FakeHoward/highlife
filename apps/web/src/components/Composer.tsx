@@ -1,10 +1,15 @@
 import type { TimelineItem } from "@highlife/ui-contracts";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useI18n } from "../i18n";
-import { sendMessage, setTyping, uploadFile } from "../matrix/service";
+import { sendMessage, setTyping, uploadFile, CryptoUnavailableError } from "../matrix/service";
 import { IconAttach, IconMic, IconSend, IconStop } from "./Icons";
 
 export type ComposeMode = { type: "reply" | "edit"; item: TimelineItem } | null;
+
+function composeFailure(reason: unknown, fallback: string, cryptoMessage: string): string {
+  if (reason instanceof CryptoUnavailableError) return cryptoMessage;
+  return reason instanceof Error ? reason.message : fallback;
+}
 
 function pickAudioMime(): string {
   if (typeof MediaRecorder === "undefined") return "";
@@ -103,7 +108,7 @@ export function Composer({
       onMode(null);
       await setTyping(roomId, false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("composer.sendFailed"));
+      setError(composeFailure(reason, t("composer.sendFailed"), t("composer.cryptoUnavailable")));
     } finally {
       setBusy(false);
     }
@@ -139,7 +144,7 @@ export function Composer({
       });
       if (mode?.type === "reply") onMode(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("composer.uploadFailed"));
+      setError(composeFailure(reason, t("composer.uploadFailed"), t("composer.cryptoUnavailable")));
     } finally {
       setBusy(false);
       setUploadRatio(null);
@@ -206,7 +211,7 @@ export function Composer({
       });
       if (mode?.type === "reply") onMode(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("composer.uploadFailed"));
+      setError(composeFailure(reason, t("composer.uploadFailed"), t("composer.cryptoUnavailable")));
     } finally {
       setBusy(false);
       setUploadRatio(null);

@@ -136,5 +136,7 @@ void main() {
     );
     expect(isLikelyBotUserId('@formspacebot:example.org'), isTrue);
     expect(isLikelyBotUserId('@ada:example.org'), isFalse);
+    expect(hasActiveCommandsState({}), isFalse);
+    expect(hasActiveCommandsState({'commands': []}), isTrue);
   });
 }

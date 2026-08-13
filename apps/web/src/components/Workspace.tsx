@@ -279,6 +279,9 @@ export function Workspace() {
                 : t("chat.syncing")}
           </div>
         )}
+        {matrix.connection === "online" && matrix.error && (
+          <div className="connection error" role="alert">{matrix.error}</div>
+        )}
         {matrix.toast && (
           <div
             className={`host-toast${matrix.toast.alert ? " is-alert" : ""}`}

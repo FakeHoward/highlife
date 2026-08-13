@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
@@ -9,6 +10,7 @@ import 'package:matrix/matrix.dart';
 
 import 'call_uri.dart';
 import 'matrix_rtc_boundary.dart';
+import 'matrix_rtc_e2ee.dart';
 import 'matrix_rtc_focus.dart';
 
 enum MatrixRtcPhase { idle, connecting, connected, ended, error }
@@ -50,8 +52,12 @@ class MatrixRtcService {
 
   MatrixRtcSnapshot _snapshot = MatrixRtcSnapshot.idle;
   lk.Room? _livekit;
+  lk.BaseKeyProvider? _keyProvider;
   Room? _room;
   Timer? _membershipKeepAlive;
+  StreamSubscription<dynamic>? _toDeviceSub;
+  Uint8List? _outboundKey;
+  var _outboundIndex = 0;
   var _disposed = false;
 
   MatrixRtcSnapshot get snapshot => _snapshot;
@@ -106,7 +112,27 @@ class MatrixRtcService {
         deviceId: deviceId,
         openIdToken: token,
       );
-      final livekit = lk.Room();
+      _outboundKey = generateCallEncryptionKey();
+      _outboundIndex = 0;
+      final keyProvider = await lk.BaseKeyProvider.create(
+        sharedKey: false,
+        ratchetWindowSize: 10,
+        keyRingSize: 256,
+      );
+      await keyProvider.setRawKey(
+        _outboundKey!,
+        participantId: rtcBackendIdentity(userId, deviceId),
+        keyIndex: _outboundIndex,
+      );
+      _keyProvider = keyProvider;
+      _listenForRemoteKeys(room.id);
+      await _shareOutboundKey(room, userId, deviceId);
+      final livekit = lk.Room(
+        roomOptions: lk.RoomOptions(
+          encryption: lk.E2EEOptions(keyProvider: keyProvider),
+          defaultAudioPublishOptions: const lk.AudioPublishOptions(red: false),
+        ),
+      );
       _livekit = livekit;
       livekit.addListener(_onLivekitChanged);
       await livekit.connect(config.url, config.jwt);
@@ -114,7 +140,10 @@ class MatrixRtcService {
       _membershipKeepAlive?.cancel();
       _membershipKeepAlive = Timer.periodic(
         const Duration(minutes: 20),
-        (_) => unawaited(_publishMembership(room, userId, deviceId, focus)),
+        (_) {
+          unawaited(_publishMembership(room, userId, deviceId, focus));
+          unawaited(_shareOutboundKey(room, userId, deviceId));
+        },
       );
       _publish(
         MatrixRtcSnapshot(
@@ -267,6 +296,10 @@ class MatrixRtcService {
   Future<void> _cleanup() async {
     _membershipKeepAlive?.cancel();
     _membershipKeepAlive = null;
+    await _toDeviceSub?.cancel();
+    _toDeviceSub = null;
+    _outboundKey = null;
+    _keyProvider = null;
     final livekit = _livekit;
     _livekit = null;
     if (livekit != null) {
@@ -314,6 +347,70 @@ class MatrixRtcService {
       }
     }
     return null;
+  }
+
+  void _listenForRemoteKeys(String roomId) {
+    _toDeviceSub?.cancel();
+    _toDeviceSub = client.onToDeviceEvent.stream.listen((event) {
+      if (event.type != callEncryptionKeysEventType) return;
+      final parsed = parseCallEncryptionToDevice(
+        sender: event.sender,
+        roomId: roomId,
+        content: Map<String, dynamic>.from(event.content),
+      );
+      if (parsed == null) return;
+      unawaited(
+        _keyProvider?.setRawKey(
+          parsed.key,
+          participantId: parsed.rtcBackendIdentity,
+          keyIndex: parsed.index,
+        ),
+      );
+    });
+  }
+
+  Future<void> _shareOutboundKey(
+    Room room,
+    String userId,
+    String deviceId,
+  ) async {
+    final key = _outboundKey;
+    if (key == null) return;
+    final content = callEncryptionToDeviceContent(
+      roomId: room.id,
+      deviceId: deviceId,
+      memberId: rtcBackendIdentity(userId, deviceId),
+      key: key,
+      index: _outboundIndex,
+    );
+    final messages = toDeviceMessages(
+      peers: _callPeers(room),
+      selfUserId: userId,
+      selfDeviceId: deviceId,
+      content: content,
+    );
+    if (messages.isEmpty) return;
+    await client.sendToDevice(
+      callEncryptionKeysEventType,
+      'm${DateTime.now().millisecondsSinceEpoch}',
+      messages,
+    );
+  }
+
+  List<CallPeer> _callPeers(Room room) {
+    final states = room.states[callMemberStateEventType];
+    if (states == null) return const [];
+    final peers = <CallPeer>[];
+    for (final entry in states.entries) {
+      peers.addAll(
+        callPeersFromMemberContent(
+          sender: entry.value.senderId,
+          stateKey: entry.key,
+          content: Map<String, dynamic>.from(entry.value.content),
+        ),
+      );
+    }
+    return peers;
   }
 
   void _ensureAvailable() {

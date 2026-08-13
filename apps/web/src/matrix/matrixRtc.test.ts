@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("matrix-js-sdk/lib/matrixrtc", () => ({
-  MatrixRTCSessionEvent: { MembershipsChanged: "MembershipsChanged" },
+  MatrixRTCSessionEvent: {
+    MembershipsChanged: "memberships_changed",
+    EncryptionKeyChanged: "encryption_key_changed",
+  },
 }));
+
+vi.mock("./livekitE2ee", () => {
+  class FakeKeyProvider {
+    attached: unknown = null;
+    attach(session: unknown) {
+      this.attached = session;
+    }
+    detach() {
+      this.attached = null;
+    }
+  }
+  return { MatrixLivekitKeyProvider: FakeKeyProvider };
+});
 
 import { MatrixRTCSessionEvent } from "matrix-js-sdk/lib/matrixrtc";
 import {
@@ -20,10 +36,12 @@ class FakeMedia implements LivekitMediaSession {
   connected = false;
   mic = true;
   stream: MediaStream | null = null;
+  lastOptions: { keyProvider?: unknown } | undefined;
   private listeners = new Set<() => void>();
 
-  async connect() {
+  async connect(_url?: string, _token?: string, options?: { keyProvider?: unknown }) {
     this.connected = true;
+    this.lastOptions = options;
   }
   async disconnect() {
     this.connected = false;
@@ -62,6 +80,7 @@ class FakeSession {
     this.memberships = [{}];
     for (const listener of this.listeners.get(MatrixRTCSessionEvent.MembershipsChanged) ?? []) listener();
   }
+  reemitEncryptionKeys() {}
   async leaveRoomSession() {
     this.left = true;
     this.joined = false;
@@ -141,6 +160,7 @@ describe("MatrixRtcController", () => {
 
     expect(session.joined).toBe(true);
     expect(media.connected).toBe(true);
+    expect(media.lastOptions?.keyProvider).toBeDefined();
     expect(controller.snapshot.phase).toBe("connected");
     expect(controller.snapshot.participantCount).toBe(1);
     expect(fetchJson).toHaveBeenCalledWith(

@@ -1,9 +1,11 @@
+import type { BaseKeyProvider } from "livekit-client";
 import type { MatrixClient, Room } from "matrix-js-sdk";
 import {
   MatrixRTCSessionEvent,
   type LivekitTransport,
   type MatrixRTCSession,
 } from "matrix-js-sdk/lib/matrixrtc";
+import { MatrixLivekitKeyProvider } from "./livekitE2ee";
 import {
   MSC3401_MEMBER_EVENT,
   remoteLivekitFocusFromEvents,
@@ -33,8 +35,12 @@ export interface MatrixRtcSnapshot {
   fallbackAvailable: boolean;
 }
 
+export interface LivekitConnectOptions {
+  keyProvider?: BaseKeyProvider;
+}
+
 export interface LivekitMediaSession {
-  connect(url: string, token: string): Promise<void>;
+  connect(url: string, token: string, options?: LivekitConnectOptions): Promise<void>;
   disconnect(): Promise<void>;
   setMicrophoneEnabled(enabled: boolean): Promise<void>;
   remoteStream(): MediaStream | null;
@@ -124,6 +130,7 @@ export class MatrixRtcController {
   private current: MatrixRtcSnapshot = EMPTY;
   private readonly listeners = new Set<() => void>();
   private session: MatrixRTCSession | null = null;
+  private keyProvider: MatrixLivekitKeyProvider | null = null;
   private unsubMedia: (() => void) | null = null;
   private readonly onMemberships = (): void => this.refresh();
 
@@ -179,7 +186,10 @@ export class MatrixRtcController {
       livekit_service_url: focus.livekit_service_url,
       livekit_alias: focus.livekit_alias ?? roomId,
     };
-    rtc.joinRoomSession([transport]);
+    rtc.joinRoomSession([transport], undefined, { manageMediaKeys: true });
+    const keyProvider = new MatrixLivekitKeyProvider();
+    keyProvider.attach(rtc);
+    this.keyProvider = keyProvider;
     try {
       const openId = await this.client.getOpenIdToken();
       let config: SfuConfig;
@@ -203,7 +213,7 @@ export class MatrixRtcController {
         );
       }
       this.unsubMedia = this.media.subscribe(() => this.refresh());
-      await this.media.connect(config.url, config.jwt);
+      await this.media.connect(config.url, config.jwt, { keyProvider });
       await this.media.setMicrophoneEnabled(true);
       this.refresh({ phase: "connected", error: null });
     } catch (reason) {
@@ -250,6 +260,8 @@ export class MatrixRtcController {
   private async cleanupSession(): Promise<void> {
     this.unsubMedia?.();
     this.unsubMedia = null;
+    this.keyProvider?.detach();
+    this.keyProvider = null;
     await this.media.disconnect().catch(() => undefined);
     if (this.session) {
       this.session.off(MatrixRTCSessionEvent.MembershipsChanged, this.onMemberships);

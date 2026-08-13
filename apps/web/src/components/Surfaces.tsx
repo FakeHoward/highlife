@@ -39,6 +39,7 @@ import {
   setupRecoveryAndKeyBackup,
   startDirectMessage,
   subscribeIncomingVerification,
+  CryptoUnavailableError,
   updateProfile,
   setCanonicalAlias,
   removeRoomAlias,
@@ -121,11 +122,12 @@ export function Modal({ title, onClose, children, wide = false }: {
 
 export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: (roomId: string) => void }) {
   const { t } = useI18n();
+  const cryptoReady = getCryptoStatus().enabled;
   const [tab, setTab] = useState<"join" | "create" | "dm">("join");
   const [value, setValue] = useState("");
   const [topic, setTopic] = useState("");
   const [alias, setAlias] = useState("");
-  const [encrypted, setEncrypted] = useState(true);
+  const [encrypted, setEncrypted] = useState(cryptoReady);
   const [error, setError] = useState<string | null>(null);
 
   function switchTab(next: typeof tab) {
@@ -134,7 +136,7 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
     setTopic("");
     setAlias("");
     setError(null);
-    setEncrypted(true);
+    setEncrypted(cryptoReady);
   }
 
   async function submit(event: FormEvent) {
@@ -145,18 +147,22 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
       if (tab === "join") {
         roomId = await joinRoom(value.trim());
       } else if (tab === "dm") {
-        roomId = await startDirectMessage(value.trim(), encrypted);
+        roomId = await startDirectMessage(value.trim(), encrypted && cryptoReady);
       } else {
         roomId = await createRoom({
           name: value.trim(),
           topic: topic.trim() || undefined,
           alias: alias.trim() || undefined,
-          encrypted,
+          encrypted: encrypted && cryptoReady,
         });
       }
       onOpen(roomId);
       onClose();
     } catch (reason) {
+      if (reason instanceof CryptoUnavailableError) {
+        setError(t("composer.cryptoUnavailable"));
+        return;
+      }
       if (reason instanceof JoinRoomFailure) {
         const key =
           reason.kind === "banned"
@@ -226,17 +232,29 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
               <input value={alias} onChange={(event) => setAlias(event.target.value)} placeholder={t("rooms.aliasPlaceholder")} />
             </label>
             <label className="check">
-              <input type="checkbox" checked={encrypted} onChange={(event) => setEncrypted(event.target.checked)} />
+              <input
+                type="checkbox"
+                checked={encrypted && cryptoReady}
+                disabled={!cryptoReady}
+                onChange={(event) => setEncrypted(event.target.checked)}
+              />
               {" "}{t("rooms.enableE2ee")}
             </label>
+            {!cryptoReady && <p className="muted small">{t("rooms.e2eeNeedsCrypto")}</p>}
           </>
         )}
         {tab === "dm" && (
           <label className="check">
-            <input type="checkbox" checked={encrypted} onChange={(event) => setEncrypted(event.target.checked)} />
+            <input
+              type="checkbox"
+              checked={encrypted && cryptoReady}
+              disabled={!cryptoReady}
+              onChange={(event) => setEncrypted(event.target.checked)}
+            />
             {" "}{t("rooms.enableE2ee")}
           </label>
         )}
+        {tab === "dm" && !cryptoReady && <p className="muted small">{t("rooms.e2eeNeedsCrypto")}</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <button className="button primary">{submitLabel}</button>
       </form>

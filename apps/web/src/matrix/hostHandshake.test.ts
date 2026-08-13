@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyBotUserId, roomNeedsHostHandshake } from "./hostHandshake";
+import { hasActiveCommandsState, isLikelyBotUserId, roomNeedsHostHandshake } from "./hostHandshake";
 
 describe("roomNeedsHostHandshake", () => {
   it("skips encrypted DMs and ordinary group chats", () => {
@@ -37,5 +37,10 @@ describe("roomNeedsHostHandshake", () => {
     expect(isLikelyBotUserId("@highlifebot:example.org")).toBe(true);
     expect(isLikelyBotUserId("@formspacebot:example.org")).toBe(true);
     expect(isLikelyBotUserId("@ada:example.org")).toBe(false);
+  });
+
+  it("ignores empty or redacted commands leftovers", () => {
+    expect(hasActiveCommandsState([{}, undefined, null])).toBe(false);
+    expect(hasActiveCommandsState([{ commands: [{ name: "start" }] }])).toBe(true);
   });
 });

@@ -1,18 +1,35 @@
-import { Room, RoomEvent, Track } from "livekit-client";
+import { Room, RoomEvent, Track, type BaseKeyProvider } from "livekit-client";
 import type { LivekitMediaSession } from "./matrixRtc";
+
+function createLivekitE2eeWorker(): Worker {
+  return new Worker(new URL("livekit-client/e2ee-worker", import.meta.url), { type: "module" });
+}
 
 export class BrowserLivekitMedia implements LivekitMediaSession {
   private room: Room | null = null;
   private mixed: MediaStream | null = null;
   private readonly listeners = new Set<() => void>();
 
-  async connect(url: string, token: string): Promise<void> {
+  async connect(url: string, token: string, options?: { keyProvider?: BaseKeyProvider }): Promise<void> {
     await this.disconnect();
-    const room = new Room();
+    const keyProvider = options?.keyProvider;
+    const room = new Room({
+      encryption: keyProvider
+        ? {
+            keyProvider,
+            worker: createLivekitE2eeWorker(),
+          }
+        : undefined,
+      publishDefaults: {
+        // LiveKit SFU strips RED for clients that cannot decode it; that breaks E2EE.
+        red: false,
+      },
+    });
     this.room = room;
     room.on(RoomEvent.TrackSubscribed, () => this.rebuildRemote());
     room.on(RoomEvent.TrackUnsubscribed, () => this.rebuildRemote());
     room.on(RoomEvent.Disconnected, () => this.rebuildRemote());
+    if (keyProvider) await room.setE2EEEnabled(true);
     await room.connect(url, token);
     this.rebuildRemote();
   }

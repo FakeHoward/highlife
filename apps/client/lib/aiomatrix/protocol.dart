@@ -436,6 +436,10 @@ bool isLikelyBotUserId(String userId) {
   return key == 'highlifebot' || key.endsWith('bot') || key.startsWith('bot');
 }
 
+bool hasActiveCommandsState(Map<String, dynamic>? content) {
+  return content != null && content.isNotEmpty;
+}
+
 bool roomNeedsHostHandshake({
   required Iterable<String> memberUserIds,
   bool hasCommandsState = false,

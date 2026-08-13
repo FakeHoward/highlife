@@ -15,7 +15,7 @@ __MATRIX_DOMAIN__ {
 		X-Frame-Options "SAMEORIGIN"
 		# Vite SPA may emit small inline bootstrapping; keep script-src unsafe-inline until nonces land.
 		# Residual: with unsafe-inline, XSS can still read in-memory recovery keys while cached (tab lifetime).
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.__MATRIX_DOMAIN__; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.__MATRIX_DOMAIN__; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		Permissions-Policy "camera=(self \"https://call.__MATRIX_DOMAIN__\"), microphone=(self \"https://call.__MATRIX_DOMAIN__\"), display-capture=(self \"https://call.__MATRIX_DOMAIN__\"), fullscreen=(self \"https://call.__MATRIX_DOMAIN__\"), geolocation=()"
 	}
 	encode zstd gzip
@@ -126,7 +126,11 @@ rtc.__MATRIX_DOMAIN__ {
 			respond "" 204
 		}
 		uri strip_prefix /livekit/jwt
-		reverse_proxy lk-jwt-service:8080
+		reverse_proxy lk-jwt-service:8080 {
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Methods
+			header_down -Access-Control-Allow-Headers
+		}
 	}
 
 	handle /livekit/sfu* {

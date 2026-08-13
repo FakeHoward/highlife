@@ -63,6 +63,7 @@ class HighLifeSession extends ChangeNotifier {
   HostToast? _hostToast;
   int _toastSeq = 0;
   bool _hostCapsBusy = false;
+  bool _hostCapsRan = false;
   final Set<String> _dismissedRtcInvites = <String>{};
   bool _ssoAvailable = false;
   bool _passwordLoginAvailable = false;
@@ -136,8 +137,9 @@ class HighLifeSession extends ChangeNotifier {
         if (status.status == SyncStatus.finished ||
             status.status == SyncStatus.processing ||
             status.status == SyncStatus.cleaningUp) {
+          final first = !_initialSyncDone;
           _initialSyncDone = true;
-          unawaited(advertiseHostCapabilities());
+          if (first) unawaited(advertiseHostCapabilities());
         }
         notifyListeners();
       }),
@@ -235,12 +237,12 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Advertise aiomatrix host caps only in rooms that have a bot; strip leftovers from DMs.
+  /// Advertise aiomatrix host caps only in rooms that have a bot. Once per session.
   Future<void> advertiseHostCapabilities({Room? room}) async {
     final client = _client;
     final self = client?.userID;
     if (client == null || self == null || !client.isLogged()) return;
-    if (_hostCapsBusy) return;
+    if (_hostCapsBusy || (room == null && _hostCapsRan)) return;
     _hostCapsBusy = true;
     final content = buildHostCapabilitiesContent();
     final targets = room != null
@@ -248,22 +250,18 @@ class HighLifeSession extends ChangeNotifier {
         : rooms.where((r) => r.membership == Membership.join);
     try {
       for (final target in targets) {
+        final commandStates = target.states[commandsStateEventType];
         final needed = roomNeedsHostHandshake(
           memberUserIds:
               target.getParticipants([Membership.join]).map((user) => user.id),
-          hasCommandsState:
-              target.states[commandsStateEventType]?.isNotEmpty == true,
+          hasCommandsState: commandStates?.values.any(
+                (event) => hasActiveCommandsState(
+                  Map<String, dynamic>.from(event.content),
+                ),
+              ) ==
+              true,
         );
-        if (!needed) {
-          final leftover =
-              target.getState(hostCapabilitiesStateEventType, self);
-          if (leftover is Event) {
-            try {
-              await leftover.redactEvent();
-            } catch (_) {}
-          }
-          continue;
-        }
+        if (!needed) continue;
         final existing =
             target.getState(hostCapabilitiesStateEventType, self);
         if (existing != null &&
@@ -281,6 +279,7 @@ class HighLifeSession extends ChangeNotifier {
           // Needs power level; stock rooms stay on aware bot defaults.
         }
       }
+      if (room == null) _hostCapsRan = true;
     } finally {
       _hostCapsBusy = false;
     }
@@ -643,6 +642,7 @@ class HighLifeSession extends ChangeNotifier {
     _hostToast = null;
     _initialSyncDone = false;
     _hostCapsBusy = false;
+    _hostCapsRan = false;
     _dismissedRtcInvites.clear();
     _error = failure;
     notifyListeners();

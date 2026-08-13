@@ -90,7 +90,8 @@ import {
   togglePinnedIds,
 } from "./messengerExtras";
 import { DIRECT_CALL_CRYPTO_UNAVAILABLE } from "./directCallErrors";
-import { roomNeedsHostHandshake } from "./hostHandshake";
+import { roomNeedsHostHandshake, hasActiveCommandsState } from "./hostHandshake";
+import { assertCryptoForEncryptedRoom } from "./cryptoGuard";
 import { outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
 import {
@@ -103,6 +104,7 @@ import { normalizeTimeline, type RawTimelineEvent } from "./timeline";
 
 export { normalizeRoomIdOrAlias } from "./roomAddress";
 export { registerPushAfterLogin } from "./push";
+export { CryptoUnavailableError } from "./cryptoGuard";
 
 export interface MatrixSnapshot {
   client: MatrixClient | null;
@@ -175,6 +177,7 @@ let snapshot: MatrixSnapshot = {
 };
 let toastSeq = 0;
 let hostCapsBusy = false;
+let hostCapsRan = false;
 const dismissedRtcInvites = new Set<string>();
 const listeners = new Set<() => void>();
 const historyStates = new Map<string, HistoryState>();
@@ -362,9 +365,10 @@ export function showLocalToast(text: string, alert = false): void {
   });
 }
 
-/** Advertise aiomatrix host caps only in rooms that have a bot; strip leftovers from DMs. */
-async function advertiseHostCapabilities(): Promise<void> {
+/** Advertise aiomatrix host caps only in rooms that have a bot. Bulk once, then per new join. */
+async function advertiseHostCapabilities(targetRoom?: Room): Promise<void> {
   if (!client || hostCapsBusy) return;
+  if (!targetRoom && hostCapsRan) return;
   hostCapsBusy = true;
   const userId = client.getUserId();
   if (!userId) {
@@ -372,26 +376,21 @@ async function advertiseHostCapabilities(): Promise<void> {
     return;
   }
   const content = buildHostCapabilitiesContent();
+  const rooms = targetRoom ? [targetRoom] : client.getRooms();
   try {
-    for (const room of client.getRooms()) {
+    for (const room of rooms) {
       if (room.getMyMembership() !== "join") continue;
+      const commandEvents = room.currentState.getStateEvents("dev.aiomatrix.commands");
+      const commandList = Array.isArray(commandEvents) ? commandEvents : commandEvents ? [commandEvents] : [];
       const needed = roomNeedsHostHandshake({
         isDirect: Boolean(room.getDMInviter() || room.guessDMUserId()),
         memberUserIds: room.getJoinedMembers().map((member) => member.userId),
-        hasCommandsState: room.currentState.getStateEvents("dev.aiomatrix.commands").length > 0,
+        hasCommandsState: hasActiveCommandsState(
+          commandList.map((event) => event.getContent() as Record<string, unknown>),
+        ),
       });
+      if (!needed) continue;
       const existing = room.currentState.getStateEvents(AIOMATRIX_HOST_STATE_EVENT_TYPE, userId);
-      if (!needed) {
-        const eventId = existing?.getId();
-        if (eventId) {
-          try {
-            await client.redactEvent(room.roomId, eventId);
-          } catch {
-            /* no power or already gone */
-          }
-        }
-        continue;
-      }
       const previous = existing?.getContent() ?? {};
       if (JSON.stringify(previous) === JSON.stringify(content)) continue;
       try {
@@ -405,6 +404,7 @@ async function advertiseHostCapabilities(): Promise<void> {
         // Needs power level; aware bots already use toast profile.
       }
     }
+    if (!targetRoom) hostCapsRan = true;
   } finally {
     hostCapsBusy = false;
   }
@@ -463,13 +463,19 @@ async function start(session: StoredSession): Promise<void> {
   attachCallControllers(client);
   publish({ connection: navigator.onLine ? "syncing" : "offline", error: null, toast: null });
   hostCapsBusy = false;
+  hostCapsRan = false;
   dismissedRtcInvites.clear();
   client.on(ClientEvent.Sync, (state) => {
     publish({
       connection: state === "SYNCING" || state === "PREPARED" ? "online" : state === "ERROR" ? "error" : "syncing",
     });
-    if (state === "PREPARED" || state === "SYNCING") {
+    if (state === "PREPARED") {
       void advertiseHostCapabilities();
+    }
+  });
+  client.on(RoomEvent.MyMembership, (room, membership) => {
+    if (membership === "join" && hostCapsRan) {
+      void advertiseHostCapabilities(room);
     }
   });
   client.on(RoomEvent.Timeline, (event, room, toStartOfTimeline) => {
@@ -717,6 +723,7 @@ export async function logout(): Promise<void> {
   }
   publish({ connection: "offline", error: null, toast: null });
   hostCapsBusy = false;
+  hostCapsRan = false;
   dismissedRtcInvites.clear();
   publishVerification();
 }
@@ -908,6 +915,12 @@ export async function sendMessage(
   body: string,
   options: { editEventId?: string; replyEventId?: string } = {},
 ): Promise<void> {
+  const active = requiredClient();
+  const room = active.getRoom(roomId);
+  assertCryptoForEncryptedRoom({
+    encrypted: Boolean(room?.hasEncryptionStateEvent()),
+    cryptoReady: Boolean(active.getCrypto()),
+  });
   const content: Record<string, unknown> = { msgtype: "m.text", body };
   if (options.editEventId) {
     content.body = `* ${body}`;
@@ -916,7 +929,7 @@ export async function sendMessage(
   } else if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
   }
-  await requiredClient().sendEvent(roomId, EventType.RoomMessage, content as never);
+  await active.sendEvent(roomId, EventType.RoomMessage, content as never);
 }
 
 export async function uploadFile(
@@ -927,6 +940,10 @@ export async function uploadFile(
   const active = requiredClient();
   const room = active.getRoom(roomId);
   const encryptedRoom = Boolean(room?.hasEncryptionStateEvent());
+  assertCryptoForEncryptedRoom({
+    encrypted: encryptedRoom,
+    cryptoReady: Boolean(active.getCrypto()),
+  });
   const bytes = await file.arrayBuffer();
   options.onProgress?.(0.05);
 
@@ -1174,7 +1191,13 @@ export async function createRoom(input: {
   encrypted?: boolean;
   isSpace?: boolean;
 }): Promise<string> {
-  const response = await requiredClient().createRoom({
+  const active = requiredClient();
+  const encrypted = Boolean(input.encrypted);
+  assertCryptoForEncryptedRoom({
+    encrypted,
+    cryptoReady: Boolean(active.getCrypto()),
+  });
+  const response = await active.createRoom({
     name: input.name,
     topic: input.topic,
     room_alias_name: input.alias?.trim().replace(/^#/, "").split(":")[0] || undefined,
@@ -1182,7 +1205,7 @@ export async function createRoom(input: {
     preset: Preset.PrivateChat,
     room_version: input.isSpace ? "11" : undefined,
     creation_content: input.isSpace ? { type: "m.space" } : undefined,
-    initial_state: input.encrypted
+    initial_state: encrypted
       ? [{ type: EventType.RoomEncryption, state_key: "", content: { algorithm: "m.megolm.v1.aes-sha2" } }]
       : undefined,
   });
@@ -1196,6 +1219,10 @@ export async function startDirectMessage(userId: string, encrypted = true): Prom
   if (!trimmed.startsWith("@") || !trimmed.includes(":")) {
     throw new Error("Enter a full Matrix user ID like @name:server");
   }
+  assertCryptoForEncryptedRoom({
+    encrypted,
+    cryptoReady: Boolean(active.getCrypto()),
+  });
   for (const room of active.getRooms()) {
     if (!room.getDMInviter() && !room.guessDMUserId()) continue;
     const members = room.getJoinedMembers().map((member) => member.userId);

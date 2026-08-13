@@ -170,6 +170,8 @@ const en = {
   "composer.send": "Send message",
   "composer.attach": "Attach file",
   "composer.sendFailed": "Message was not sent",
+  "composer.cryptoUnavailable":
+    "This room is encrypted, but encryption is not ready on this device. Open Profile and set up recovery, or use an unencrypted room.",
   "composer.uploadFailed": "Upload failed",
   "composer.uploadProgress": "Uploading… {percent}%",
   "composer.createPoll": "Poll",
@@ -305,6 +307,8 @@ const en = {
   "rooms.aliasOptional": "Room address (optional)",
   "rooms.aliasPlaceholder": "#room:server",
   "rooms.enableE2ee": "Enable end-to-end encryption",
+  "rooms.e2eeNeedsCrypto":
+    "Encryption is not ready on this device, so new rooms stay unencrypted.",
   "rooms.joinRoom": "Join room",
   "rooms.createRoom": "Create room",
   "rooms.requestFailed": "Room request failed",
@@ -559,6 +563,8 @@ const ru: Record<MessageKey, string> = {
   "composer.send": "Отправить сообщение",
   "composer.attach": "Прикрепить файл",
   "composer.sendFailed": "Сообщение не отправлено",
+  "composer.cryptoUnavailable":
+    "Комната зашифрована, но шифрование на этом устройстве не готово. Откройте Профиль и настройте восстановление — или пишите в незашифрованную комнату.",
   "composer.uploadFailed": "Не удалось загрузить файл",
   "composer.uploadProgress": "Загрузка… {percent}%",
   "composer.createPoll": "Опрос",
@@ -691,6 +697,8 @@ const ru: Record<MessageKey, string> = {
   "rooms.aliasOptional": "Адрес комнаты (необязательно)",
   "rooms.aliasPlaceholder": "#room:server",
   "rooms.enableE2ee": "Включить сквозное шифрование",
+  "rooms.e2eeNeedsCrypto":
+    "Шифрование на этом устройстве не готово — новые комнаты будут без E2EE.",
   "rooms.joinRoom": "Присоединиться к комнате",
   "rooms.createRoom": "Создать комнату",
   "rooms.requestFailed": "Не удалось выполнить запрос",
