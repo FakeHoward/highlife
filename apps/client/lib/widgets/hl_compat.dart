@@ -1,9 +1,35 @@
 import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
 
 import '../theme.dart';
+
+Future<T?> showDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+  bool useRootNavigator = true,
+  Color? barrierColor,
+  AlignmentGeometry? alignment,
+}) {
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: 'Dismiss',
+    barrierColor: barrierColor ?? const Color(0x80000000),
+    useRootNavigator: useRootNavigator,
+    pageBuilder: (context, animation, secondaryAnimation) {
+      final child = builder(context);
+      if (alignment == null) return child;
+      return Align(alignment: alignment, child: child);
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
 
 class InputDecoration {
   const InputDecoration({
@@ -570,7 +596,7 @@ class PopupMenuButton<T> extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final items = itemBuilder(context).whereType<PopupMenuItem<T>>().toList();
-    final selected = await shadcn.showDialog<T>(
+    final selected = await showDialog<T>(
       context: context,
       builder: (context) => shadcn.AlertDialog(
         content: Column(
@@ -911,7 +937,7 @@ Future<T?> showModalBottomSheet<T>({
   Color? backgroundColor,
   bool isDismissible = true,
 }) {
-  return shadcn.showDialog<T>(
+  return showDialog<T>(
     context: context,
     barrierDismissible: isDismissible,
     alignment: Alignment.bottomCenter,
@@ -1076,7 +1102,7 @@ class DropdownButtonFormField<T> extends StatelessWidget {
           onPressed: onChanged == null
               ? null
               : () async {
-                  final next = await shadcn.showDialog<T>(
+                  final next = await showDialog<T>(
                     context: context,
                     builder: (context) => shadcn.AlertDialog(
                       content: Column(
@@ -1102,7 +1128,7 @@ class DropdownButtonFormField<T> extends StatelessWidget {
 }
 
 class SelectableText extends StatelessWidget {
-  const SelectableText(this.data, {super.key, this.style});
+  const SelectableText(this.data, {super.key, this.style}) : _span = null;
 
   const SelectableText.rich(this._span, {super.key, this.style}) : data = null;
 
@@ -1112,11 +1138,9 @@ class SelectableText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SelectionArea(
-      child: _span == null
-          ? Text(data ?? '', style: style)
-          : Text.rich(_span!, style: style),
-    );
+    return _span == null
+        ? Text(data ?? '', style: style)
+        : Text.rich(_span!, style: style);
   }
 }
 
