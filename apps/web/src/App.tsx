@@ -62,6 +62,7 @@ export function App() {
           mute: t("call.mute"),
           unmute: t("call.unmute"),
           hangup: t("call.hangup"),
+          micBlocked: t("call.micBlocked"),
         }}
         onAccept={() => void acceptDirectCall()}
         onReject={rejectDirectCall}

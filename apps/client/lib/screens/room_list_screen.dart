@@ -431,53 +431,65 @@ class _SpacesRail extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: colors.surfaceContainerLow,
+      clipBehavior: Clip.hardEdge,
       child: SafeArea(
-        child: Column(
+        child: SizedBox(
+          width: AdaptiveMessengerShell.railWidth,
+          child: Column(
           children: [
             const SizedBox(height: 8),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                clipBehavior: Clip.hardEdge,
                 itemCount: spaces.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final space = spaces[index];
                   final selected = selectedSpaceId == space.id;
-                  return Tooltip(
+                  return Center(
+                    child: Tooltip(
                     message: space.getLocalizedDisplayname(),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                       onTap: () => onSelect(space),
                       child: Container(
-                        width: 40,
-                        height: 40,
+                        width: 36,
+                        height: 36,
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: selected
-                              ? Border.all(color: colors.primary, width: 2)
+                          shape: BoxShape.circle,
+                          color: selected
+                              ? colors.primary.withValues(alpha: 0.16)
                               : null,
                         ),
                         child: MatrixAvatar(
                           name: space.getLocalizedDisplayname(),
                           mxc: space.avatar,
                           client: space.client,
-                          radius: 17,
+                          radius: 16,
                           fallbackIcon: Icons.workspaces_outline,
                         ),
                       ),
                     ),
+                  ),
                   );
                 },
               ),
             ),
-            IconButton(
-              tooltip: createTooltip,
-              onPressed: onCreate,
-              icon: const Icon(Icons.add, size: 20),
+            Center(
+              child: IconButton(
+                tooltip: createTooltip,
+                onPressed: onCreate,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                icon: const Icon(Icons.add, size: 20),
+              ),
             ),
             const SizedBox(height: 4),
           ],
+          ),
         ),
       ),
     );

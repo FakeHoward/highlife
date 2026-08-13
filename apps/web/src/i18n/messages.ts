@@ -145,6 +145,12 @@ const en = {
   "timeline.systemAliasCleared": "{name} cleared the room address",
   "timeline.systemSpace": "{name} updated space rooms",
   "timeline.systemState": "{name} updated room state",
+  "timeline.systemCallInvite": "{name} started a voice call",
+  "timeline.systemCallAnswer": "{name} answered the call",
+  "timeline.systemCallHangup": "{name} ended the call",
+  "timeline.systemCallReject": "{name} declined the call",
+  "timeline.today": "Today",
+  "timeline.yesterday": "Yesterday",
 
   // Composer
   "composer.editing": "Editing",
@@ -334,6 +340,8 @@ const en = {
   "call.hangup": "Hang up",
   "call.participants": "{count} in call",
   "call.fallback": "Use Element Call",
+  "call.micBlocked":
+    "Microphone is blocked by Windows. Allow it for this browser in Settings → Privacy → Microphone, then try again.",
 
   // Threads
   "thread.title": "Thread",
@@ -484,6 +492,12 @@ const ru: Record<MessageKey, string> = {
   "timeline.systemAliasCleared": "{name} удалил(а) адрес комнаты",
   "timeline.systemSpace": "{name} обновил(а) комнаты пространства",
   "timeline.systemState": "{name} обновил(а) состояние комнаты",
+  "timeline.systemCallInvite": "{name} начал(а) голосовой звонок",
+  "timeline.systemCallAnswer": "{name} ответил(а) на звонок",
+  "timeline.systemCallHangup": "{name} завершил(а) звонок",
+  "timeline.systemCallReject": "{name} отклонил(а) звонок",
+  "timeline.today": "Сегодня",
+  "timeline.yesterday": "Вчера",
 
   "composer.editing": "Редактирование",
   "composer.replyingTo": "Ответ",
@@ -667,6 +681,8 @@ const ru: Record<MessageKey, string> = {
   "call.hangup": "Завершить",
   "call.participants": "В звонке: {count}",
   "call.fallback": "Открыть Element Call",
+  "call.micBlocked":
+    "Микрофон заблокирован Windows. Разрешите его для этого браузера в Параметры → Конфиденциальность → Микрофон и попробуйте снова.",
 
   "thread.title": "Тред",
   "thread.loading": "Загрузка треда…",

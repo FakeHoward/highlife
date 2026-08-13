@@ -47,6 +47,10 @@ describe("i18n messages", () => {
     expect(translate("en", "call.dialog")).toBe("Voice call");
     expect(translate("en", "call.fallback")).toBe("Use Element Call");
     expect(translate("ru", "call.participants", { count: 3 })).toBe("В звонке: 3");
+    expect(translate("en", "call.micBlocked")).toMatch(/Windows/i);
+    expect(translate("ru", "timeline.systemCallInvite", { name: "Ada" })).toBe(
+      "Ada начал(а) голосовой звонок",
+    );
   });
 
   it("persists locale switches through the provider", () => {

@@ -7,9 +7,11 @@ import {
   CallState,
 } from "matrix-js-sdk/lib/webrtc/call";
 import { CallEventHandlerEvent } from "matrix-js-sdk/lib/webrtc/callEventHandler";
+import { classifyDirectCallFailure } from "./directCallErrors";
 
 export type DirectCallPhase = "idle" | "ringing" | "connecting" | "connected" | "ended" | "error";
 export type DirectCallDirection = "incoming" | "outgoing" | null;
+export { DIRECT_CALL_MIC_BLOCKED, classifyDirectCallFailure } from "./directCallErrors";
 
 export type DirectMatrixCall = MatrixCall;
 
@@ -70,11 +72,16 @@ function preferredStream(
 
 export class DirectCallController {
   private current: DirectCallSnapshot = EMPTY_SNAPSHOT;
+  private retainError = false;
   private readonly listeners = new Set<() => void>();
   private readonly onIncoming = (call: DirectMatrixCall) => this.attach(call, "incoming");
   private readonly onCallState = (nextState: CallState): void => {
     if (nextState === CallState.Ended) {
       this.detachCurrent();
+      if (this.retainError || this.current.phase === "error") {
+        this.publish({ ...this.terminalSnapshot("error"), error: this.current.error });
+        return;
+      }
       this.publish(this.terminalSnapshot("ended"));
       return;
     }
@@ -82,11 +89,8 @@ export class DirectCallController {
   };
   private readonly onFeedsChanged = (): void => this.refresh();
   private readonly onCallError = (reason: unknown): void => {
-    const message =
-      reason && typeof reason === "object" && "message" in reason
-        ? String((reason as { message?: unknown }).message)
-        : "Call failed";
-    this.refresh({ phase: "error", error: message });
+    this.retainError = true;
+    this.refresh({ phase: "error", error: classifyDirectCallFailure(reason) });
   };
 
   constructor(private readonly client: DirectCallClient) {
@@ -110,13 +114,7 @@ export class DirectCallController {
     try {
       await call.placeVoiceCall();
     } catch (reason) {
-      call.hangup(CallErrorCode.UserHangup, false);
-      this.detachCurrent();
-      const error =
-        reason && typeof reason === "object" && "message" in reason
-          ? String((reason as { message?: unknown }).message)
-          : "Call failed";
-      this.publish({ ...this.terminalSnapshot("error"), error });
+      this.failCurrent(call, reason);
       throw reason;
     }
   }
@@ -150,6 +148,7 @@ export class DirectCallController {
 
   clearEnded(): void {
     if (this.current.phase === "ended" || this.current.phase === "error") {
+      this.retainError = false;
       this.publish(EMPTY_SNAPSHOT);
     }
   }
@@ -164,11 +163,26 @@ export class DirectCallController {
     this.listeners.clear();
   }
 
+  private failCurrent(call: DirectMatrixCall, reason: unknown): void {
+    this.retainError = true;
+    this.detachCurrent();
+    try {
+      call.hangup(CallErrorCode.UserHangup, false);
+    } catch {
+      // The SDK may already have terminated the call after getUserMediaFailed.
+    }
+    this.publish({
+      ...this.terminalSnapshot("error"),
+      error: classifyDirectCallFailure(reason),
+    });
+  }
+
   private attach(call: DirectMatrixCall, direction: Exclude<DirectCallDirection, null>): void {
     if (this.current.call && this.current.call !== call) {
       if (direction === "incoming") call.reject();
       return;
     }
+    this.retainError = false;
     this.detachCurrent();
     call.on(CallEvent.State, this.onCallState);
     call.on(CallEvent.FeedsChanged, this.onFeedsChanged);

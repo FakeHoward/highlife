@@ -283,6 +283,36 @@ describe("normalizeTimeline", () => {
     );
   });
 
+  it("renders voice-call signalling as system lines", () => {
+    const events = [
+      {
+        eventId: "$invite",
+        type: "m.call.invite",
+        sender: "@bot:example.org",
+        timestamp: 1,
+        content: { call_id: "c1", version: "1" },
+      },
+      {
+        eventId: "$hangup",
+        type: "m.call.hangup",
+        sender: "@me:example.org",
+        timestamp: 2,
+        content: { call_id: "c1", version: "1" },
+      },
+    ];
+
+    expect(normalizeTimeline(events, base)).toEqual([
+      expect.objectContaining({
+        kind: "system",
+        body: "HighLife Bot started a voice call",
+      }),
+      expect.objectContaining({
+        kind: "system",
+        body: "@me:example.org ended the call",
+      }),
+    ]);
+  });
+
   it("renders membership system events", () => {
     const events = [
       {

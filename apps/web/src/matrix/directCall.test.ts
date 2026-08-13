@@ -70,6 +70,8 @@ class FakeCall {
     this.hungUp = true;
     this.hangupReason = reason;
     this.suppressHangupEvent = suppressEvent;
+    this.state = CallState.Ended;
+    this.emit(CallEvent.State, CallState.Ended);
   }
 
   isMicrophoneMuted() {
@@ -176,6 +178,36 @@ describe("DirectCallController", () => {
     expect(controller.snapshot.call).toBeNull();
     expect(controller.snapshot.remoteStream).toBeNull();
     expect(controller.snapshot.localStream).toBeNull();
+  });
+
+  it("keeps a visible error when getUserMedia fails and the SDK ends the call", async () => {
+    const client = new FakeClient();
+    const controller = new DirectCallController(client);
+    const denied = Object.assign(new Error("Permission denied by system"), { name: "NotAllowedError" });
+    client.call.placeVoiceCall = async () => {
+      client.call.emit(CallEvent.Error, denied);
+      client.call.hangup(CallErrorCode.UserHangup, false);
+      throw denied;
+    };
+
+    await expect(controller.start("!room:example.org")).rejects.toThrow(/Permission denied/);
+    expect(controller.snapshot.phase).toBe("error");
+    expect(controller.snapshot.call).toBeNull();
+    expect(controller.snapshot.error).toBe("mic_blocked");
+  });
+
+  it("keeps the mic-blocked error when the SDK ends the call without rejecting placeVoiceCall", async () => {
+    const client = new FakeClient();
+    const controller = new DirectCallController(client);
+    const denied = Object.assign(new Error("Permission denied by system"), { name: "NotAllowedError" });
+    client.call.placeVoiceCall = async () => {
+      client.call.emit(CallEvent.Error, denied);
+      client.call.hangup(CallErrorCode.UserHangup, false);
+    };
+
+    await controller.start("!room:example.org");
+    expect(controller.snapshot.phase).toBe("error");
+    expect(controller.snapshot.error).toBe("mic_blocked");
   });
 
   it("unsubscribes and terminates an active call when disposed", () => {

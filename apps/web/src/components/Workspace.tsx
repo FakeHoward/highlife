@@ -20,6 +20,7 @@ import {
   subscribeIncomingVerification,
   type SasChallenge,
 } from "../matrix/service";
+import { classifyDirectCallFailure, DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
 import { parseAiomatrixPayload, type MiniAppCard } from "../protocol/aiomatrix";
 import { Composer, type ComposeMode } from "./Composer";
 import { Avatar } from "./Avatar";
@@ -270,7 +271,13 @@ export function Workspace() {
                     type="button"
                     onClick={() => {
                       if (activeRoom.isDirect) {
-                        void startDirectCall(activeRoom.roomId).catch((error: Error) => showLocalToast(error.message, true));
+                        void startDirectCall(activeRoom.roomId).catch((error: Error) => {
+                          const classified = classifyDirectCallFailure(error);
+                          showLocalToast(
+                            classified === DIRECT_CALL_MIC_BLOCKED ? t("call.micBlocked") : error.message,
+                            true,
+                          );
+                        });
                         return;
                       }
                       void startMatrixRtc(activeRoom.roomId).catch((error: Error) => {
@@ -344,7 +351,6 @@ export function Workspace() {
           </>
         ) : (
           <div className="welcome">
-            <span className="welcome-mark" aria-hidden="true">H</span>
             <h1>{t("chat.welcomeTitle")}</h1>
             <p>{t("chat.welcomeBody")}</p>
             <button className="button primary" onClick={() => setSurface("rooms")}>{t("chat.findRoom")}</button>

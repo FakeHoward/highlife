@@ -1,6 +1,6 @@
 import type { ReactionSummary, TimelineItem } from "@highlife/ui-contracts";
 import DOMPurify from "dompurify";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Fragment } from "react";
 import { useI18n } from "../i18n";
 import { markdownToHtml } from "../matrix/markdown";
 import {
@@ -26,6 +26,21 @@ import { IconDownload } from "./Icons";
 import { Avatar } from "./Avatar";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀"] as const;
+
+function sameCalendarDay(left: number, right: number): boolean {
+  const a = new Date(left);
+  const b = new Date(right);
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function dateChipLabel(timestamp: number, todayLabel: string, yesterdayLabel: string): string {
+  const today = new Date();
+  if (sameCalendarDay(timestamp, today.getTime())) return todayLabel;
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (sameCalendarDay(timestamp, yesterday.getTime())) return yesterdayLabel;
+  return new Date(timestamp).toLocaleDateString(undefined, { day: "numeric", month: "long" });
+}
 
 function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
@@ -176,22 +191,29 @@ export function MessageTimeline({
       )}
       {items.length === 0 && (
         <div className="timeline-empty">
-          <span aria-hidden="true">H</span>
           <strong>{t("timeline.emptyTitle")}</strong>
           <p>{t("timeline.emptyBody")}</p>
         </div>
       )}
       {items.map((item, index) => {
+        const previous = items[index - 1];
+        const showDate = !previous || !sameCalendarDay(previous.timestamp, item.timestamp);
+        const dateChip = showDate ? (
+          <div className="date-chip">{dateChipLabel(item.timestamp, t("timeline.today"), t("timeline.yesterday"))}</div>
+        ) : null;
         if (item.kind === "system") {
           return (
-            <div key={item.eventId} className="system-event" data-event-id={item.eventId}>
-              <span>{item.body}</span>
-            </div>
+            <Fragment key={item.eventId}>
+              {dateChip}
+              <div className="system-event" data-event-id={item.eventId}>
+                <span>{item.body}</span>
+              </div>
+            </Fragment>
           );
         }
-        const previous = items[index - 1];
         const grouped = previous?.senderId === item.senderId
           && previous.kind !== "system"
+          && !showDate
           && item.timestamp - previous.timestamp < 300_000;
         const bot = parseAiomatrixPayload(item.rawContent);
         const html = displayHtml(item, bot);
@@ -208,8 +230,9 @@ export function MessageTimeline({
             })
           : null;
         return (
-          <article
-            key={item.eventId}
+          <Fragment key={item.eventId}>
+            {dateChip}
+            <article
             data-event-id={item.eventId}
             className={`message ${item.isOwn ? "own" : ""} ${grouped ? "grouped" : ""} ${highlightEventId === item.eventId ? "highlight" : ""}`}
           >
@@ -333,6 +356,7 @@ export function MessageTimeline({
               )}
             </div>
           </article>
+          </Fragment>
         );
       })}
       <div ref={end} />

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { DirectCallSnapshot } from "../matrix/directCall";
+import { DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
 
 interface Props {
   snapshot: DirectCallSnapshot;
@@ -22,6 +23,7 @@ export interface DirectCallLabels {
   mute: string;
   unmute: string;
   hangup: string;
+  micBlocked: string;
 }
 
 export function DirectCallSurface({
@@ -44,20 +46,22 @@ export function DirectCallSurface({
     };
   }, [snapshot.remoteStream]);
 
-  if (!snapshot.call && snapshot.phase !== "error") return null;
+  if (snapshot.phase === "idle" || snapshot.phase === "ended") return null;
 
   const incoming = snapshot.direction === "incoming" && snapshot.phase === "ringing";
-  const status =
-    snapshot.phase === "connected"
+  const failed = snapshot.phase === "error";
+  const status = failed
+    ? snapshot.error === DIRECT_CALL_MIC_BLOCKED
+      ? labels.micBlocked
+      : snapshot.error || labels.failed
+    : snapshot.phase === "connected"
       ? labels.connected
       : snapshot.phase === "ringing"
         ? labels.incoming
-        : snapshot.phase === "error"
-          ? labels.failed
-          : labels.connecting;
+        : labels.connecting;
 
   return (
-    <section className="direct-call" role="dialog" aria-label={labels.dialog}>
+    <section className={`direct-call${failed ? " is-error" : ""}`} role="dialog" aria-label={labels.dialog}>
       <audio ref={remoteAudio} autoPlay />
       <div className="direct-call-copy">
         <strong>{snapshot.peerName || snapshot.peerUserId || labels.unknownPeer}</strong>
@@ -73,6 +77,10 @@ export function DirectCallSurface({
               {labels.decline}
             </button>
           </>
+        ) : failed ? (
+          <button type="button" className="button danger" onClick={onHangup} aria-label={labels.hangup}>
+            {labels.hangup}
+          </button>
         ) : (
           <>
             <button type="button" className="button" onClick={onToggleMicrophone} aria-label={snapshot.microphoneMuted ? labels.unmute : labels.mute}>

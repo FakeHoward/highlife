@@ -74,10 +74,7 @@ export function RoomSidebar({
       )}
       <aside className={`sidebar ${activeId ? "has-room" : ""}`} aria-label={t("sidebar.rooms")}>
       <header className="sidebar-head">
-        <div className="brand-lockup compact">
-          <span className="brand-symbol" aria-hidden="true">H</span>
-          <strong>HighLife</strong>
-        </div>
+        <strong className="sidebar-title">HighLife</strong>
         <div className="head-actions">
           <button className="icon-button" type="button" onClick={onNew} aria-label={t("sidebar.createOrJoin")} title={t("sidebar.createOrJoin")}>
             <IconPlus />

@@ -227,6 +227,29 @@ describe("message actions", () => {
     expect(grouped?.querySelector(".message-stack")).not.toBeNull();
   });
 
+  it("inserts a date chip when consecutive messages fall on different days", () => {
+    const first: TimelineItem = {
+      ...message,
+      timestamp: Date.parse("2026-08-11T12:00:00Z"),
+    };
+    const second: TimelineItem = {
+      ...message,
+      eventId: "$next-day",
+      timestamp: Date.parse("2026-08-12T12:00:00Z"),
+    };
+    const { container } = wrap(
+      <MessageTimeline
+        items={[first, second]}
+        roomId={room.roomId}
+        onComposeMode={vi.fn()}
+        onMiniApp={vi.fn()}
+        history={{ loading: false, exhausted: true, error: null }}
+        onLoadOlder={vi.fn()}
+      />,
+    );
+    expect(container.querySelectorAll(".date-chip")).toHaveLength(2);
+  });
+
   it("opens reply mode for the selected message", () => {
     const compose = vi.fn();
     wrap(

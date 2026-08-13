@@ -54,6 +54,10 @@ const SYSTEM_TYPES = new Set([
   "m.room.canonical_alias",
   "m.space.child",
   "m.space.parent",
+  "m.call.invite",
+  "m.call.answer",
+  "m.call.hangup",
+  "m.call.reject",
 ]);
 
 function record(value: unknown): Record<string, unknown> {
@@ -150,6 +154,10 @@ function systemBody(event: RawTimelineEvent, names: Record<string, string>): str
       : t("timeline.systemAliasCleared", { name: sender });
   }
   if (event.type === "m.space.child") return t("timeline.systemSpace", { name: sender });
+  if (event.type === "m.call.invite") return t("timeline.systemCallInvite", { name: sender });
+  if (event.type === "m.call.answer") return t("timeline.systemCallAnswer", { name: sender });
+  if (event.type === "m.call.hangup") return t("timeline.systemCallHangup", { name: sender });
+  if (event.type === "m.call.reject") return t("timeline.systemCallReject", { name: sender });
   return t("timeline.systemState", { name: sender });
 }
 
