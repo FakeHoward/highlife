@@ -226,21 +226,23 @@ class _RoundCallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        IconButton.filled(
-          tooltip: label,
-          onPressed: onPressed,
-          style: IconButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: foreground ?? Colors.white,
-            minimumSize: const Size(64, 64),
+    final fg = foreground ?? Colors.white;
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, size: 28, color: fg),
           ),
-          icon: Icon(icon, size: 28),
-        ),
-        const SizedBox(height: 6),
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
-      ],
+          const SizedBox(height: 6),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ],
+      ),
     );
   }
 }
