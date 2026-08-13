@@ -132,8 +132,10 @@ LivekitFocus? remoteLivekitFocus(Room room, String selfUserId) {
   final states = room.states[callMemberStateEventType];
   if (states == null) return null;
   for (final entry in states.entries) {
-    final sender = entry.value.senderId ??
-        userIdFromCallMemberStateKey(entry.key, '');
+        final sender = userIdFromCallMemberStateKey(
+          entry.key,
+          entry.value.senderId,
+        );
     if (sender == selfUserId) continue;
     final focus = livekitFocusFromCallMemberContent(
       Map<String, dynamic>.from(entry.value.content),

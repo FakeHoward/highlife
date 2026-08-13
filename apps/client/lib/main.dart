@@ -11,6 +11,7 @@ import 'theme.dart';
 import 'widgets/call_surface.dart';
 import 'widgets/host_toast_listener.dart';
 import 'widgets/hl_button.dart';
+import 'widgets/matrix_rtc_call_surface.dart';
 import 'services/matrix_rtc_service.dart';
 import 'widgets/native_voice_call_surface.dart';
 

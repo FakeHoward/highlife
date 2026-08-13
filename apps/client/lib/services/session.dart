@@ -257,7 +257,7 @@ class HighLifeSession extends ChangeNotifier {
         if (!needed) {
           final leftover =
               target.getState(hostCapabilitiesStateEventType, self);
-          if (leftover != null) {
+          if (leftover is Event) {
             try {
               await leftover.redactEvent();
             } catch (_) {}
@@ -887,8 +887,10 @@ class HighLifeSession extends ChangeNotifier {
       for (final entry in states.entries) {
         final content = Map<String, dynamic>.from(entry.value.content);
         if (!hasActiveCallMemberStates([content])) continue;
-        final sender = entry.value.senderId ??
-            userIdFromCallMemberStateKey(entry.key, '');
+        final sender = userIdFromCallMemberStateKey(
+          entry.key,
+          entry.value.senderId,
+        );
         if (sender == self) {
           me = true;
         } else {
