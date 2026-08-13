@@ -112,6 +112,8 @@ void main() {
     expect(hostCapabilitiesStateEventType, 'dev.aiomatrix.host');
     expect(callbackAnswerEventType, 'dev.aiomatrix.callback_answer');
     expect(toastEventType, 'dev.aiomatrix.toast');
+  });
+
   test('advertises host handshake only for bots or command rooms', () {
     expect(
       roomNeedsHostHandshake(

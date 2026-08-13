@@ -72,7 +72,7 @@ class MatrixRtcService {
         (await client.getWellknown()).toJson(),
       );
     } catch (_) {}
-    final remote = remoteLivekitFocus(room, userId);
+    final remote = userId == null ? null : remoteLivekitFocus(room, userId);
     final focus = remote ??
         discoverLivekitFocus(
           wellKnownJson,
