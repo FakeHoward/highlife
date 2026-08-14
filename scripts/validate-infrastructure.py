@@ -280,6 +280,13 @@ def validate_static_config() -> None:
     require("--org app.highlife" in client_workflow, "Flutter CI organization is incorrect")
     require("relay-" not in client_workflow, "Flutter CI still contains Relay artifact identifiers")
 
+    infra = (ROOT / ".github" / "workflows" / "infrastructure.yml").read_text(encoding="utf-8")
+    wait_prefix = infra.split("ready=1", 1)[0]
+    require(
+        "8083/.well-known/openid-configuration" in wait_prefix,
+        "infrastructure health must wait for MAS HTTP, not only mas-cli config check",
+    )
+
 
 def docker_compose_config(path: Path) -> None:
     docker = shutil.which("docker")
