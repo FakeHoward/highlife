@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
+    "typescript": "~7.0.2",
     "vite": "^7.2.2",
     "vitest": "^4.0.8"
   }
