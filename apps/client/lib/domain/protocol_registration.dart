@@ -7,7 +7,7 @@ List<List<String>> windowsProtocolRegCommands({
   required String scheme,
   required String executable,
 }) {
-  final classes = r'Software\Classes\' + scheme;
+  final classes = 'Software\\Classes\\$scheme';
   return [
     ['add', classes, '/ve', '/d', 'URL:$scheme Protocol', '/f'],
     ['add', classes, '/v', 'URL Protocol', '/d', '', '/f'],

@@ -8,9 +8,9 @@ void main() {
       executable: r'C:\HighLife\highlife_client.exe',
     );
     expect(commands, hasLength(3));
-    expect(commands.first, contains('Software\\Classes\\highlife'));
-    expect(commands.last.last, contains(r'C:\HighLife\highlife_client.exe'));
-    expect(commands.last.last, contains('%1'));
+    expect(commands[0][1], 'Software\\Classes\\highlife');
+    expect(commands.last[4], contains('highlife_client.exe'));
+    expect(commands.last[4], contains('%1'));
   });
 
   test('Linux desktop entry claims the highlife scheme', () {

@@ -35,7 +35,7 @@ jobs:
       - name: Test
         run: npm test --workspace @highlife/web -- --run && npm test --workspace @highlife/miniapp -- --run
       - name: Typecheck
-        run: npm run typecheck --workspace @highlife/web
+        run: npm run typecheck --workspace @highlife/web && npm run typecheck --workspace @highlife/miniapp
       - name: Build
         run: npm run build --workspace @highlife/web && npm run build --workspace @highlife/miniapp
         env:
