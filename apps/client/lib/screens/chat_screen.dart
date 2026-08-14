@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
@@ -292,6 +293,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _composer.text,
     );
     final callActive = session.roomHasActiveCall(widget.room);
+    final compactChrome = MediaQuery.sizeOf(context).width < 420;
 
     return Scaffold(
       appBar: AppBar(
@@ -333,6 +335,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (_typingLabel(session, s) != null)
                     Text(
                       _typingLabel(session, s)!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall.copyWith(
                             color: tokens.accent,
                             fontSize: 12,
@@ -341,6 +345,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   else if (_presenceLabel(s) != null)
                     Text(
                       _presenceLabel(s)!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall.copyWith(
                             color: tokens.muted,
                             fontSize: 12,
@@ -353,12 +359,14 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            tooltip: s.searchMessages,
-            onPressed: () => _openSearch(session, s),
-            icon: const Icon(Icons.search),
-          ),
-          if (session.nativeCalls != null || session.rtcAvailable)
+          if (!compactChrome)
+            IconButton(
+              tooltip: s.searchMessages,
+              onPressed: () => _openSearch(session, s),
+              icon: const Icon(Icons.search),
+            ),
+          if (!compactChrome &&
+              (session.nativeCalls != null || session.rtcAvailable))
             IconButton(
               tooltip: s.startCall,
               onPressed: () => _startCall(session),
@@ -367,6 +375,11 @@ class _ChatScreenState extends State<ChatScreen> {
           PopupMenuButton<String>(
             onSelected: (action) => _roomAction(session, s, action),
             itemBuilder: (_) => [
+              if (compactChrome)
+                PopupMenuItem(value: 'search', child: Text(s.searchMessages)),
+              if (compactChrome &&
+                  (session.nativeCalls != null || session.rtcAvailable))
+                PopupMenuItem(value: 'call', child: Text(s.startCall)),
               PopupMenuItem(value: 'details', child: Text(s.roomDetails)),
               PopupMenuItem(value: 'poll', child: Text(s.createPoll)),
               PopupMenuItem(
@@ -408,13 +421,26 @@ class _ChatScreenState extends State<ChatScreen> {
           if (callActive)
             Material(
               color: Theme.of(context).colorScheme.primaryContainer,
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.call),
-                title: Text(s.callBannerActive),
-                trailing: HlButton.primary(
-                  onPressed: () => _joinMatrixRtc(session),
-                  label: Text(s.joinCall),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.call, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        s.callBannerActive,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    HlButton.primary(
+                      height: 32,
+                      onPressed: () => _joinMatrixRtc(session),
+                      label: Text(s.joinCall),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -925,6 +951,14 @@ class _ChatScreenState extends State<ChatScreen> {
     AppStrings s,
     String action,
   ) async {
+    if (action == 'search') {
+      await _openSearch(session, s);
+      return;
+    }
+    if (action == 'call') {
+      await _startCall(session);
+      return;
+    }
     if (action == 'mute') {
       final muted = widget.room.pushRuleState == PushRuleState.dontNotify;
       await widget.room.setPushRuleState(
@@ -1291,10 +1325,13 @@ class _MessageTile extends StatelessWidget {
     final time =
         '${item.timestamp.hour.toString().padLeft(2, '0')}:${item.timestamp.minute.toString().padLeft(2, '0')}';
 
-    return Align(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = math.min(520.0, constraints.maxWidth * 0.86);
+        return Align(
       alignment: align,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: BoxConstraints(maxWidth: maxW),
         child: GestureDetector(
           onSecondaryTapDown: (details) => _showActions(
             context,
@@ -1346,7 +1383,10 @@ class _MessageTile extends StatelessWidget {
                           radius: 10,
                         ),
                         const SizedBox(width: 6),
-                        Flexible(
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: math.max(72, maxW - 44),
+                          ),
                           child: Text(
                             event.senderFromMemoryOrFallback.displayName ??
                                 event.senderId,
@@ -1515,6 +1555,8 @@ class _MessageTile extends StatelessWidget {
           ),
         ),
       ),
+        );
+      },
     );
   }
 
@@ -1592,11 +1634,10 @@ class _RichMessageBody extends StatelessWidget {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     if (item.kind == TimelineItemKind.system) {
       return Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.info_outline, size: 15),
           const SizedBox(width: 6),
-          Flexible(
+          Expanded(
             child: Text(
               item.body.isEmpty ? systemLabel : '$systemLabel: ${item.body}',
               style: TextStyle(fontSize: 12, color: tokens.muted),
@@ -1631,6 +1672,7 @@ class _RichMessageBody extends StatelessWidget {
               constraints: const BoxConstraints(maxHeight: 280),
               child: Image.network(
                 httpMediaUrl.toString(),
+                width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => _MediaFallback(
                   item: item,
@@ -1681,11 +1723,10 @@ class _MediaFallback extends StatelessWidget {
     return InkWell(
       onTap: onOpenMedia,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 9),
-          Flexible(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

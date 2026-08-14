@@ -160,7 +160,7 @@ class _CallStageState extends State<CallStage> {
                       label: widget.labels.answer ?? widget.labels.connected,
                       onPressed: widget.onAnswer,
                     ),
-                    const SizedBox(width: 28),
+                    const SizedBox(width: 20),
                     _RoundCallButton(
                       color: colors.error,
                       icon: Icons.call_end,
@@ -182,7 +182,7 @@ class _CallStageState extends State<CallStage> {
                             : widget.labels.mute,
                         onPressed: () => unawaited(widget.onToggleMicrophone()),
                       ),
-                    if (!widget.failed) const SizedBox(width: 28),
+                    if (!widget.failed) const SizedBox(width: 20),
                     _RoundCallButton(
                       color: colors.error,
                       icon: Icons.call_end,
@@ -190,7 +190,7 @@ class _CallStageState extends State<CallStage> {
                       onPressed: () => unawaited(widget.onHangup()),
                     ),
                     if (widget.failed && widget.fallbackAvailable) ...[
-                      const SizedBox(width: 28),
+                      const SizedBox(width: 20),
                       _RoundCallButton(
                         color: colors.primary,
                         icon: Icons.open_in_new,
@@ -240,7 +240,16 @@ class _RoundCallButton extends StatelessWidget {
             child: Icon(icon, size: 28, color: fg),
           ),
           const SizedBox(height: 6),
-          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          SizedBox(
+            width: 76,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
         ],
       ),
     );

@@ -396,8 +396,8 @@ jobs:
         with:
           path: artifacts
 
-      # Tag is always client-v$version from pubspec — bump version on every ship
-      # (never reuse a tag; softprops will create a new GitHub Release per tag).
+      # Tag includes +build so a forgotten name bump cannot overwrite an
+      # existing GitHub Release (softprops updates in place for the same tag).
       - name: Read version from pubspec
         id: version
         shell: bash
@@ -408,7 +408,7 @@ jobs:
           build="${line##*+}"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
-          echo "tag=client-v$name" >> "$GITHUB_OUTPUT"
+          echo "tag=client-v${name}-${build}" >> "$GITHUB_OUTPUT"
 
       - name: Package release assets
         env:

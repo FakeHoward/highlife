@@ -58,4 +58,82 @@ void main() {
     expect(find.text('Rooms'), findsOneWidget);
     expect(find.text('Conversation'), findsNothing);
   });
+
+  testWidgets('compact chrome keeps the app bar inside 320px', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final overflows = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.toString().contains('overflowed')) {
+        overflows.add(details.toString());
+      }
+      previous?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previous);
+
+    await tester.pumpWidget(
+      highLifeTestApp(
+        home: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              onPressed: () {},
+              icon: const Icon(Icons.arrow_back),
+            ),
+            title: const Text(
+              'Very long conversation title that must ellipsize',
+            ),
+            actions: [
+              IconButton(onPressed: () {}, icon: const Icon(Icons.search)),
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.call_outlined),
+              ),
+              IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert)),
+            ],
+          ),
+          body: const SizedBox.expand(),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(overflows, isEmpty);
+  });
+
+  testWidgets('theme segments fit a 320px profile row', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final overflows = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.toString().contains('overflowed')) {
+        overflows.add(details.toString());
+      }
+      previous?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previous);
+
+    await tester.pumpWidget(
+      highLifeTestApp(
+        home: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 0, label: Text('System')),
+              ButtonSegment(value: 1, label: Text('Light')),
+              ButtonSegment(value: 2, label: Text('Dark')),
+            ],
+            selected: const {1},
+            onSelectionChanged: _noopSelection,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(overflows, isEmpty);
+  });
 }
+
+void _noopSelection(Set<int> value) {}

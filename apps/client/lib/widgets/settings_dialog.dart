@@ -72,35 +72,64 @@ class _ProfilePageState extends State<ProfilePage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: InkWell(
-                  onTap: () => _changeAvatar(session),
-                  borderRadius: BorderRadius.circular(14),
-                  child: MatrixAvatar(
-                    name: _displayName ?? session.userId ?? '',
-                    mxc: _avatarUrl,
-                    client: session.client,
-                    radius: 24,
-                  ),
-                ),
-                title: Text(s.displayName),
-                subtitle: Text(
-                  '${_displayName?.isNotEmpty == true ? _displayName! : '—'}\n'
-                  '${session.userId ?? ''}',
-                ),
-                isThreeLine: true,
-                trailing: Wrap(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 20),
+                child: Column(
                   children: [
-                    IconButton(
-                      tooltip: s.changeAvatar,
-                      onPressed: () => _changeAvatar(session),
-                      icon: const Icon(Icons.add_a_photo_outlined),
+                    InkWell(
+                      onTap: () => _changeAvatar(session),
+                      borderRadius: BorderRadius.circular(40),
+                      child: MatrixAvatar(
+                        name: _displayName ?? session.userId ?? '',
+                        mxc: _avatarUrl,
+                        client: session.client,
+                        radius: 40,
+                      ),
                     ),
-                    IconButton(
-                      tooltip: s.editDisplayName,
-                      onPressed: () => _editDisplayName(session, s),
-                      icon: const Icon(Icons.edit_outlined),
+                    const SizedBox(height: 12),
+                    Text(
+                      _displayName?.isNotEmpty == true
+                          ? _displayName!
+                          : (session.userId ?? '—'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (session.userId != null)
+                      Text(
+                        session.userId!,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: HighLifeTokens.of(context).muted,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: HlButton.secondary(
+                            height: 36,
+                            isFullWidth: true,
+                            onPressed: () => _changeAvatar(session),
+                            label: Text(s.changeAvatar),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: HlButton.secondary(
+                            height: 36,
+                            isFullWidth: true,
+                            onPressed: () => _editDisplayName(session, s),
+                            label: Text(s.editDisplayName),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

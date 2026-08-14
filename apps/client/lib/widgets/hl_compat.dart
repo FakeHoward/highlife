@@ -150,18 +150,26 @@ class AppBar extends StatelessWidget {
             children: [
               if (resolvedLeading != null) resolvedLeading,
               Expanded(
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.text,
-                    height: 1.2,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.text,
+                      height: 1.2,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    child: title ?? const SizedBox.shrink(),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  child: title ?? const SizedBox.shrink(),
                 ),
               ),
-              if (actions != null) ...actions!,
+              if (actions != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: actions!,
+                ),
             ],
           ),
         ),
@@ -377,48 +385,32 @@ class IconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final compact = identical(visualDensity, VisualDensity.compact);
     final custom = style is _IconButtonStyle ? style as _IconButtonStyle : null;
+    final tokens = HighLifeTokens.of(context);
     final size = custom?.minimumSize ??
         (constraints == null
-            ? (compact ? const Size(36, 36) : const Size(40, 40))
+            ? (compact ? const Size(36, 36) : const Size(44, 44))
             : Size(constraints!.minWidth, constraints!.minHeight));
-    Widget glyph = icon;
-    if (iconSize != null) {
-      glyph = IconTheme.merge(
-        data: IconThemeData(size: iconSize),
-        child: icon,
-      );
-    }
-    late final Widget button;
-    if (custom?.backgroundColor != null) {
-      button = GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          width: size.width,
-          height: size.height,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: custom!.backgroundColor,
-            shape: BoxShape.circle,
-          ),
-          child: IconTheme(
-            data: IconThemeData(
-              color: custom.foregroundColor ?? const Color(0xFFFFFFFF),
-            ),
-            child: glyph,
-          ),
-        ),
-      );
-    } else if (_filled) {
-      button = shadcn.IconButton.primary(
-        icon: glyph,
-        onPressed: onPressed,
-      );
-    } else {
-      button = shadcn.IconButton.ghost(
-        icon: glyph,
-        onPressed: onPressed,
-      );
-    }
+    final fg = custom?.foregroundColor ??
+        (_filled ? const Color(0xFFFFFFFF) : tokens.muted);
+    Widget glyph = IconTheme.merge(
+      data: IconThemeData(size: iconSize ?? 22, color: fg),
+      child: icon,
+    );
+    final filledColor = custom?.backgroundColor ??
+        (_filled ? tokens.accent : null);
+    final button = GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: size.width,
+        height: size.height,
+        alignment: Alignment.center,
+        decoration: filledColor == null
+            ? null
+            : BoxDecoration(color: filledColor, shape: BoxShape.circle),
+        child: glyph,
+      ),
+    );
     if (tooltip == null || tooltip!.isEmpty) {
       return Padding(padding: padding ?? EdgeInsets.zero, child: button);
     }
@@ -562,6 +554,8 @@ class ListTile extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: scheme.foreground,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         child: title!,
                       ),
                     if (subtitle != null) ...[
@@ -578,7 +572,13 @@ class ListTile extends StatelessWidget {
               ),
               if (trailing != null) ...[
                 const SizedBox(width: 8),
-                trailing!,
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing!,
+                  ),
+                ),
               ],
             ],
           ),
@@ -1179,23 +1179,51 @@ class SegmentedButton<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final segment in segments)
-          selected.contains(segment.value)
-              ? shadcn.Button.primary(
-                  onPressed: () => onSelectionChanged({segment.value}),
-                  leading: segment.icon,
-                  child: segment.label,
-                )
-              : shadcn.Button.outline(
-                  onPressed: () => onSelectionChanged({segment.value}),
-                  leading: segment.icon,
-                  child: segment.label,
+    final tokens = HighLifeTokens.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Row(
+          children: [
+            for (final segment in segments)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => onSelectionChanged({segment.value}),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected.contains(segment.value)
+                          ? tokens.surface
+                          : const Color(0x00000000),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: DefaultTextStyle.merge(
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected.contains(segment.value)
+                            ? tokens.text
+                            : tokens.muted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      child: segment.label,
+                    ),
+                  ),
                 ),
-      ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

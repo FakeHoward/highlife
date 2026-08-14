@@ -196,7 +196,7 @@ export function MessageTimeline({
       {history.error && (
         <div className="history-error" role="alert">
           {history.error}
-          <button onClick={() => void loadOlder()}>{t("timeline.retry")}</button>
+          <button type="button" className="text-button" onClick={() => void loadOlder()}>{t("timeline.retry")}</button>
         </div>
       )}
       {items.length === 0 && (

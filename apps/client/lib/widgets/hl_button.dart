@@ -142,18 +142,37 @@ class HlButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (leading != null) ...[leading!, const SizedBox(width: 8)],
-        DefaultTextStyle.merge(
-          style: TextStyle(
-            color: fg,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
+        if (isFullWidth)
+          Flexible(
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                color: fg,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              child: IconTheme(
+                data: IconThemeData(color: fg, size: 18),
+                child: label,
+              ),
+            ),
+          )
+        else
+          DefaultTextStyle.merge(
+            style: TextStyle(
+              color: fg,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+            child: IconTheme(
+              data: IconThemeData(color: fg, size: 18),
+              child: label,
+            ),
           ),
-          child: IconTheme(
-            data: IconThemeData(color: fg, size: 18),
-            child: label,
-          ),
-        ),
       ],
     );
     return Opacity(

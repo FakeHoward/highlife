@@ -319,12 +319,12 @@ export function Workspace() {
                 </span>
               </button>
               <div className="head-actions">
-                <button className="icon-button" type="button" onClick={() => setSurface("search")} aria-label={t("chat.search")}>
+                <button className="icon-button head-search" type="button" onClick={() => setSurface("search")} aria-label={t("chat.search")}>
                   <IconSearch />
                 </button>
                 {callCapability?.available && (
                   <button
-                    className="icon-button"
+                    className="icon-button head-call"
                     type="button"
                     onClick={() => {
                       void startOutgoingCall(activeRoom.roomId).catch((error: Error) => {
@@ -360,6 +360,36 @@ export function Workspace() {
                 </button>
                 {surface === "roomMenu" && (
                   <div className="room-menu" role="menu">
+                    <button type="button" role="menuitem" className="room-menu-compact" onClick={() => setSurface("search")}>
+                      {t("chat.search")}
+                    </button>
+                    {callCapability?.available && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="room-menu-compact"
+                        onClick={() => {
+                          setSurface(null);
+                          void startOutgoingCall(activeRoom.roomId).catch((error: Error) => {
+                            const classified = classifyDirectCallFailure(error);
+                            showLocalToast(
+                              classified === DIRECT_CALL_MIC_BLOCKED
+                                ? t("call.micBlocked")
+                                : classified === DIRECT_CALL_CRYPTO_UNAVAILABLE
+                                  ? t("call.cryptoUnavailable")
+                                  : error.message,
+                              true,
+                            );
+                            if (!activeRoom.isDirect) {
+                              void leaveMatrixRtc();
+                              setSurface("call");
+                            }
+                          });
+                        }}
+                      >
+                        {t("chat.call")}
+                      </button>
+                    )}
                     <button type="button" role="menuitem" onClick={() => setSurface("poll")}>
                       {t("composer.createPoll")}
                     </button>

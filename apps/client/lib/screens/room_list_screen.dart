@@ -486,31 +486,69 @@ class _InviteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final topic = room.topic.trim();
     final subtitle = topic.isNotEmpty ? topic : invitationLabel;
-    return ListTile(
-      leading: MatrixAvatar(
-        name: room.getLocalizedDisplayname(),
-        mxc: room.avatar,
-        client: room.client,
-        radius: 22,
-        backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-        fallbackIcon: Icons.mail_outline,
-      ),
-      title: Text(
-        room.getLocalizedDisplayname(),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      isThreeLine: false,
-      trailing: Wrap(
-        spacing: 4,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          HlButton.text(onPressed: onDecline, label: Text(declineLabel)),
-          HlButton.primary(onPressed: onAccept, label: Text(acceptLabel)),
+          Row(
+            children: [
+              MatrixAvatar(
+                name: room.getLocalizedDisplayname(),
+                mxc: room.avatar,
+                client: room.client,
+                radius: 22,
+                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                fallbackIcon: Icons.mail_outline,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      room.getLocalizedDisplayname(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: HighLifeTokens.of(context).muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: HlButton.text(
+                  height: 36,
+                  isFullWidth: true,
+                  onPressed: onDecline,
+                  label: Text(declineLabel),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: HlButton.primary(
+                  height: 36,
+                  isFullWidth: true,
+                  onPressed: onAccept,
+                  label: Text(acceptLabel),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

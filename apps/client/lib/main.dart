@@ -188,38 +188,52 @@ class HighLifeApp extends StatelessWidget {
                           color: Theme.of(context).colorScheme.surface,
                           child: SafeArea(
                             bottom: false,
-                            child: Padding(
+                              child: Padding(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                              child: Row(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          incomingRtc.room
-                                              .getLocalizedDisplayname(),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium,
+                                  Text(
+                                    incomingRtc.room
+                                        .getLocalizedDisplayname(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
+                                  ),
+                                  Text(locales.strings.callIncoming),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: HlButton.primary(
+                                          height: 36,
+                                          isFullWidth: true,
+                                          onPressed: () => unawaited(
+                                            matrixRtc?.join(incomingRtc.room),
+                                          ),
+                                          label: Text(
+                                            locales.strings.callAnswer,
+                                          ),
                                         ),
-                                        Text(locales.strings.callIncoming),
-                                      ],
-                                    ),
-                                  ),
-                                  HlButton.primary(
-                                    onPressed: () => unawaited(
-                                      matrixRtc?.join(incomingRtc.room),
-                                    ),
-                                    label: Text(locales.strings.callAnswer),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  HlButton.text(
-                                    onPressed: () => session
-                                        .dismissIncomingRtc(incomingRtc.room.id),
-                                    label: Text(locales.strings.callReject),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: HlButton.text(
+                                          height: 36,
+                                          isFullWidth: true,
+                                          onPressed: () => session
+                                              .dismissIncomingRtc(
+                                            incomingRtc.room.id,
+                                          ),
+                                          label: Text(
+                                            locales.strings.callReject,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
