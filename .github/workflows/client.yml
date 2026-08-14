@@ -155,6 +155,32 @@ jobs:
                       path.write_text(text.replace(needle, needle + "\n        " + mirror, 1))
                       print(f"patched {name}")
                       break
+          # flutter_local_notifications requires JDK desugaring.
+          app_gradle = Path("android/app/build.gradle.kts")
+          if app_gradle.is_file():
+              text = app_gradle.read_text()
+              if "isCoreLibraryDesugaringEnabled" not in text:
+                  text = text.replace(
+                      "compileOptions {",
+                      "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                      1,
+                  )
+              if "desugar_jdk_libs" not in text:
+                  block = (
+                      "\ndependencies {\n"
+                      '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n'
+                      "}\n"
+                  )
+                  if "dependencies {" in text:
+                      text = text.replace(
+                          "dependencies {",
+                          'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
+                          1,
+                      )
+                  else:
+                      text += block
+              app_gradle.write_text(text)
+              print("enabled core library desugaring")
           PY
 
       - name: Cache Gradle
@@ -323,6 +349,36 @@ jobs:
         if: matrix.target == 'linux'
         working-directory: apps/client
         run: flutter build linux --release
+
+      - name: Silence MSVC experimental coroutines
+        if: matrix.target == 'windows'
+        working-directory: apps/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake=windows/CMakeLists.txt
+          if grep -q '_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS' "$cmake"; then
+            echo "coroutine silence already present"
+            exit 0
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("windows/CMakeLists.txt")
+          text = path.read_text()
+          needle = "add_definitions(-DUNICODE -D_UNICODE)"
+          insert = (
+              needle
+              + "\nadd_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)"
+          )
+          if needle in text:
+              path.write_text(text.replace(needle, insert, 1))
+          else:
+              path.write_text(
+                  "add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)\n"
+                  + text
+              )
+          print("patched CMakeLists for experimental coroutines")
+          PY
 
       - name: Build Windows
         if: matrix.target == 'windows'
