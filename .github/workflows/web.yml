@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "apps/web/**"
+      - "apps/miniapp/**"
       - "packages/ui-contracts/**"
       - "package.json"
       - "package-lock.json"
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - "apps/web/**"
+      - "apps/miniapp/**"
       - "packages/ui-contracts/**"
       - "package.json"
       - "package-lock.json"
@@ -31,11 +33,11 @@ jobs:
       - name: Install
         run: npm ci
       - name: Test
-        run: npm test --workspace @highlife/web -- --run
+        run: npm test --workspace @highlife/web -- --run && npm test --workspace @highlife/miniapp -- --run
       - name: Typecheck
         run: npm run typecheck --workspace @highlife/web
       - name: Build
-        run: npm run build --workspace @highlife/web
+        run: npm run build --workspace @highlife/web && npm run build --workspace @highlife/miniapp
         env:
           VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
           VITE_MINIAPP_ALLOWED_ORIGINS: https://testhighlife.strangled.net

@@ -84,6 +84,23 @@ void main() {
           .having((item) => item.kind, 'kind', TimelineItemKind.image)
           .having((item) => item.body, 'body', 'photo.jpg'),
     );
+    expect(
+      TimelineItem.fromContent(
+        eventId: 'voice',
+        senderId: '@alice:example.org',
+        timestamp: DateTime.utc(2026),
+        content: const {
+          'msgtype': 'm.audio',
+          'body': 'Voice message',
+          'url': 'mxc://example.org/voice',
+          'org.matrix.msc3245.voice': <String, dynamic>{},
+          'org.matrix.msc1767.audio': {'duration': 2400},
+        },
+      ),
+      isA<MediaTimelineItem>()
+          .having((item) => item.isVoice, 'isVoice', isTrue)
+          .having((item) => item.durationMs, 'durationMs', 2400),
+    );
   });
 
   group('buildTimelineItems', () {
@@ -184,6 +201,25 @@ void main() {
       );
       expect(items.single.reactions.single.reactedByMe, isTrue);
       expect(items.single.reactions.single.ownEventId, 'react');
+    });
+
+    test('keeps undecrypted events on the timeline', () {
+      final items = buildTimelineItems([
+        RawRoomEvent(
+          eventId: 'cipher',
+          type: 'm.room.encrypted',
+          senderId: '@bob:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 11),
+          content: const {
+            'algorithm': 'm.megolm.v1.aes-sha2',
+            'ciphertext': '…',
+          },
+        ),
+      ]);
+
+      expect(items, hasLength(1));
+      expect(items.single.kind, TimelineItemKind.notice);
+      expect(items.single.eventId, 'cipher');
     });
 
     test('keeps reply targets from m.in_reply_to', () {

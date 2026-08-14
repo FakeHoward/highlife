@@ -3,18 +3,23 @@ import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../hl_kit.dart';
 import 'package:matrix/matrix.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../aiomatrix/markdown.dart';
 import '../aiomatrix/protocol.dart';
+import '../domain/call_routing.dart';
 import '../domain/messenger_extras.dart';
 import '../domain/timeline_models.dart';
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
 import '../services/session.dart';
+import '../services/voice_note_recorder.dart';
 import '../theme.dart';
 import '../widgets/call_surface.dart';
 import '../widgets/create_poll_dialog.dart';
@@ -55,6 +60,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Event? _editing;
   bool _loadingHistory = false;
   bool _uploading = false;
+  bool _recording = false;
+  final _voice = VoiceNoteRecorder();
   String? _highlightEventId;
   Timer? _highlightTimer;
   final Map<String, GlobalKey> _eventKeys = {};
@@ -69,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final readUpTo = widget.room.fullyRead;
     _unreadAnchor = readUpTo.isEmpty ? null : readUpTo;
     _loadTimeline();
+    unawaited(_restoreDraft());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -89,6 +97,26 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _timeline = timeline);
     await timeline.setReadMarker();
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpEnd());
+  }
+
+  Future<void> _restoreDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draft = prefs.getString(composerDraftKey(widget.room.id));
+    if (!mounted || draft == null || draft.isEmpty) return;
+    if (_composer.text.isNotEmpty) return;
+    _composer.text = draft;
+    setState(() {});
+  }
+
+  Future<void> _persistDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final text = _composer.text;
+    final key = composerDraftKey(widget.room.id);
+    if (text.trim().isEmpty) {
+      await prefs.remove(key);
+    } else {
+      await prefs.setString(key, text);
+    }
   }
 
   void _jumpEnd() {
@@ -151,6 +179,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_typingSent) {
       unawaited(widget.room.setTyping(false));
     }
+    unawaited(_persistDraft());
+    unawaited(_voice.cancel());
     _composer.dispose();
     _scroll.dispose();
     _timeline?.cancelSubscriptions();
@@ -163,6 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _typingDebounce?.cancel();
     if (text.isEmpty) {
       _stopTyping(session);
+      unawaited(_persistDraft());
       return;
     }
     // Debounce: do not notify the server on every keystroke.
@@ -372,6 +403,14 @@ class _ChatScreenState extends State<ChatScreen> {
               onPressed: () => _startCall(session),
               icon: const Icon(Icons.call_outlined),
             ),
+          if (!compactChrome &&
+              widget.room.isDirectChat &&
+              session.nativeCalls != null)
+            IconButton(
+              tooltip: s.startVideoCall,
+              onPressed: () => _startCall(session, video: true),
+              icon: const Icon(Icons.videocam_outlined),
+            ),
           PopupMenuButton<String>(
             onSelected: (action) => _roomAction(session, s, action),
             itemBuilder: (_) => [
@@ -380,6 +419,10 @@ class _ChatScreenState extends State<ChatScreen> {
               if (compactChrome &&
                   (session.nativeCalls != null || session.rtcAvailable))
                 PopupMenuItem(value: 'call', child: Text(s.startCall)),
+              if (compactChrome &&
+                  widget.room.isDirectChat &&
+                  session.nativeCalls != null)
+                PopupMenuItem(value: 'video', child: Text(s.startVideoCall)),
               PopupMenuItem(value: 'details', child: Text(s.roomDetails)),
               PopupMenuItem(value: 'poll', child: Text(s.createPoll)),
               PopupMenuItem(
@@ -403,19 +446,30 @@ class _ChatScreenState extends State<ChatScreen> {
           if (widget.room.pinnedEventIds.isNotEmpty)
             Material(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.push_pin_outlined, size: 18),
-                title: Text(s.pinned),
-                subtitle: Text(
-                  _pinnedPreview(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              child: PopupMenuButton<String>(
+                tooltip: s.pinned,
+                onSelected: (id) => unawaited(_revealEvent(id)),
+                itemBuilder: (_) => [
+                  for (final id in widget.room.pinnedEventIds)
+                    PopupMenuItem(
+                      value: id,
+                      child: Text(
+                        _pinnedPreviewFor(id),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.push_pin_outlined, size: 18),
+                  title: Text(s.pinned),
+                  subtitle: Text(
+                    _pinnedPreview(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                onTap: () {
-                  final id = widget.room.pinnedEventIds.lastOrNull;
-                  if (id != null) unawaited(_revealEvent(id));
-                },
               ),
             ),
           if (callActive)
@@ -471,7 +525,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           });
                           _send(session);
                         },
-                        label: Text(s.retry),
+                        label: Text(s.retrySend),
                       ),
                   ],
                 ),
@@ -575,7 +629,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                     },
                     onRedact: event.canRedact
-                        ? () => session.roomRepository?.redact(event)
+                        ? () => _confirmRedact(session, event)
                         : null,
                     onOpenMedia: row.httpMediaUrl == null
                         ? null
@@ -647,6 +701,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     }),
                   ),
                 if (_uploading) const LinearProgressIndicator(minHeight: 2),
+                if (_recording)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    child: Text(s.recordingVoice),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                   child: Row(
@@ -681,27 +740,44 @@ class _ChatScreenState extends State<ChatScreen> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 0),
                         child: GestureDetector(
-                          onTap: _composer.text.trim().isEmpty
-                              ? null
-                              : () => _send(session),
+                          onTap: _recording
+                              ? () => unawaited(_stopVoice(session))
+                              : _composer.text.trim().isEmpty
+                                  ? (kIsWeb
+                                      ? null
+                                      : () => unawaited(_startVoice()))
+                                  : () => _send(session),
                           child: Tooltip(
-                            message: s.sendMessage,
+                            message: _recording
+                                ? s.stopRecording
+                                : _composer.text.trim().isEmpty
+                                    ? s.recordVoice
+                                    : s.sendMessage,
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 120),
-                              opacity:
-                                  _composer.text.trim().isEmpty ? 0.38 : 1,
+                              opacity: _recording ||
+                                      _composer.text.trim().isNotEmpty ||
+                                      !kIsWeb
+                                  ? 1
+                                  : 0.38,
                               child: Container(
                                 width: 44,
                                 height: 44,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: tokens.accent,
+                                  color: _recording
+                                      ? Theme.of(context).colorScheme.error
+                                      : tokens.accent,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(
-                                  Icons.send,
+                                child: Icon(
+                                  _recording
+                                      ? Icons.stop
+                                      : _composer.text.trim().isEmpty
+                                          ? Icons.mic
+                                          : Icons.send,
                                   size: 18,
-                                  color: Color(0xFFFFFFFF),
+                                  color: const Color(0xFFFFFFFF),
                                 ),
                               ),
                             ),
@@ -749,10 +825,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _pinnedPreview() {
     final id = widget.room.pinnedEventIds.lastOrNull;
-    if (id == null) return '';
-    final event = _timeline?.events.firstWhereOrNull((item) => item.eventId == id);
-    final body = event?.body.trim() ?? '';
-    return body.isEmpty ? id : body;
+    return id == null ? '' : _pinnedPreviewFor(id);
+  }
+
+  String _pinnedPreviewFor(String id) {
+    Event? match;
+    for (final event in _timeline?.events ?? const <Event>[]) {
+      if (event.eventId == id) {
+        match = event;
+        break;
+      }
+    }
+    if (match == null) return id;
+    final body = markdownToPlain(match.body).trim();
+    return body.isEmpty ? match.senderId : body;
   }
 
   Future<void> _togglePin(Event event) async {
@@ -804,11 +890,20 @@ class _ChatScreenState extends State<ChatScreen> {
     if (targetId == null) return;
     final target = session.client?.getRoomById(targetId);
     if (target == null) return;
-    final body = formatForwardedBody(
-      event.senderFromMemoryOrFallback.calcDisplayname(),
-      event.body,
-    );
-    await target.sendTextEvent(body);
+    try {
+      await session.roomRepository?.forwardEvent(target, event);
+    } catch (_) {
+      final body = event.messageType == MessageTypes.Text
+          ? formatForwardedBody(
+              event.senderFromMemoryOrFallback.calcDisplayname(),
+              event.body,
+            )
+          : formatForwardedMedia(
+              event.senderFromMemoryOrFallback.calcDisplayname(),
+              mediaKindLabel(event.messageType),
+            );
+      await target.sendTextEvent(body);
+    }
   }
 
   Future<void> _toggleReaction(
@@ -834,16 +929,34 @@ class _ChatScreenState extends State<ChatScreen> {
     await repo.sendReaction(widget.room, event, key);
   }
 
-  Future<void> _startCall(HighLifeSession session) async {
-    await _joinMatrixRtc(session);
+  Future<void> _startCall(HighLifeSession session, {bool video = false}) async {
+    if (outgoingCallKind(isDirectChat: widget.room.isDirectChat) ==
+        OutgoingCallKind.nativeDirect) {
+      final peer = widget.room.directChatMatrixID;
+      final calls = session.nativeCalls;
+      if (calls != null && peer != null) {
+        try {
+          await calls.startCall(
+            widget.room,
+            peerUserId: peer,
+            video: video,
+          );
+          return;
+        } catch (_) {}
+      }
+    }
+    await _joinMatrixRtc(session, camera: video);
   }
 
-  Future<void> _joinMatrixRtc(HighLifeSession session) async {
+  Future<void> _joinMatrixRtc(
+    HighLifeSession session, {
+    bool camera = false,
+  }) async {
     final s = context.read<HighLifeLocales>().strings;
     final rtc = session.matrixRtc;
     if (rtc != null) {
       try {
-        await rtc.join(widget.room);
+        await rtc.join(widget.room, camera: camera);
         return;
       } catch (_) {
         await rtc.leave();
@@ -886,6 +999,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _composer.text.trim();
     if (text.isEmpty) return;
     _composer.clear();
+    unawaited(_persistDraft());
     setState(() {
       _actionError = null;
       _failedText = null;
@@ -946,6 +1060,59 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _startVoice() async {
+    setState(() => _actionError = null);
+    try {
+      await _voice.start();
+      if (mounted) setState(() => _recording = true);
+    } catch (error) {
+      if (mounted) setState(() => _actionError = error.toString());
+    }
+  }
+
+  Future<void> _stopVoice(HighLifeSession session) async {
+    setState(() => _recording = false);
+    try {
+      final note = await _voice.stop();
+      setState(() => _uploading = true);
+      await session.roomRepository?.upload(
+        widget.room,
+        bytes: note.bytes,
+        fileName: note.fileName,
+        replyTo: _replyTo,
+        extraContent: voiceNoteExtraContent(durationMs: note.durationMs),
+      );
+      if (mounted) setState(() => _replyTo = null);
+    } catch (error) {
+      if (mounted) setState(() => _actionError = error.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _confirmRedact(HighLifeSession session, Event event) async {
+    final s = context.read<HighLifeLocales>().strings;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.delete),
+        content: Text(s.confirmDelete),
+        actions: [
+          HlButton.text(
+            onPressed: () => Navigator.pop(context, false),
+            label: Text(s.cancel),
+          ),
+          HlButton.danger(
+            onPressed: () => Navigator.pop(context, true),
+            label: Text(s.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await session.roomRepository?.redact(event);
+  }
+
   Future<void> _roomAction(
     HighLifeSession session,
     AppStrings s,
@@ -957,6 +1124,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (action == 'call') {
       await _startCall(session);
+      return;
+    }
+    if (action == 'video') {
+      await _startCall(session, video: true);
       return;
     }
     if (action == 'mute') {
@@ -1454,7 +1625,21 @@ class _MessageTile extends StatelessWidget {
                     httpMediaUrl: httpMediaUrl,
                     onOpenMedia: onOpenMedia,
                     attachmentLabel: strings.attachment,
+                    voiceLabel: strings.recordVoice,
                     systemLabel: strings.roomUpdate,
+                    encryptedLabel: event.type == EventTypes.Encrypted
+                        ? strings.encryptedMessage
+                        : null,
+                    retryLabel: strings.retry,
+                    onRetryDecrypt: event.type == EventTypes.Encrypted
+                        ? () {
+                            unawaited(() async {
+                              try {
+                                await event.requestKey();
+                              } catch (_) {}
+                            }());
+                          }
+                        : null,
                   ),
                 if (keyboard != null)
                   InlineKeyboardView(keyboard: keyboard, onPressed: onButton),
@@ -1521,7 +1706,11 @@ class _MessageTile extends StatelessWidget {
                         ),
                         if (own) ...[
                           const SizedBox(width: 3),
-                          Icon(
+                          GestureDetector(
+                            onTap: event.status.isError
+                                ? () => unawaited(event.sendAgain())
+                                : null,
+                            child: Icon(
                             event.status.isSending
                                 ? Icons.schedule
                                 : event.status.isError
@@ -1536,8 +1725,18 @@ class _MessageTile extends StatelessWidget {
                             color: event.status.isError
                                 ? tokens.danger
                                 : tokens.accent,
+                            ),
                           ),
                         ],
+                        if (event.room.encrypted)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.lock_outline,
+                              size: 10,
+                              color: tokens.muted,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1571,7 +1770,8 @@ class _MessageTile extends StatelessWidget {
       ),
       items: [
         PopupMenuItem(value: 'reply', child: Text(strings.reply)),
-        for (final emoji in const ['👍', '❤️', '😂', '🎉', '👀'])
+        PopupMenuItem(value: 'copy', child: Text(strings.copyMessage)),
+        for (final emoji in kQuickReactions)
           PopupMenuItem(value: 'react:$emoji', child: Text(emoji)),
         if (onEdit != null)
           PopupMenuItem(value: 'edit', child: Text(strings.edit)),
@@ -1600,6 +1800,8 @@ class _MessageTile extends StatelessWidget {
     switch (action) {
       case 'reply':
         onReply();
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: event.plaintextBody));
       case 'edit':
         onEdit?.call();
       case 'redact':
@@ -1619,6 +1821,10 @@ class _RichMessageBody extends StatelessWidget {
     required this.item,
     required this.attachmentLabel,
     required this.systemLabel,
+    this.voiceLabel,
+    this.encryptedLabel,
+    this.retryLabel,
+    this.onRetryDecrypt,
     this.httpMediaUrl,
     this.onOpenMedia,
   });
@@ -1626,6 +1832,10 @@ class _RichMessageBody extends StatelessWidget {
   final TimelineItem item;
   final String attachmentLabel;
   final String systemLabel;
+  final String? voiceLabel;
+  final String? encryptedLabel;
+  final String? retryLabel;
+  final VoidCallback? onRetryDecrypt;
   final Uri? httpMediaUrl;
   final VoidCallback? onOpenMedia;
 
@@ -1650,6 +1860,28 @@ class _RichMessageBody extends StatelessWidget {
       return MarkdownMessage(source: '* ${item.body}');
     }
     if (item.kind == TimelineItemKind.notice) {
+      if (encryptedLabel != null) {
+        return Row(
+          children: [
+            Icon(Icons.lock_outline, size: 15, color: tokens.muted),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                encryptedLabel!,
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: tokens.muted,
+                ),
+              ),
+            ),
+            if (onRetryDecrypt != null && retryLabel != null)
+              HlButton.text(
+                onPressed: onRetryDecrypt,
+                label: Text(retryLabel!),
+              ),
+          ],
+        );
+      }
       return MarkdownMessage(
         source: item.body,
         style: TextStyle(
@@ -1660,6 +1892,35 @@ class _RichMessageBody extends StatelessWidget {
     }
     if (item is! MediaTimelineItem) {
       return MarkdownMessage(source: item.body);
+    }
+
+    if (item.kind == TimelineItemKind.audio) {
+      final seconds = item.durationMs == null
+          ? null
+          : (item.durationMs! / 1000).round();
+      return InkWell(
+        onTap: onOpenMedia,
+        child: Row(
+          children: [
+            Icon(
+              item.isVoice ? Icons.mic : Icons.play_circle_outline,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                item.isVoice
+                    ? (seconds == null
+                        ? (voiceLabel ?? attachmentLabel)
+                        : '${voiceLabel ?? attachmentLabel} · ${seconds}s')
+                    : (item.body.isEmpty ? attachmentLabel : item.body),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (item.kind == TimelineItemKind.image && httpMediaUrl != null) {

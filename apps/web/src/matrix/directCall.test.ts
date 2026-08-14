@@ -34,6 +34,8 @@ class FakeCall {
   hungUp = false;
   hangupReason: CallErrorCode | null = null;
   suppressHangupEvent: boolean | null = null;
+  cameraMuted = true;
+  video = false;
   remoteFeeds: Array<{ stream: MediaStream }> = [];
   localFeeds: Array<{ stream: MediaStream }> = [];
   private listeners = new Map<string, Set<(...args: unknown[]) => void>>();
@@ -56,6 +58,20 @@ class FakeCall {
 
   async placeVoiceCall() {
     this.placed = true;
+  }
+
+  async placeVideoCall() {
+    this.placed = true;
+    this.video = true;
+  }
+
+  isLocalVideoMuted() {
+    return this.cameraMuted ?? true;
+  }
+
+  async setLocalVideoMuted(muted: boolean) {
+    this.cameraMuted = muted;
+    return muted;
   }
 
   async answer() {

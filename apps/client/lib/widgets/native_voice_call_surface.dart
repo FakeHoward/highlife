@@ -17,6 +17,8 @@ class NativeVoiceCallLabels {
     required this.mute,
     required this.unmute,
     required this.hangup,
+    this.cameraOn,
+    this.cameraOff,
   });
 
   final String incoming;
@@ -30,6 +32,8 @@ class NativeVoiceCallLabels {
   final String mute;
   final String unmute;
   final String hangup;
+  final String? cameraOn;
+  final String? cameraOff;
 }
 
 class NativeVoiceCallSurface extends StatelessWidget {
@@ -69,9 +73,12 @@ class NativeVoiceCallSurface extends StatelessWidget {
       failed: snapshot.phase == NativeCallPhase.error,
       incoming: incoming,
       muted: snapshot.microphoneMuted,
+      cameraMuted: snapshot.cameraMuted,
       remoteStream: snapshot.remoteStream,
+      localStream: snapshot.localStream,
       onHangup: actions.hangup,
       onToggleMicrophone: actions.toggleMicrophone,
+      onToggleCamera: snapshot.video ? actions.toggleCamera : null,
       onAnswer: incoming ? () => actions.answer() : null,
       onDecline: incoming ? () => actions.reject() : null,
       labels: CallStageLabels(
@@ -84,6 +91,8 @@ class NativeVoiceCallSurface extends StatelessWidget {
         incoming: labels.incoming,
         answer: labels.answer,
         decline: labels.reject,
+        cameraOn: labels.cameraOn,
+        cameraOff: labels.cameraOff,
       ),
     );
   }

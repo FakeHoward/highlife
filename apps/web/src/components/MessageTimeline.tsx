@@ -8,6 +8,8 @@ import {
   mediaUrl,
   redact,
   resolveMediaObjectUrl,
+  retryDecryptEvent,
+  retryFailedEvent,
   sendCallback,
   sendMessage,
   toggleReaction,
@@ -22,7 +24,7 @@ import {
   type AiomatrixPayload,
   type MiniAppCard,
 } from "../protocol/aiomatrix";
-import { IconDownload } from "./Icons";
+import { IconDownload, IconExternal, IconLock } from "./Icons";
 import { Avatar } from "./Avatar";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀"] as const;
@@ -101,6 +103,7 @@ interface Props {
   onPin?: (item: TimelineItem) => void;
   onForward?: (item: TimelineItem) => void;
   onOpenProfile?: (item: TimelineItem) => void;
+  onJumpToEvent?: (eventId: string) => void;
 }
 
 export function MessageTimeline({
@@ -116,6 +119,7 @@ export function MessageTimeline({
   onPin,
   onForward,
   onOpenProfile,
+  onJumpToEvent,
 }: Props) {
   const { t } = useI18n();
   const end = useRef<HTMLDivElement>(null);
@@ -278,7 +282,14 @@ export function MessageTimeline({
               {!grouped && !item.isOwn && <header><strong>{item.senderName}</strong></header>}
               <div className="bubble">
                 {item.replyToEventId && (
-                  <button className="relation-bar" onClick={() => onComposeMode({ type: "reply", item })}>
+                  <button
+                    className="relation-bar"
+                    type="button"
+                    onClick={() => {
+                      if (item.replyToEventId) onJumpToEvent?.(item.replyToEventId);
+                      onComposeMode({ type: "reply", item });
+                    }}
+                  >
                     {item.replyPreview
                       ? <><strong>{item.replyPreview.senderName}</strong><span>{item.replyPreview.body}</span></>
                       : <>{t("timeline.replyUnavailable")}</>}
@@ -286,6 +297,17 @@ export function MessageTimeline({
                 )}
                 {item.redacted ? (
                   <em className="muted">{item.body}</em>
+                ) : item.kind === "notice" && typeof item.rawContent?.algorithm === "string" ? (
+                  <p className="decrypt-failed">
+                    <IconLock width={14} height={14} /> {item.body}
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => void retryDecryptEvent(roomId, item.eventId)}
+                    >
+                      {t("timeline.retry")}
+                    </button>
+                  </p>
                 ) : item.poll ? (
                   <PollCard roomId={roomId} item={item} />
                 ) : html ? (
@@ -298,7 +320,7 @@ export function MessageTimeline({
                   <button className="mini-card" onClick={() => onMiniApp(bot.miniApp!, item)}>
                     <span className="mini-mark">{t("timeline.miniAppBadge")}</span>
                     <span><strong>{bot.miniApp.title}</strong><small>{bot.miniApp.description ?? t("timeline.openMiniApp")}</small></span>
-                    <span aria-hidden="true">↗</span>
+                    <IconExternal width={16} height={16} />
                   </button>
                 )}
                 {keyboardRows && keyboardRows.length > 0 && (
@@ -319,7 +341,19 @@ export function MessageTimeline({
                   <time dateTime={new Date(item.timestamp).toISOString()}>
                     {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </time>
-                  {mark && <span title={mark.title}>{mark.text}</span>}
+                  {mark && mark.text === "!" ? (
+                    <button
+                      type="button"
+                      className="delivery-retry"
+                      title={mark.title}
+                      aria-label={t("timeline.retry")}
+                      onClick={() => void retryFailedEvent(roomId, item.eventId)}
+                    >
+                      {mark.text}
+                    </button>
+                  ) : mark ? (
+                    <span title={mark.title}>{mark.text}</span>
+                  ) : null}
                 </footer>
                 {item.reactions.length > 0 && (
                   <div className="reactions">
@@ -431,7 +465,7 @@ function PollCard({ roomId, item }: { roomId: string; item: TimelineItem }) {
         {poll.ended ? (
           <span>{t("timeline.pollEnded")}</span>
         ) : item.isOwn ? (
-          <button type="button" onClick={() => void endPoll(roomId, item.eventId)}>{t("timeline.endPoll")}</button>
+          <button type="button" className="text-button" onClick={() => void endPoll(roomId, item.eventId)}>{t("timeline.endPoll")}</button>
         ) : null}
       </footer>
     </div>

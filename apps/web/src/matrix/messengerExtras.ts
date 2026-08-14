@@ -49,6 +49,33 @@ export function formatForwardedBody(senderName: string, body: string): string {
   return `${senderName}:\n${trimmed}`;
 }
 
+export function formatForwardedMedia(senderName: string, kind: string): string {
+  const label = kind.trim() || "attachment";
+  return `${senderName}:\n[${label}]`;
+}
+
+export function partitionInvitesAndJoined<T>(
+  items: T[],
+  membershipOf: (item: T) => string,
+): { invites: T[]; joined: T[] } {
+  const invites: T[] = [];
+  const joined: T[] = [];
+  for (const item of items) {
+    const membership = membershipOf(item);
+    if (membership === "invite") invites.push(item);
+    else if (membership === "join") joined.push(item);
+  }
+  return { invites, joined };
+}
+
+export function notificationTargetFromPush(payload: Record<string, unknown> | null | undefined): string {
+  const roomId = payload?.room_id ?? payload?.roomId;
+  if (typeof roomId === "string" && roomId.startsWith("!")) {
+    return `/?room=${encodeURIComponent(roomId)}`;
+  }
+  return "/";
+}
+
 function startOfLocalDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }

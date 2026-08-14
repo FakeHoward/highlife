@@ -6,7 +6,7 @@ Note: as of 0.6.0 unsigned `dev.aiomatrix.callback` payloads (forgeable `data` w
 
 Aware hosts (0.6.2+) should also handle ephemeral `dev.aiomatrix.callback_answer` / `toast` / `progress` and may publish `dev.aiomatrix.host` capabilities.
 
-- `schemas/` contains schemas for keyboard blocks, callback event content, advertised command state, MiniApp cards and MiniApp data messages.
+- `schemas/` contains schemas for keyboard blocks, callback event content, advertised command state, MiniApp cards, MiniApp data, host toasts/progress/callback answers, and `dev.aiomatrix.host` capabilities.
 - `fixtures/` contains valid examples generated from the bot's showcase builders.
 - `bot/tests/showcase.test.ts` validates every fixture and compares builder-backed fixtures with actual library output.
 

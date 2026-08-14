@@ -27,7 +27,7 @@ is an operator step outside the repo.
 - [x] First-party call cores integrated with session/chat lifecycle and localized UI
 - [x] Native first-party MatrixRTC/LiveKit group media; Element Call is last-resort fallback
 - [x] CI + FormSpace bot
-- [x] Pins, mute, forward, unread divider, DM presence, user sheet, shared media (web + Flutter); voice notes on web
+- [x] Pins, mute, forward, unread divider, DM presence, user sheet, shared media (web + Flutter); voice notes on web and Flutter
 - [ ] Play Console store listing (operator; UnifiedPush/signing ready in repo)
 - [ ] iOS — out of scope
 
@@ -38,13 +38,13 @@ is an operator step outside the repo.
 - [x] Caddy CSP + deploy smoke `default-src`
 - [x] MAS password registration open by default (close via env)
 - [x] Bot crypto preserved on routine deploy
-- [x] FormSpace CORS allowlist + optional MiniApp secret
+- [x] `scripts/backup-highlife.sh` (Synapse + MAS Postgres dumps, named volumes)
+- [x] FormSpace CORS allowlist + optional MiniApp secret + `FORMSPACE_ANONYMITY_SALT`
 - [x] `Caddyfile.template` domain render
 - [x] Deploy auth: `DEPLOY_PASSWORD` and/or `DEPLOY_SSH_KEY` for Actions only —
       **never disables password SSH on the VPS**
 - [x] Optional Sygnal via `ENABLE_PUSH=true` + `push.` DNS + VAPID secrets
       (`SYGNAL_VAPID_PRIVATE_KEY` / `VITE_VAPID_PUBLIC_KEY`)
-- [x] Backup script `scripts/backup-highlife.sh`
 - [x] Stale `raw-deploy.yml` removed
 
 ## Calling / federation / push smoke

@@ -35,6 +35,7 @@ import {
 class FakeMedia implements LivekitMediaSession {
   connected = false;
   mic = true;
+  camera = false;
   stream: MediaStream | null = null;
   lastOptions: { keyProvider?: unknown } | undefined;
   private listeners = new Set<() => void>();
@@ -49,6 +50,9 @@ class FakeMedia implements LivekitMediaSession {
   }
   async setMicrophoneEnabled(enabled: boolean) {
     this.mic = enabled;
+  }
+  async setCameraEnabled(enabled: boolean) {
+    this.camera = enabled;
   }
   remoteStream() {
     return this.stream;

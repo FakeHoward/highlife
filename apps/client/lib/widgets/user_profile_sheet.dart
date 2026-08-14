@@ -1,5 +1,6 @@
 import '../hl_kit.dart';
 import 'package:flutter/services.dart';
+import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 
 import '../l10n/messages.dart';
@@ -7,6 +8,7 @@ import '../services/session.dart';
 import '../theme.dart';
 import 'hl_button.dart';
 import 'matrix_avatar.dart';
+import 'verification_dialog.dart';
 
 Future<String?> showUserProfileSheet(
   BuildContext context, {
@@ -109,6 +111,37 @@ class UserProfileSheet extends StatelessWidget {
                     },
                     label: Text(strings.startDmAction),
                   ),
+                  if (session.cryptoAvailable)
+                    HlButton.text(
+                      onPressed: () async {
+                        DeviceKeys? device;
+                        final map = client?.userDeviceKeys[userId];
+                        if (map != null) {
+                          for (final candidate in map.deviceKeys.values) {
+                            if (!candidate.verified) {
+                              device = candidate;
+                              break;
+                            }
+                          }
+                        }
+                        if (device == null) {
+                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                            SnackBar(content: Text(strings.allDevicesVerified)),
+                          );
+                          return;
+                        }
+                        final request =
+                            await session.crypto!.startDeviceVerification(device);
+                        if (!context.mounted) return;
+                        Navigator.pop(context);
+                        await VerificationDialog.show(
+                          context,
+                          request: request,
+                          strings: strings,
+                        );
+                      },
+                      label: Text(strings.verifyUser),
+                    ),
                   HlButton.text(
                     onPressed: () async {
                       if (ignored) {

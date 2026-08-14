@@ -22,6 +22,7 @@ import {
   paginateRoomHistory,
   rejectInvite,
   respondToIncomingVerification,
+  requestUserVerification,
   setRoomMuted,
   showLocalToast,
   scrubHostCapabilitiesForRoom,
@@ -32,11 +33,12 @@ import {
   type SasChallenge,
 } from "../matrix/service";
 import { firstUnreadEventId, formatPresenceLabel } from "../matrix/messengerExtras";
+import { checkWebUpdate, WEB_APP_VERSION } from "../matrix/updateCheck";
 import { classifyDirectCallFailure, DIRECT_CALL_CRYPTO_UNAVAILABLE, DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
 import { parseAiomatrixPayload, type MiniAppCard } from "../protocol/aiomatrix";
 import { Composer, type ComposeMode } from "./Composer";
 import { Avatar } from "./Avatar";
-import { IconBack, IconCall, IconMore, IconSearch } from "./Icons";
+import { IconBack, IconCall, IconMore, IconSearch, IconVideo } from "./Icons";
 import { MessageTimeline } from "./MessageTimeline";
 import { RoomSidebar } from "./RoomSidebar";
 import {
@@ -64,13 +66,22 @@ type Surface =
   | { miniApp: MiniAppCard; item: TimelineItem }
   | null;
 
+function roomIdFromLocation(): string | null {
+  try {
+    const id = new URLSearchParams(window.location.search).get("room");
+    return id?.startsWith("!") ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export function Workspace() {
   const { t } = useI18n();
   const matrix = useMatrix();
   const [query, setQuery] = useState("");
   const rooms = useRooms(query);
   const allRooms = useRooms("");
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(() => roomIdFromLocation());
   const [surface, setSurface] = useState<Surface>(null);
   const [mode, setMode] = useState<ComposeMode>(null);
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
@@ -81,6 +92,8 @@ export function Workspace() {
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [sas, setSas] = useState<SasChallenge | null>(null);
   const [verificationState, setVerificationState] = useState<string | null>(null);
+  const [updateNotice, setUpdateNotice] = useState<{ version: string; url: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const timeline = useTimeline(activeId);
   const history = useHistoryState(activeId);
   const spaces = useMemo(() => listSpaces(), [matrix.version]);
@@ -144,6 +157,38 @@ export function Workspace() {
     return () => window.clearTimeout(timer);
   }, [matrix.toast]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void checkWebUpdate(WEB_APP_VERSION).then((result) => {
+      if (cancelled || !result.updateAvailable || !result.latest) return;
+      setUpdateNotice({
+        version: result.latest.version,
+        url: result.assetUrl ?? "https://testhighlife.strangled.net/client/latest.json",
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (surface !== "roomMenu") return;
+    function onPointer(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setSurface(null);
+      }
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setSurface(null);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [surface]);
+
   // Notify about new MiniApp cards without stealing focus (tap the card to open).
   const seenMiniApps = useRef(new Set<string>());
   const miniAppRoom = useRef<string | null>(null);
@@ -178,7 +223,7 @@ export function Workspace() {
   }
 
   return (
-    <div className={`workspace ${activeId || surface === "settings" ? "room-open" : ""}`}>
+    <div className={`workspace ${activeId || surface === "settings" ? "room-open" : ""} ${spaces.length ? "has-rail" : ""}`}>
       <RoomSidebar
         rooms={filteredRooms}
         activeId={activeId}
@@ -189,6 +234,7 @@ export function Workspace() {
         onNewSpace={() => setSurface("createSpace")}
         onSettings={() => setSurface("settings")}
         onProfile={() => setSurface("settings")}
+        onSearchMessages={() => setSurface("search")}
         profileId={getSessionIdentity()?.userId ?? ""}
         profileName={getOwnDisplayName() || getSessionIdentity()?.userId || "HighLife"}
         profileAvatar={getOwnAvatarUrl()}
@@ -201,6 +247,13 @@ export function Workspace() {
           <Settings onClose={() => setSurface(null)} />
         ) : (
         <>
+        {updateNotice && (
+          <div className="update-banner" role="status">
+            <span>{t("update.available", { version: updateNotice.version })}</span>
+            <a className="text-button" href={updateNotice.url} target="_blank" rel="noreferrer">{t("update.open")}</a>
+            <button type="button" className="icon-button" onClick={() => setUpdateNotice(null)} aria-label={t("common.close")}>×</button>
+          </div>
+        )}
         {incoming && (
           <div className="verification-banner" role="status">
             <div>
@@ -323,6 +376,7 @@ export function Workspace() {
                   <IconSearch />
                 </button>
                 {callCapability?.available && (
+                  <>
                   <button
                     className="icon-button head-call"
                     type="button"
@@ -348,6 +402,21 @@ export function Workspace() {
                   >
                     <IconCall />
                   </button>
+                  {activeRoom.isDirect && (
+                    <button
+                      className="icon-button head-call"
+                      type="button"
+                      onClick={() => {
+                        void startOutgoingCall(activeRoom.roomId, { video: true }).catch((error: Error) => {
+                          showLocalToast(error.message, true);
+                        });
+                      }}
+                      aria-label={t("call.cameraOn")}
+                    >
+                      <IconVideo />
+                    </button>
+                  )}
+                  </>
                 )}
                 <button
                   className="icon-button head-details"
@@ -359,7 +428,7 @@ export function Workspace() {
                   <IconMore />
                 </button>
                 {surface === "roomMenu" && (
-                  <div className="room-menu" role="menu">
+                  <div className="room-menu" role="menu" ref={menuRef}>
                     <button type="button" role="menuitem" className="room-menu-compact" onClick={() => setSurface("search")}>
                       {t("chat.search")}
                     </button>
@@ -411,14 +480,28 @@ export function Workspace() {
               </div>
             </header>
             {pinnedIds.length > 0 && activeRoom.membership === "join" && (
-              <button
-                type="button"
-                className="pin-banner"
-                onClick={() => pinnedItem && setHighlightEventId(pinnedItem.eventId)}
-              >
-                <span>{t("chat.pinned")}</span>
-                <strong>{pinnedItem?.body || t("chat.noPinnedBody")}</strong>
-              </button>
+              pinnedIds.length === 1 ? (
+                <button
+                  type="button"
+                  className="pin-banner"
+                  onClick={() => pinnedItem && setHighlightEventId(pinnedItem.eventId)}
+                >
+                  <span>{t("chat.pinned")}</span>
+                  <strong>{pinnedItem?.body || t("chat.noPinnedBody")}</strong>
+                </button>
+              ) : (
+                <details className="pin-banner pin-menu">
+                  <summary>{t("chat.pinned")} · {pinnedIds.length}</summary>
+                  {pinnedIds.map((id) => {
+                    const item = timeline.find((entry) => entry.eventId === id);
+                    return (
+                      <button key={id} type="button" onClick={() => setHighlightEventId(id)}>
+                        {item?.body || t("chat.noPinnedBody")}
+                      </button>
+                    );
+                  })}
+                </details>
+              )
             )}
             {callCapability?.groupActive && activeRoom.membership === "join" && (
               <div className="call-banner" role="status">
@@ -456,6 +539,7 @@ export function Workspace() {
                   onPin={(item) => void togglePinnedEvent(activeRoom.roomId, item.eventId)}
                   onForward={(item) => setForwardEventId(item.eventId)}
                   onOpenProfile={(item) => setProfileUserId(item.senderId)}
+                  onJumpToEvent={setHighlightEventId}
                 />
                 <Composer roomId={activeRoom.roomId} mode={mode} onMode={setMode} />
               </>
@@ -496,10 +580,13 @@ export function Workspace() {
           }}
         />
       )}
-      {surface === "search" && activeId && (
+      {surface === "search" && (
         <SearchSurface
-          roomId={activeId}
-          onJump={(eventId) => setHighlightEventId(eventId)}
+          roomId={activeId ?? undefined}
+          onJump={(eventId, roomId) => {
+            if (roomId && roomId !== activeId) openRoom(roomId);
+            setHighlightEventId(eventId);
+          }}
           onClose={(eventId) => {
             if (eventId) setHighlightEventId(eventId);
             setSurface(null);
@@ -516,6 +603,11 @@ export function Workspace() {
           onOpenedDm={(roomId) => {
             setProfileUserId(null);
             openRoom(roomId);
+          }}
+          onVerify={(userId) => {
+            void requestUserVerification(userId, setSas, setVerificationState).catch((error: Error) => {
+              showLocalToast(error.message, true);
+            });
           }}
         />
       )}

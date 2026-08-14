@@ -78,6 +78,14 @@ export function IconBack(props: IconProps) {
   );
 }
 
+export function IconVideo(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 8.5V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-2.5l5 3v-9z" />
+    </Icon>
+  );
+}
+
 export function IconCall(props: IconProps) {
   return (
     <Icon {...props}>
@@ -136,6 +144,16 @@ export function IconDownload(props: IconProps) {
       <path d="M12 3v12" />
       <path d="m7 10 5 5 5-5" />
       <path d="M5 21h14" />
+    </Icon>
+  );
+}
+
+export function IconExternal(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14 4h6v6" />
+      <path d="M10 14 20 4" />
+      <path d="M20 14v6H4V4h6" />
     </Icon>
   );
 }

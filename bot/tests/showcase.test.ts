@@ -127,7 +127,17 @@ test("protocol fixture builders match aiomatrix parsers and media shape", () => 
 
 test("all published fixtures validate against language-neutral schemas", async () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
-  const names = ["keyboard", "callback", "commands", "mini_app", "mini_app_data"] as const;
+  const names = [
+    "keyboard",
+    "callback",
+    "commands",
+    "mini_app",
+    "mini_app_data",
+    "callback_answer",
+    "toast",
+    "progress",
+    "host",
+  ] as const;
 
   for (const name of names) {
     const schema = await json(`schemas/dev.aiomatrix.${name}.schema.json`);

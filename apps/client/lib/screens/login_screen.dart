@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../hl_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -53,6 +55,19 @@ class _LoginScreenState extends State<LoginScreen> {
     _pass.dispose();
     _loginToken.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final session = context.read<HighLifeSession>();
+    if (session.pendingLoginToken == null) return;
+    final token = session.takePendingLoginToken();
+    if (token == null) return;
+    _loginToken.text = token;
+    _showTokenField = true;
+    final s = context.read<HighLifeLocales>().strings;
+    unawaited(_submitToken(session, s));
   }
 
   @override

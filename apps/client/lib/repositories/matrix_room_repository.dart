@@ -159,10 +159,19 @@ class MatrixRoomRepository {
     required Uint8List bytes,
     required String fileName,
     Event? replyTo,
+    Map<String, dynamic>? extraContent,
   }) {
     return room.sendFileEvent(
       MatrixFile(bytes: bytes, name: fileName),
       inReplyTo: replyTo,
+      extraContent: extraContent,
+    );
+  }
+
+  Future<String?> forwardEvent(Room target, Event event) {
+    return target.sendEvent(
+      Map<String, dynamic>.from(event.content),
+      type: event.type,
     );
   }
 }

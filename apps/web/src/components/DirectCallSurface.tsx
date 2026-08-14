@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DirectCallSnapshot } from "../matrix/directCall";
 import { DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
+import { IconCall } from "./Icons";
 
 interface Props {
   snapshot: DirectCallSnapshot;
@@ -8,6 +9,7 @@ interface Props {
   onReject: () => void;
   onHangup: () => void;
   onToggleMicrophone: () => void;
+  onToggleCamera?: () => void;
   labels: DirectCallLabels;
 }
 
@@ -24,6 +26,8 @@ export interface DirectCallLabels {
   unmute: string;
   hangup: string;
   micBlocked: string;
+  cameraOn?: string;
+  cameraOff?: string;
 }
 
 function useCallElapsed(active: boolean): string {
@@ -49,9 +53,12 @@ export function DirectCallSurface({
   onReject,
   onHangup,
   onToggleMicrophone,
+  onToggleCamera,
   labels,
 }: Props) {
   const remoteAudio = useRef<HTMLAudioElement>(null);
+  const remoteVideo = useRef<HTMLVideoElement>(null);
+  const localVideo = useRef<HTMLVideoElement>(null);
   const elapsed = useCallElapsed(snapshot.phase === "connected");
 
   useEffect(() => {
@@ -63,6 +70,19 @@ export function DirectCallSurface({
       element.srcObject = null;
     };
   }, [snapshot.remoteStream]);
+
+  useEffect(() => {
+    const remote = remoteVideo.current;
+    if (remote) {
+      remote.srcObject = snapshot.remoteStream;
+      if (snapshot.remoteStream) void remote.play().catch(() => undefined);
+    }
+    const local = localVideo.current;
+    if (local) {
+      local.srcObject = snapshot.localStream;
+      if (snapshot.localStream) void local.play().catch(() => undefined);
+    }
+  }, [snapshot.remoteStream, snapshot.localStream]);
 
   if (snapshot.phase === "idle" || snapshot.phase === "ended") return null;
 
@@ -81,7 +101,13 @@ export function DirectCallSurface({
   return (
     <section className={`call-stage${failed ? " is-error" : ""}`} role="dialog" aria-label={labels.dialog}>
       <audio ref={remoteAudio} autoPlay />
-      <div className="call-stage-mark" aria-hidden="true">☎</div>
+      {snapshot.video && (
+        <div className="call-stage-video">
+          <video ref={remoteVideo} autoPlay playsInline />
+          <video ref={localVideo} autoPlay playsInline muted className="is-local" />
+        </div>
+      )}
+      {!snapshot.video && <div className="call-stage-mark" aria-hidden="true"><IconCall /></div>}
       <div className="call-stage-copy">
         <strong>{snapshot.peerName || snapshot.peerUserId || labels.unknownPeer}</strong>
         <span>{status}</span>
@@ -110,6 +136,16 @@ export function DirectCallSurface({
             >
               {snapshot.microphoneMuted ? labels.unmute : labels.mute}
             </button>
+            {onToggleCamera && snapshot.video && labels.cameraOn && labels.cameraOff && (
+              <button
+                type="button"
+                className={`call-round mute${snapshot.cameraMuted ? " is-on" : ""}`}
+                onClick={onToggleCamera}
+                aria-label={snapshot.cameraMuted ? labels.cameraOn : labels.cameraOff}
+              >
+                {snapshot.cameraMuted ? labels.cameraOn : labels.cameraOff}
+              </button>
+            )}
             <button type="button" className="call-round hangup" onClick={onHangup} aria-label={labels.hangup}>
               {labels.hangup}
             </button>

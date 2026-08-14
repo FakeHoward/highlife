@@ -227,6 +227,7 @@ export function Composer({
           <span>{mode.type === "edit" ? t("composer.editing") : t("composer.replyingTo")} <strong>{mode.item.senderName}</strong>: {mode.item.body.slice(0, 80)}</span>
           <button
             type="button"
+            className="icon-button"
             onClick={() => {
               if (mode.type === "edit") setText("");
               onMode(null);

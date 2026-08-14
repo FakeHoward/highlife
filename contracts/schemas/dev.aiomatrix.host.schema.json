@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://highlife.example/contracts/dev.aiomatrix.host.schema.json",
+  "title": "dev.aiomatrix.host room state content",
+  "type": "object",
+  "required": ["version", "client_profile"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "client_profile": { "type": "string", "minLength": 1 },
+    "features": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "keyboard": { "type": "boolean" },
+    "callback_answer": { "type": "boolean" },
+    "toast": { "type": "boolean" },
+    "progress": { "type": "boolean" },
+    "poll_ui": { "type": "boolean" },
+    "mini_app": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

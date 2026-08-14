@@ -200,6 +200,7 @@ class AppStrings {
   String get callsNeedUrl => _('callsNeedUrl');
   String get signOut => _('signOut');
   String get startCall => _('startCall');
+  String get startVideoCall => _('startVideoCall');
   String get callsUnavailable => _('callsUnavailable');
   String get callNeedsUrl => _('callNeedsUrl');
   String get couldNotOpenCall => _('couldNotOpenCall');
@@ -214,6 +215,8 @@ class AppStrings {
   String get callMute => _('callMute');
   String get callUnmute => _('callUnmute');
   String get callHangup => _('callHangup');
+  String get callCameraOn => _('callCameraOn');
+  String get callCameraOff => _('callCameraOff');
   String get callFallback => _('callFallback');
   String get callParticipants => _('callParticipants');
   String get devicesVerification => _('devicesVerification');
@@ -302,6 +305,15 @@ class AppStrings {
   String get sharedMedia => _('sharedMedia');
   String get noSharedMedia => _('noSharedMedia');
   String get copyMxid => _('copyMxid');
+  String get copyMessage => _('copyMessage');
+  String get confirmDelete => _('confirmDelete');
+  String get verifyUser => _('verifyUser');
+  String get allDevicesVerified => _('allDevicesVerified');
+  String get recordVoice => _('recordVoice');
+  String get stopRecording => _('stopRecording');
+  String get recordingVoice => _('recordingVoice');
+  String get retrySend => _('retrySend');
+  String get encryptedMessage => _('encryptedMessage');
   String get miniApp => _('miniApp');
   String get edited => _('edited');
   String get attachment => _('attachment');
@@ -774,6 +786,10 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'signOut': {AppLocale.en: 'Sign out', AppLocale.ru: 'Выйти'},
   'startCall': {AppLocale.en: 'Start call', AppLocale.ru: 'Начать звонок'},
+  'startVideoCall': {
+    AppLocale.en: 'Video call',
+    AppLocale.ru: 'Видеозвонок',
+  },
   'callsUnavailable': {
     AppLocale.en: 'Calls unavailable',
     AppLocale.ru: 'Звонки недоступны',
@@ -825,6 +841,11 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'callHangup': {
     AppLocale.en: 'Hang up',
     AppLocale.ru: 'Завершить',
+  },
+  'callCameraOn': {AppLocale.en: 'Camera', AppLocale.ru: 'Камера'},
+  'callCameraOff': {
+    AppLocale.en: 'Camera off',
+    AppLocale.ru: 'Камера выкл.',
   },
   'callFallback': {
     AppLocale.en: 'Use Element Call',
@@ -1130,4 +1151,22 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'В загруженной истории нет фото, файлов и голосовых.',
   },
   'copyMxid': {AppLocale.en: 'Copy Matrix ID', AppLocale.ru: 'Скопировать MXID'},
+  'copyMessage': {AppLocale.en: 'Copy', AppLocale.ru: 'Копировать'},
+  'confirmDelete': {
+    AppLocale.en: 'Delete this message for everyone in the room?',
+    AppLocale.ru: 'Удалить это сообщение у всех в комнате?',
+  },
+  'verifyUser': {AppLocale.en: 'Verify', AppLocale.ru: 'Проверить'},
+  'allDevicesVerified': {
+    AppLocale.en: 'Every device for this user is already verified.',
+    AppLocale.ru: 'Все устройства этого пользователя уже проверены.',
+  },
+  'recordVoice': {AppLocale.en: 'Voice message', AppLocale.ru: 'Голосовое'},
+  'stopRecording': {AppLocale.en: 'Send voice', AppLocale.ru: 'Отправить голос'},
+  'recordingVoice': {AppLocale.en: 'Recording…', AppLocale.ru: 'Запись…'},
+  'retrySend': {AppLocale.en: 'Retry send', AppLocale.ru: 'Повторить отправку'},
+  'encryptedMessage': {
+    AppLocale.en: 'Encrypted',
+    AppLocale.ru: 'Зашифровано',
+  },
 };

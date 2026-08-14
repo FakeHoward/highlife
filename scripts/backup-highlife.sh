@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Backup Synapse DB, media, and bot data volumes on the HighLife VPS.
+# Backup Synapse + MAS Postgres, media, and bot/Caddy volumes on the HighLife VPS.
 # Run from the compose directory (e.g. /opt/highlife) as root/cron.
 set -euo pipefail
 
@@ -17,10 +17,13 @@ if docker compose -f "$COMPOSE" ps postgres >/dev/null 2>&1; then
   docker compose -f "$COMPOSE" exec -T postgres \
     pg_dump -U "${POSTGRES_USER:-synapse}" "${POSTGRES_DB:-synapse}" \
     | gzip >"$OUT/synapse.sql.gz"
+  docker compose -f "$COMPOSE" exec -T postgres \
+    pg_dump -U "${POSTGRES_USER:-synapse}" mas \
+    | gzip >"$OUT/mas.sql.gz"
 fi
 
 # Named volumes — adjust names if compose project prefix differs.
-for volume in highlife_synapse-data highlife_mas-data highlife_bot-data highlife_caddy-data; do
+for volume in highlife_synapse-data highlife_mas-data highlife_bot-data highlife_caddy-data highlife_postgres-data; do
   if docker volume inspect "$volume" >/dev/null 2>&1; then
     docker run --rm -v "$volume:/data:ro" -v "$OUT:/backup" alpine \
       tar czf "/backup/${volume}.tar.gz" -C /data .

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "client_profile": "aware",
+  "features": ["keyboard", "callback_answer", "toast", "progress", "poll_ui", "mini_app"],
+  "keyboard": true,
+  "callback_answer": true,
+  "toast": true,
+  "progress": true,
+  "poll_ui": true,
+  "mini_app": true
+}

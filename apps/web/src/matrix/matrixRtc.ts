@@ -30,7 +30,9 @@ export interface MatrixRtcSnapshot {
   phase: MatrixRtcPhase;
   participantCount: number;
   microphoneMuted: boolean;
+  cameraMuted?: boolean;
   remoteStream: MediaStream | null;
+  localStream?: MediaStream | null;
   error: string | null;
   fallbackAvailable: boolean;
 }
@@ -43,7 +45,9 @@ export interface LivekitMediaSession {
   connect(url: string, token: string, options?: LivekitConnectOptions): Promise<void>;
   disconnect(): Promise<void>;
   setMicrophoneEnabled(enabled: boolean): Promise<void>;
+  setCameraEnabled?(enabled: boolean): Promise<void>;
   remoteStream(): MediaStream | null;
+  localStream?(): MediaStream | null;
   subscribe(listener: () => void): () => void;
 }
 
@@ -150,7 +154,7 @@ export class MatrixRtcController {
     return () => this.listeners.delete(listener);
   }
 
-  async join(roomId: string): Promise<void> {
+  async join(roomId: string, options?: { camera?: boolean }): Promise<void> {
     if (this.current.phase === "connecting" || this.current.phase === "connected") {
       if (this.current.roomId === roomId) return;
       await this.leave();
@@ -215,7 +219,12 @@ export class MatrixRtcController {
       this.unsubMedia = this.media.subscribe(() => this.refresh());
       await this.media.connect(config.url, config.jwt, { keyProvider });
       await this.media.setMicrophoneEnabled(true);
-      this.refresh({ phase: "connected", error: null });
+      if (options?.camera) await this.media.setCameraEnabled?.(true);
+      this.refresh({
+        phase: "connected",
+        error: null,
+        cameraMuted: !options?.camera,
+      });
     } catch (reason) {
       await this.cleanupSession();
       this.publish({
@@ -242,6 +251,12 @@ export class MatrixRtcController {
     this.refresh({ microphoneMuted: muted });
   }
 
+  async toggleCamera(): Promise<void> {
+    const muted = !(this.current.cameraMuted ?? true);
+    await this.media.setCameraEnabled?.(!muted);
+    this.refresh({ cameraMuted: muted });
+  }
+
   dispose(): void {
     void this.leave();
     this.listeners.clear();
@@ -253,6 +268,7 @@ export class MatrixRtcController {
       ...this.current,
       participantCount: memberships.length,
       remoteStream: this.media.remoteStream(),
+      localStream: this.media.localStream?.() ?? null,
       ...overrides,
     });
   }

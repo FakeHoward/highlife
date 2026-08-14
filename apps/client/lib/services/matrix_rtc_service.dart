@@ -22,6 +22,7 @@ class MatrixRtcSnapshot {
     this.phase = MatrixRtcPhase.idle,
     this.participantCount = 0,
     this.microphoneMuted = false,
+    this.cameraMuted = true,
     this.remoteStream,
     this.error,
     this.fallbackAvailable = false,
@@ -33,6 +34,7 @@ class MatrixRtcSnapshot {
   final MatrixRtcPhase phase;
   final int participantCount;
   final bool microphoneMuted;
+  final bool cameraMuted;
   final webrtc.MediaStream? remoteStream;
   final String? error;
   final bool fallbackAvailable;
@@ -64,7 +66,7 @@ class MatrixRtcService {
   MatrixRtcSnapshot get snapshot => _snapshot;
   Stream<MatrixRtcSnapshot> get snapshots => _snapshots.stream;
 
-  Future<void> join(Room room) async {
+  Future<void> join(Room room, {bool camera = false}) async {
     _ensureAvailable();
     if (_snapshot.phase == MatrixRtcPhase.connecting ||
         _snapshot.phase == MatrixRtcPhase.connected) {
@@ -138,6 +140,9 @@ class MatrixRtcService {
       livekit.addListener(_onLivekitChanged);
       await livekit.connect(config.url, config.jwt);
       await livekit.localParticipant?.setMicrophoneEnabled(true);
+      if (camera) {
+        await livekit.localParticipant?.setCameraEnabled(true);
+      }
       _membershipKeepAlive?.cancel();
       _membershipKeepAlive = Timer.periodic(
         const Duration(minutes: 20),
@@ -155,7 +160,8 @@ class MatrixRtcService {
           roomId: room.id,
           phase: MatrixRtcPhase.connected,
           participantCount: _memberCount(room),
-          remoteStream: _firstRemoteAudio(livekit),
+          remoteStream: _firstRemote(livekit),
+          cameraMuted: !(livekit.localParticipant?.isCameraEnabled() ?? false),
           fallbackAvailable: true,
         ),
       );
@@ -189,6 +195,25 @@ class MatrixRtcService {
         phase: _snapshot.phase,
         participantCount: _snapshot.participantCount,
         microphoneMuted: muted,
+        cameraMuted: _snapshot.cameraMuted,
+        remoteStream: _snapshot.remoteStream,
+        fallbackAvailable: true,
+      ),
+    );
+  }
+
+  Future<void> toggleCamera() async {
+    final participant = _livekit?.localParticipant;
+    if (participant == null) throw StateError('matrixrtc_not_active');
+    final muted = participant.isCameraEnabled();
+    await participant.setCameraEnabled(!muted);
+    _publish(
+      MatrixRtcSnapshot(
+        roomId: _snapshot.roomId,
+        phase: _snapshot.phase,
+        participantCount: _snapshot.participantCount,
+        microphoneMuted: _snapshot.microphoneMuted,
+        cameraMuted: muted,
         remoteStream: _snapshot.remoteStream,
         fallbackAvailable: true,
       ),
@@ -330,7 +355,8 @@ class MatrixRtcService {
         phase: MatrixRtcPhase.connected,
         participantCount: _memberCount(room),
         microphoneMuted: !(livekit.localParticipant?.isMicrophoneEnabled() ?? true),
-        remoteStream: _firstRemoteAudio(livekit),
+        cameraMuted: !(livekit.localParticipant?.isCameraEnabled() ?? false),
+        remoteStream: _firstRemote(livekit),
         fallbackAvailable: true,
       ),
     );
@@ -344,6 +370,16 @@ class MatrixRtcService {
         Map<String, dynamic>.from(event.content),
       ]);
     }).length;
+  }
+
+  webrtc.MediaStream? _firstRemote(lk.Room room) {
+    for (final participant in room.remoteParticipants.values) {
+      for (final publication in participant.videoTrackPublications) {
+        final track = publication.track;
+        if (track is lk.RemoteVideoTrack) return track.mediaStream;
+      }
+    }
+    return _firstRemoteAudio(room);
   }
 
   webrtc.MediaStream? _firstRemoteAudio(lk.Room room) {

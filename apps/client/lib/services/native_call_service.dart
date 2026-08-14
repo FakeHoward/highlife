@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as webrtc;
 import 'package:matrix/matrix.dart';
 
@@ -37,7 +38,11 @@ class NativeCallSnapshot {
     this.direction,
     this.phase = NativeCallPhase.idle,
     this.microphoneMuted = false,
+    this.cameraMuted = true,
+    this.video = false,
     this.remoteStream,
+    this.localStream,
+    this.incomingGroupRoomId,
     this.error,
   });
 
@@ -50,7 +55,11 @@ class NativeCallSnapshot {
   final NativeCallDirection? direction;
   final NativeCallPhase phase;
   final bool microphoneMuted;
+  final bool cameraMuted;
+  final bool video;
   final webrtc.MediaStream? remoteStream;
+  final webrtc.MediaStream? localStream;
+  final String? incomingGroupRoomId;
 
   /// Stable machine-readable failure category for localization by the caller.
   final String? error;
@@ -60,10 +69,11 @@ abstract interface class NativeCallActions {
   Future<void> answer();
   Future<void> reject();
   Future<void> toggleMicrophone();
+  Future<void> toggleCamera();
   Future<void> hangup();
 }
 
-/// First-party Matrix 1:1 voice calling for one logged-in [Client] lifetime.
+/// First-party Matrix 1:1 calling for one logged-in [Client] lifetime.
 ///
 /// The Matrix SDK owns signalling and peer connections. This class only adapts
 /// `flutter_webrtc`, publishes presentation-neutral state, and releases its
@@ -80,6 +90,8 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
 
   NativeCallSnapshot _snapshot = NativeCallSnapshot.idle;
   CallSession? _activeCall;
+  GroupCallSession? _pendingGroup;
+  Timer? _ring;
   var _disposed = false;
 
   NativeCallSnapshot get snapshot => _snapshot;
@@ -88,11 +100,19 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   Future<CallSession> startVoiceCall(
     Room room, {
     required String peerUserId,
+  }) {
+    return startCall(room, peerUserId: peerUserId, video: false);
+  }
+
+  Future<CallSession> startCall(
+    Room room, {
+    required String peerUserId,
+    bool video = false,
   }) async {
     _ensureAvailable();
     final call = await voip.inviteToCall(
       room,
-      CallType.kVoice,
+      video ? CallType.kVideo : CallType.kVoice,
       userId: peerUserId,
     );
     _attach(call);
@@ -103,12 +123,14 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   Future<void> answer() async {
     final call = _requireCall();
     await call.answer();
+    await stopRingtone();
     _publishFor(call, phase: NativeCallPhase.connecting);
   }
 
   @override
   Future<void> reject() async {
     final call = _requireCall();
+    await stopRingtone();
     await call.reject();
     await _finish(call);
   }
@@ -121,8 +143,16 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   }
 
   @override
+  Future<void> toggleCamera() async {
+    final call = _requireCall();
+    await call.setLocalVideoMuted(!call.isLocalVideoMuted);
+    _publishFor(call);
+  }
+
+  @override
   Future<void> hangup() async {
     final call = _requireCall();
+    await stopRingtone();
     await call.hangup(reason: CallErrorCode.userHangup);
     await _finish(call);
   }
@@ -130,12 +160,14 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    await stopRingtone();
     final call = _activeCall;
     if (call != null && !call.callHasEnded) {
       await call.hangup(reason: CallErrorCode.userHangup);
     }
     await _cancelSubscriptions();
     _activeCall = null;
+    _pendingGroup = null;
     _snapshot = NativeCallSnapshot.idle;
     await _snapshots.close();
   }
@@ -162,16 +194,32 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   EncryptionKeyProvider? get keyProvider => null;
 
   @override
-  Future<void> playRingtone() async {}
+  Future<void> playRingtone() async {
+    _ring?.cancel();
+    _ring = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(SystemSound.play(SystemSoundType.alert));
+    });
+    await SystemSound.play(SystemSoundType.alert);
+  }
 
   @override
-  Future<void> stopRingtone() async {}
+  Future<void> stopRingtone() async {
+    _ring?.cancel();
+    _ring = null;
+  }
 
   @override
   Future<void> registerListeners(CallSession session) async {
     if (_subscriptions.containsKey(session)) return;
     _subscriptions[session] = [
       session.onCallStateChanged.stream.listen((state) {
+        if (state == CallState.kRinging &&
+            session.direction == CallDirection.kIncoming) {
+          unawaited(playRingtone());
+        }
+        if (state == CallState.kConnected || state == CallState.kEnded) {
+          unawaited(stopRingtone());
+        }
         if (state == CallState.kEnded) {
           unawaited(_finish(session));
         } else {
@@ -201,6 +249,7 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
 
   @override
   Future<void> handleMissedCall(CallSession session) async {
+    await stopRingtone();
     if (_activeCall == session) {
       _publishFor(
         session,
@@ -214,10 +263,20 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
   }
 
   @override
-  Future<void> handleNewGroupCall(GroupCallSession groupCall) async {}
+  Future<void> handleNewGroupCall(GroupCallSession groupCall) async {
+    _pendingGroup = groupCall;
+  }
 
   @override
-  Future<void> handleGroupCallEnded(GroupCallSession groupCall) async {}
+  Future<void> handleGroupCallEnded(GroupCallSession groupCall) async {
+    if (_pendingGroup == groupCall) {
+      _pendingGroup = null;
+      await stopRingtone();
+      if (_activeCall == null) {
+        _publish(NativeCallSnapshot.idle);
+      }
+    }
+  }
 
   void _attach(CallSession call) {
     if (_disposed) return;
@@ -246,7 +305,10 @@ class NativeCallService implements WebRTCDelegate, NativeCallActions {
             : NativeCallDirection.outgoing,
         phase: phase ?? nativeCallPhaseForState(call.state),
         microphoneMuted: retainCall && call.isMicrophoneMuted,
+        cameraMuted: !retainCall || call.isLocalVideoMuted,
+        video: call.type == CallType.kVideo,
         remoteStream: retainCall ? call.remoteUserMediaStream?.stream : null,
+        localStream: retainCall ? call.localUserMediaStream?.stream : null,
         error: error,
       ),
     );

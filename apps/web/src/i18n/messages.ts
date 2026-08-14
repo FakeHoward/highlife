@@ -14,7 +14,7 @@ const en = {
   "app.preparing": "Restoring session…",
 
   // Login
-  "login.headline": "Sign in to Matrix",
+  "login.headline": "Sign in to HighLife",
   "login.blurb":
     "Sign in to any Matrix server. Some rooms only accept accounts from servers they allow.",
   "login.title": "Sign in",
@@ -50,6 +50,11 @@ const en = {
   "login.oidcFailed": "SSO sign-in failed",
   "login.homeserverRequired": "Homeserver is required",
   "login.language": "Language",
+  "login.ssoToken": "SSO login token",
+  "login.ssoTokenPlaceholder": "Paste loginToken from the redirect",
+  "login.useToken": "Sign in with token",
+  "login.cryptoBanner":
+    "This browser cannot run Matrix encryption (needs HTTPS, WebAssembly, and IndexedDB). Encrypted rooms will stay unreadable until those are available.",
 
   // Rooms sidebar
   "sidebar.rooms": "Rooms",
@@ -189,6 +194,8 @@ const en = {
   "user.unignore": "Stop ignoring",
   "user.lastSeen": "Last seen {when}",
   "user.offline": "Offline",
+  "user.verify": "Verify",
+  "user.verifying": "Starting verification…",
   "rooms.sharedMedia": "Shared media",
   "rooms.noSharedMedia": "No photos, files, or voice notes in the loaded history.",
   "sidebar.muted": "Muted",
@@ -317,6 +324,8 @@ const en = {
   "rooms.aliasOptional": "Room address (optional)",
   "rooms.aliasPlaceholder": "#room:server",
   "rooms.enableE2ee": "Enable end-to-end encryption",
+  "rooms.encryptConfirm": "Turn on encryption for this room? This cannot be undone.",
+  "rooms.encryptFailed": "Could not enable encryption",
   "rooms.e2eeNeedsCrypto":
     "Encryption is not ready on this device, so new rooms stay unencrypted.",
   "rooms.joinRoom": "Join room",
@@ -363,9 +372,14 @@ const en = {
   // Search
   "search.title": "Search messages",
   "search.placeholder": "Words in this room",
+  "search.placeholderAll": "Words in any room",
   "search.action": "Search",
   "search.busy": "Searching…",
-  "search.emptyHint": "Enter a query to search this room.",
+  "search.emptyHint": "Enter a query. Leave the room filter off to search everywhere.",
+  "search.failed": "Search failed",
+  "search.retry": "Try again",
+  "search.scopeRoom": "This room",
+  "search.scopeAll": "All rooms",
   "search.noResults": "No messages matched.",
 
   // Calls
@@ -399,16 +413,10 @@ const en = {
     "Microphone is blocked by Windows. Allow it for this browser in Settings → Privacy → Microphone, then try again.",
   "call.cryptoUnavailable":
     "This encrypted chat needs working encryption before a classic invite can be sent. HighLife uses MatrixRTC for Element X; set up recovery in Profile if messages also fail.",
-
-  // Threads
-  "thread.title": "Thread",
-  "thread.loading": "Loading thread…",
-  "thread.empty": "No replies yet.",
-  "thread.loadEarlier": "Load earlier replies",
-  "thread.replyPlaceholder": "Reply in thread",
-  "thread.replyLabel": "Thread reply",
-  "thread.send": "Send",
-  "thread.failed": "Thread failed to load",
+  "call.cameraOn": "Camera on",
+  "call.cameraOff": "Camera off",
+  "update.available": "A newer HighLife web build is published ({version}).",
+  "update.open": "Open download",
 
   // Common / errors / modal
   "common.close": "Close",
@@ -421,7 +429,7 @@ const ru: Record<MessageKey, string> = {
   "app.opening": "Открываем HighLife",
   "app.preparing": "Восстанавливаем сессию…",
 
-  "login.headline": "Вход в Matrix",
+  "login.headline": "Вход в HighLife",
   "login.blurb":
     "Войдите на любой сервер Matrix. В некоторые комнаты пускают только с серверов, которые они разрешают.",
   "login.title": "Вход",
@@ -458,6 +466,11 @@ const ru: Record<MessageKey, string> = {
   "login.oidcFailed": "Не удалось войти через SSO",
   "login.homeserverRequired": "Укажите сервер",
   "login.language": "Язык",
+  "login.ssoToken": "Токен SSO",
+  "login.ssoTokenPlaceholder": "Вставьте loginToken из редиректа",
+  "login.useToken": "Войти по токену",
+  "login.cryptoBanner":
+    "Этот браузер не может запустить шифрование Matrix (нужны HTTPS, WebAssembly и IndexedDB). Зашифрованные комнаты останутся нечитаемыми.",
 
   "sidebar.rooms": "Комнаты",
   "sidebar.allRooms": "Все чаты",
@@ -592,6 +605,8 @@ const ru: Record<MessageKey, string> = {
   "user.unignore": "Перестать игнорировать",
   "user.lastSeen": "Был(а) {when}",
   "user.offline": "Не в сети",
+  "user.verify": "Проверить",
+  "user.verifying": "Запуск проверки…",
   "rooms.sharedMedia": "Общие медиа",
   "rooms.noSharedMedia": "В загруженной истории нет фото, файлов и голосовых.",
   "sidebar.muted": "Без уведомлений",
@@ -717,6 +732,8 @@ const ru: Record<MessageKey, string> = {
   "rooms.aliasOptional": "Адрес комнаты (необязательно)",
   "rooms.aliasPlaceholder": "#room:server",
   "rooms.enableE2ee": "Включить сквозное шифрование",
+  "rooms.encryptConfirm": "Включить шифрование в этой комнате? Это нельзя отменить.",
+  "rooms.encryptFailed": "Не удалось включить шифрование",
   "rooms.e2eeNeedsCrypto":
     "Шифрование на этом устройстве не готово — новые комнаты будут без E2EE.",
   "rooms.joinRoom": "Присоединиться к комнате",
@@ -762,9 +779,14 @@ const ru: Record<MessageKey, string> = {
 
   "search.title": "Поиск сообщений",
   "search.placeholder": "Слова в этой комнате",
+  "search.placeholderAll": "Слова в любой комнате",
   "search.action": "Найти",
   "search.busy": "Поиск…",
-  "search.emptyHint": "Введите запрос, чтобы искать в этой комнате.",
+  "search.emptyHint": "Введите запрос. Можно искать по всем комнатам.",
+  "search.failed": "Поиск не удался",
+  "search.retry": "Повторить",
+  "search.scopeRoom": "Эта комната",
+  "search.scopeAll": "Все комнаты",
   "search.noResults": "Сообщений не найдено.",
 
   "call.title": "Звонок",
@@ -797,15 +819,10 @@ const ru: Record<MessageKey, string> = {
     "Микрофон заблокирован Windows. Разрешите его для этого браузера в Параметры → Конфиденциальность → Микрофон и попробуйте снова.",
   "call.cryptoUnavailable":
     "Для классического invite в этом зашифрованном чате нужно рабочее шифрование. Для Element X HighLife звонит через MatrixRTC. Если не уходят и сообщения, настройте восстановление в Профиле.",
-
-  "thread.title": "Тред",
-  "thread.loading": "Загрузка треда…",
-  "thread.empty": "Пока нет ответов.",
-  "thread.loadEarlier": "Загрузить более ранние ответы",
-  "thread.replyPlaceholder": "Ответ в треде",
-  "thread.replyLabel": "Ответ в треде",
-  "thread.send": "Отправить",
-  "thread.failed": "Не удалось загрузить тред",
+  "call.cameraOn": "Камера вкл.",
+  "call.cameraOff": "Камера выкл.",
+  "update.available": "Опубликована новая веб-сборка HighLife ({version}).",
+  "update.open": "Открыть загрузку",
 
   "common.close": "Закрыть",
   "common.closeNamed": "Закрыть {title}",

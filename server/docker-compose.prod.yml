@@ -346,6 +346,7 @@ services:
       MATRIX_MINIAPP_CORS_ORIGIN: ${MATRIX_MINIAPP_CORS_ORIGIN:-https://testhighlife.strangled.net}
       MINIAPP_HTTP_PORT: "8090"
       REDIS_URL: redis://redis:6379
+      FORMSPACE_ANONYMITY_SALT: ${FORMSPACE_ANONYMITY_SALT:-}
     volumes:
       - bot-data:/app/data
     depends_on:

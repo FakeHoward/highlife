@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'l10n/highlife_locales.dart';
 import 'screens/login_screen.dart';
 import 'screens/room_list_screen.dart';
+import 'services/deep_links.dart';
 import 'services/session.dart';
 import 'theme.dart';
 import 'widgets/call_surface.dart';
@@ -14,6 +15,7 @@ import 'widgets/hl_button.dart';
 import 'widgets/matrix_rtc_call_surface.dart';
 import 'services/matrix_rtc_service.dart';
 import 'widgets/native_voice_call_surface.dart';
+import 'services/native_call_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -99,7 +101,7 @@ class _HighLifeBootstrapState extends State<HighLifeBootstrap> {
                       });
                       _start();
                     },
-                    label: const Text('Retry'),
+                    label: Text(_locales?.strings.retry ?? 'Retry'),
                   ),
                 ],
               ),
@@ -125,7 +127,7 @@ class _HighLifeBootstrapState extends State<HighLifeBootstrap> {
   }
 }
 
-class HighLifeApp extends StatelessWidget {
+class HighLifeApp extends StatefulWidget {
   const HighLifeApp({
     super.key,
     required this.session,
@@ -134,6 +136,29 @@ class HighLifeApp extends StatelessWidget {
 
   final HighLifeSession session;
   final HighLifeLocales locales;
+
+  @override
+  State<HighLifeApp> createState() => _HighLifeAppState();
+}
+
+class _HighLifeAppState extends State<HighLifeApp> {
+  late final DeepLinkListener _deepLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _deepLinks = DeepLinkListener(onLink: widget.session.applyDeepLink);
+    unawaited(_deepLinks.start());
+  }
+
+  @override
+  void dispose() {
+    unawaited(_deepLinks.dispose());
+    super.dispose();
+  }
+
+  HighLifeSession get session => widget.session;
+  HighLifeLocales get locales => widget.locales;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +204,9 @@ class HighLifeApp extends StatelessWidget {
                       child: HostToastListener(child: content),
                     ),
                     if (incomingRtc != null &&
+                        (calls == null ||
+                            calls.snapshot.phase == NativeCallPhase.idle ||
+                            calls.snapshot.phase == NativeCallPhase.ended) &&
                         (matrixRtc == null ||
                             matrixRtc.snapshot.phase == MatrixRtcPhase.idle ||
                             matrixRtc.snapshot.phase == MatrixRtcPhase.ended))
@@ -259,6 +287,8 @@ class HighLifeApp extends StatelessWidget {
                             mute: locales.strings.callMute,
                             unmute: locales.strings.callUnmute,
                             hangup: locales.strings.callHangup,
+                            cameraOn: locales.strings.callCameraOn,
+                            cameraOff: locales.strings.callCameraOff,
                           ),
                         ),
                       ),
@@ -269,6 +299,7 @@ class HighLifeApp extends StatelessWidget {
                           snapshot: matrixRtc.snapshot,
                           onHangup: matrixRtc.leave,
                           onToggleMicrophone: matrixRtc.toggleMicrophone,
+                          onToggleCamera: matrixRtc.toggleCamera,
                           onFallback: () {
                             final roomId = matrixRtc.snapshot.roomId;
                             final room = roomId == null
@@ -298,6 +329,8 @@ class HighLifeApp extends StatelessWidget {
                             unmute: locales.strings.callUnmute,
                             hangup: locales.strings.callHangup,
                             fallback: locales.strings.callFallback,
+                            cameraOn: locales.strings.callCameraOn,
+                            cameraOff: locales.strings.callCameraOff,
                           ),
                         ),
                       ),

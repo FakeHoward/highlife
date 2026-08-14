@@ -8,14 +8,18 @@ class AdaptiveMessengerShell extends StatelessWidget {
     super.key,
     required this.master,
     required this.detail,
+    this.rail,
     this.showMasterOnCompact = false,
   });
 
   static const breakpoint = 840.0;
+  static const railBreakpoint = 1100.0;
   static const masterWidth = 292.0;
+  static const railWidth = 52.0;
 
   final Widget master;
   final Widget detail;
+  final Widget? rail;
   final bool showMasterOnCompact;
 
   @override
@@ -28,6 +32,14 @@ class AdaptiveMessengerShell extends StatelessWidget {
         }
         return Row(
           children: [
+            if (rail != null && constraints.maxWidth >= railBreakpoint)
+              SizedBox(
+                key: const ValueKey('space-rail'),
+                width: railWidth,
+                child: rail,
+              ),
+            if (rail != null && constraints.maxWidth >= railBreakpoint)
+              const VerticalDivider(width: 1),
             SizedBox(
               key: const ValueKey('rooms-master'),
               width: masterWidth,

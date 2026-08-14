@@ -112,7 +112,23 @@ class TimelineItem {
     // Matrix media URLs are mxc:// — ignore https MiniApp / link fallbacks.
     final url = content['url'] as String?;
     final mxc = url != null && url.startsWith('mxc://') ? url : null;
-    return MediaTimelineItem.from(item, mxc);
+    final info = _asMap(content['info']);
+    final audioMeta = _asMap(content['org.matrix.msc1767.audio']);
+    int? durationMs;
+    final infoDuration = info['duration'];
+    if (infoDuration is num) {
+      durationMs = infoDuration >= 1000
+          ? infoDuration.round()
+          : (infoDuration * 1000).round();
+    }
+    final metaDuration = audioMeta['duration'];
+    if (metaDuration is num) durationMs = metaDuration.round();
+    return MediaTimelineItem.from(
+      item,
+      mxc,
+      isVoice: content['org.matrix.msc3245.voice'] != null,
+      durationMs: durationMs,
+    );
   }
 }
 
@@ -124,14 +140,23 @@ class MediaTimelineItem extends TimelineItem {
     required super.body,
     required super.kind,
     this.mxcUrl,
+    this.isVoice = false,
+    this.durationMs,
     super.replyToEventId,
     super.edited,
     super.reactions,
   });
 
   final String? mxcUrl;
+  final bool isVoice;
+  final int? durationMs;
 
-  factory MediaTimelineItem.from(TimelineItem item, String? mxcUrl) {
+  factory MediaTimelineItem.from(
+    TimelineItem item,
+    String? mxcUrl, {
+    bool isVoice = false,
+    int? durationMs,
+  }) {
     return MediaTimelineItem(
       eventId: item.eventId,
       senderId: item.senderId,
@@ -139,6 +164,8 @@ class MediaTimelineItem extends TimelineItem {
       body: item.body,
       kind: item.kind,
       mxcUrl: mxcUrl,
+      isVoice: isVoice,
+      durationMs: durationMs,
       replyToEventId: item.replyToEventId,
       edited: item.edited,
       reactions: item.reactions,
@@ -319,6 +346,32 @@ List<TimelineItem> buildTimelineItems(
     }
 
     if (isPollResponseType(event.type) || isPollEndType(event.type)) {
+      continue;
+    }
+
+    if (event.type == 'm.room.encrypted') {
+      final reactionMap = reactions[event.eventId] ?? const {};
+      final reactionList = reactionMap.entries
+          .map(
+            (entry) => ReactionSummary(
+              key: entry.key,
+              count: entry.value.count,
+              reactedByMe: entry.value.reactedByMe,
+              ownEventId: entry.value.ownEventId,
+            ),
+          )
+          .toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      items.add(
+        TimelineItem(
+          eventId: event.eventId,
+          senderId: event.senderId,
+          timestamp: event.timestamp,
+          body: '',
+          kind: TimelineItemKind.notice,
+          reactions: reactionList,
+        ),
+      );
       continue;
     }
 

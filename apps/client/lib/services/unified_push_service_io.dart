@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:unifiedpush/unifiedpush.dart';
+
+import '../domain/push_copy.dart';
 
 /// Registers UnifiedPush on Android and forwards the endpoint as a Matrix pushkey.
 ///
@@ -9,9 +12,10 @@ import 'package:unifiedpush/unifiedpush.dart';
 /// HTTP pusher registration is gated by [PushService.isConfigured]
 /// (`HIGHLIFE_PUSH_GATEWAY_URL`).
 class UnifiedPushService {
-  UnifiedPushService({required this.onEndpoint});
+  UnifiedPushService({required this.onEndpoint, this.onMessage});
 
   final Future<void> Function(String endpoint) onEndpoint;
+  final Future<void> Function(Object? payload)? onMessage;
 
   static const _instance = 'highlife';
   var _started = false;
@@ -34,8 +38,13 @@ class UnifiedPushService {
         },
         onRegistrationFailed: (_, __) {},
         onUnregistered: (_) {},
-        onMessage: (_, __) {
-          // Matrix push gateway delivers via HTTP; no local decrypt path here.
+        onMessage: (message, instance) {
+          if (instance != _instance && instance.isNotEmpty) return;
+          final payload = decodePushBytes(message.content);
+          final handler = onMessage;
+          if (handler == null) return;
+          // ignore: discarded_futures
+          handler(payload);
         },
       );
 

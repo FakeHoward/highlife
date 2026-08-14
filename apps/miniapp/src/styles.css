@@ -1,22 +1,24 @@
 :root {
   color-scheme: light dark;
-  --bg: #0f1412;
-  --panel: #18201c;
-  --line: #2c3a33;
-  --text: #e8f0eb;
-  --muted: #9db0a5;
-  --accent: #3d9b6e;
-  --danger: #c45c5c;
+  --bg: #F4F6F8;
+  --panel: #FFFFFF;
+  --line: #D9E0E5;
+  --text: #17212B;
+  --muted: #667786;
+  --accent: #168ACD;
+  --danger: #C83E4D;
   --font: "Segoe UI", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg: #f3f6f4;
-    --panel: #ffffff;
-    --line: #d5ddd8;
-    --text: #142019;
-    --muted: #5c6d63;
+    --bg: #101418;
+    --panel: #182027;
+    --line: #2B3740;
+    --text: #EDF3F7;
+    --muted: #91A2AF;
+    --accent: #45AEEA;
+    --danger: #F06A76;
   }
 }
 
@@ -24,17 +26,17 @@
 body {
   margin: 0;
   font-family: var(--font);
-  background: radial-gradient(circle at top, #1c2a22, var(--bg) 55%);
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
 #app { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
-h1, h2 { font-weight: 650; letter-spacing: -0.02em; margin: 0 0 8px; }
+h1, h2 { font-weight: 600; margin: 0 0 8px; }
 p { color: var(--muted); line-height: 1.45; }
 .card {
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 16px;
   margin: 12px 0;
 }
@@ -42,7 +44,7 @@ p { color: var(--muted); line-height: 1.45; }
 label { display: grid; gap: 6px; font-size: 0.92rem; }
 input, select, textarea, button {
   font: inherit;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
@@ -62,12 +64,12 @@ button.danger { background: var(--danger); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 8px 12px;
   cursor: pointer;
   user-select: none;
 }
-.chip.on { background: color-mix(in srgb, var(--accent) 30%, var(--panel)); border-color: var(--accent); }
+.chip.on { background: color-mix(in srgb, var(--accent) 18%, var(--panel)); border-color: var(--accent); }
 .muted { color: var(--muted); font-size: 0.9rem; }
 .error { color: var(--danger); }
 .field-row { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; align-items: end; }

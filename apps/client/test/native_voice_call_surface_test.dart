@@ -8,6 +8,7 @@ class _Actions implements NativeCallActions {
   var rejected = false;
   var muted = false;
   var hungUp = false;
+  var cameraToggled = false;
 
   @override
   Future<void> answer() async => answered = true;
@@ -20,6 +21,9 @@ class _Actions implements NativeCallActions {
 
   @override
   Future<void> toggleMicrophone() async => muted = true;
+
+  @override
+  Future<void> toggleCamera() async => cameraToggled = true;
 }
 
 const _labels = NativeVoiceCallLabels(

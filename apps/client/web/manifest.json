@@ -1,11 +1,11 @@
 {
-    "name": "highlife_client",
-    "short_name": "highlife_client",
+    "name": "HighLife",
+    "short_name": "HighLife",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F4F6F8",
+    "theme_color": "#168ACD",
+    "description": "HighLife Matrix messenger.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -46,6 +46,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
     final s = context.watch<HighLifeLocales>().strings;
     final tokens = HighLifeTokens.of(context);
     _maybeShowIncomingVerification(session, s);
+    _openPendingRoom(session);
 
     final query = _query.toLowerCase();
     bool matches(Room room) =>
@@ -68,9 +69,25 @@ class _RoomListScreenState extends State<RoomListScreen> {
             .toList(growable: false);
     final wide = MediaQuery.sizeOf(context).width >=
         AdaptiveMessengerShell.breakpoint;
+    final showRail = MediaQuery.sizeOf(context).width >=
+        AdaptiveMessengerShell.railBreakpoint;
 
     return AdaptiveMessengerShell(
       showMasterOnCompact: _selected == null && !_showProfile,
+      rail: showRail
+          ? _SpaceRail(
+              spaces: spaces,
+              selectedSpaceId: _selectedSpace?.id,
+              onSelectAll: () => setState(() => _selectedSpace = null),
+              onSelectSpace: (space) => setState(() {
+                _selectedSpace =
+                    _selectedSpace?.id == space.id ? null : space;
+              }),
+              onCreate: () => _roomAction(session, s, 'space'),
+              createTooltip: s.createSpace,
+              allLabel: s.allChats,
+            )
+          : null,
       master: Scaffold(
         backgroundColor: tokens.surface,
         appBar: AppBar(
@@ -117,17 +134,18 @@ class _RoomListScreenState extends State<RoomListScreen> {
                 ),
               ),
             ),
-            _FolderTabs(
-              allLabel: s.allChats,
-              spaces: spaces,
-              selectedSpaceId: _selectedSpace?.id,
-              onSelectAll: () => setState(() => _selectedSpace = null),
-              onSelectSpace: (space) => setState(() {
-                _selectedSpace = _selectedSpace?.id == space.id ? null : space;
-              }),
-              onCreate: () => _roomAction(session, s, 'space'),
-              createTooltip: s.createSpace,
-            ),
+            if (!showRail)
+              _FolderTabs(
+                allLabel: s.allChats,
+                spaces: spaces,
+                selectedSpaceId: _selectedSpace?.id,
+                onSelectAll: () => setState(() => _selectedSpace = null),
+                onSelectSpace: (space) => setState(() {
+                  _selectedSpace = _selectedSpace?.id == space.id ? null : space;
+                }),
+                onCreate: () => _roomAction(session, s, 'space'),
+                createTooltip: s.createSpace,
+              ),
             Expanded(
               child: invites.isEmpty && joined.isEmpty && spaces.isEmpty
                   ? _EmptyRooms(
@@ -222,6 +240,22 @@ class _RoomListScreenState extends State<RoomListScreen> {
       );
       session.clearIncomingVerification();
       if (mounted) _shownVerification = null;
+    });
+  }
+
+  void _openPendingRoom(HighLifeSession session) {
+    final pending = session.pendingOpenRoomId;
+    if (pending == null) return;
+    final room = session.client?.getRoomById(pending);
+    if (room == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (session.pendingOpenRoomId != pending) return;
+      session.takePendingOpenRoom();
+      setState(() {
+        _selected = room;
+        _showProfile = false;
+      });
     });
   }
 
@@ -377,6 +411,103 @@ class _RoomListScreenState extends State<RoomListScreen> {
         ),
       );
     }
+  }
+}
+
+class _SpaceRail extends StatelessWidget {
+  const _SpaceRail({
+    required this.spaces,
+    required this.selectedSpaceId,
+    required this.onSelectAll,
+    required this.onSelectSpace,
+    required this.onCreate,
+    required this.createTooltip,
+    required this.allLabel,
+  });
+
+  final List<Room> spaces;
+  final String? selectedSpaceId;
+  final VoidCallback onSelectAll;
+  final ValueChanged<Room> onSelectSpace;
+  final VoidCallback onCreate;
+  final String createTooltip;
+  final String allLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return ColoredBox(
+      color: tokens.surface,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          _railDot(
+            context,
+            selected: selectedSpaceId == null,
+            tooltip: allLabel,
+            onTap: onSelectAll,
+            child: Text(
+              'H',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: selectedSpaceId == null ? Colors.white : tokens.muted,
+              ),
+            ),
+          ),
+          for (final space in spaces)
+            _railDot(
+              context,
+              selected: selectedSpaceId == space.id,
+              tooltip: space.getLocalizedDisplayname(),
+              onTap: () => onSelectSpace(space),
+              child: MatrixAvatar(
+                name: space.getLocalizedDisplayname(),
+                mxc: space.avatar,
+                client: space.client,
+                radius: 16,
+              ),
+            ),
+          _railDot(
+            context,
+            selected: false,
+            tooltip: createTooltip,
+            onTap: onCreate,
+            child: Icon(Icons.add, size: 18, color: tokens.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _railDot(
+    BuildContext context, {
+    required bool selected,
+    required String tooltip,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    final tokens = HighLifeTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Tooltip(
+        message: tooltip,
+        child: Center(
+          child: Material(
+            color: selected ? tokens.accent : tokens.surface,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: Center(child: child),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

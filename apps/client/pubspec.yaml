@@ -1,7 +1,7 @@
 name: highlife_client
 description: HighLife Matrix client for conversations, communities, and aiomatrix bots.
 publish_to: "none"
-version: 0.4.0+15
+version: 0.4.1+16
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -28,6 +28,8 @@ dependencies:
   webview_flutter: ^4.13.0
   unifiedpush: ^6.0.0
   shadcn_flutter: ^0.0.53
+  app_links: ^6.4.0
+  flutter_local_notifications: ^19.3.0
 
 dev_dependencies:
   flutter_test:

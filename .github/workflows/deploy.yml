@@ -118,6 +118,7 @@ jobs:
           fi
           npm ci
           npm test --workspace @highlife/web -- --run
+          npm test --workspace @highlife/miniapp -- --run
           npm run typecheck --workspace @highlife/web
           npm run build --workspace @highlife/web
           npm run build --workspace @highlife/miniapp
@@ -154,6 +155,7 @@ jobs:
           LIVEKIT_SECRET: ${{ secrets.LIVEKIT_SECRET }}
           TURN_SHARED_SECRET: ${{ secrets.TURN_SHARED_SECRET }}
           MATRIX_MINIAPP_SECRET: ${{ secrets.MATRIX_MINIAPP_SECRET }}
+          FORMSPACE_ANONYMITY_SALT: ${{ secrets.FORMSPACE_ANONYMITY_SALT }}
           MATRIX_MINIAPP_CORS_ORIGIN: ${{ vars.MATRIX_MINIAPP_CORS_ORIGIN }}
           DOMAIN: ${{ secrets.DOMAIN }}
           MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
@@ -308,6 +310,9 @@ jobs:
               "${MATRIX_MINIAPP_CORS_ORIGIN:-https://${DOMAIN}}"
             if [ -n "${MATRIX_MINIAPP_SECRET:-}" ]; then
               printf 'MATRIX_MINIAPP_SECRET=%s\n' "$MATRIX_MINIAPP_SECRET"
+            fi
+            if [ -n "${FORMSPACE_ANONYMITY_SALT:-}" ]; then
+              printf 'FORMSPACE_ANONYMITY_SALT=%s\n' "$FORMSPACE_ANONYMITY_SALT"
             fi
           } > out/deploy.env
           # Keep world-unreadable locally but readable by the SCP action container.

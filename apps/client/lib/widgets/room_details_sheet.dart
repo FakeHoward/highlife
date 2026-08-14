@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import '../hl_kit.dart';
 import 'package:flutter/services.dart';
 import 'package:matrix/matrix.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/messages.dart';
 import '../services/session.dart';
@@ -183,11 +184,40 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
         ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
+          leading: Icon(
+            event.messageType == MessageTypes.Image
+                ? Icons.image_outlined
+                : event.messageType == MessageTypes.Video
+                    ? Icons.videocam_outlined
+                    : event.messageType == MessageTypes.Audio
+                        ? Icons.audio_file_outlined
+                        : Icons.insert_drive_file_outlined,
+            size: 20,
+            color: tokens.muted,
+          ),
           title: Text(
             event.body.isEmpty ? event.messageType : event.body,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          onTap: () {
+            // ignore: deprecated_member_use
+            final uri = event.getAttachmentUrl();
+            if (uri == null) return;
+            if (event.messageType == MessageTypes.Image) {
+              showDialog<void>(
+                context: context,
+                builder: (context) => Dialog(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: Image.network(uri.toString(), fit: BoxFit.contain),
+                  ),
+                ),
+              );
+              return;
+            }
+            launchUrl(uri, mode: LaunchMode.externalApplication);
+          },
         ),
     ];
   }
@@ -304,6 +334,17 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                     label: s.encryptionLabel,
                     value: encrypted ? s.encryptionOn : s.encryptionOff,
                   ),
+                  if (!encrypted && widget.session.cryptoAvailable)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: HlButton.text(
+                        onPressed: () async {
+                          await widget.room.enableEncryption();
+                          if (mounted) setState(() {});
+                        },
+                        label: Text(s.enableEncryption),
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   Text(
                     s.sharedMedia,

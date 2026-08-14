@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   firstUnreadEventId,
   formatForwardedBody,
+  formatForwardedMedia,
   formatPresenceLabel,
   isRoomMutedByPushRules,
   isVoiceMessageContent,
   togglePinnedIds,
   formatRoomListTime,
+  partitionInvitesAndJoined,
+  notificationTargetFromPush,
 } from "./messengerExtras";
 
 describe("messenger extras", () => {
@@ -37,7 +40,22 @@ describe("messenger extras", () => {
       }),
     ).toBe("Online");
     expect(formatForwardedBody("Ada", "hello")).toBe("Ada:\nhello");
+    expect(formatForwardedMedia("Ada", "image")).toBe("Ada:\n[image]");
     expect(isVoiceMessageContent({ "org.matrix.msc3245.voice": {} })).toBe(true);
+  });
+
+  it("splits invites from joined rooms", () => {
+    const parts = partitionInvitesAndJoined(
+      [{ id: "a", membership: "join" }, { id: "b", membership: "invite" }],
+      (item) => item.membership,
+    );
+    expect(parts.invites.map((item) => item.id)).toEqual(["b"]);
+    expect(parts.joined.map((item) => item.id)).toEqual(["a"]);
+  });
+
+  it("deep-links push notifications into a room when room_id is present", () => {
+    expect(notificationTargetFromPush({ room_id: "!chat:example.org" })).toBe("/?room=%21chat%3Aexample.org");
+    expect(notificationTargetFromPush({})).toBe("/");
   });
 
   it("formats room list times as clock, yesterday, or date", () => {

@@ -14,6 +14,8 @@ class MatrixRtcCallLabels {
     required this.unmute,
     required this.hangup,
     required this.fallback,
+    this.cameraOn,
+    this.cameraOff,
   });
 
   final String connecting;
@@ -24,6 +26,8 @@ class MatrixRtcCallLabels {
   final String unmute;
   final String hangup;
   final String fallback;
+  final String? cameraOn;
+  final String? cameraOff;
 }
 
 class MatrixRtcCallSurface extends StatelessWidget {
@@ -34,11 +38,13 @@ class MatrixRtcCallSurface extends StatelessWidget {
     required this.onToggleMicrophone,
     required this.onFallback,
     required this.labels,
+    this.onToggleCamera,
   });
 
   final MatrixRtcSnapshot snapshot;
   final Future<void> Function() onHangup;
   final Future<void> Function() onToggleMicrophone;
+  final Future<void> Function()? onToggleCamera;
   final VoidCallback onFallback;
   final MatrixRtcCallLabels labels;
 
@@ -65,9 +71,11 @@ class MatrixRtcCallSurface extends StatelessWidget {
       failed: snapshot.phase == MatrixRtcPhase.error,
       incoming: false,
       muted: snapshot.microphoneMuted,
+      cameraMuted: snapshot.cameraMuted,
       remoteStream: snapshot.remoteStream,
       onHangup: onHangup,
       onToggleMicrophone: onToggleMicrophone,
+      onToggleCamera: onToggleCamera,
       onFallback: onFallback,
       fallbackAvailable: snapshot.fallbackAvailable,
       labels: CallStageLabels(
@@ -79,6 +87,8 @@ class MatrixRtcCallSurface extends StatelessWidget {
         hangup: labels.hangup,
         fallback: labels.fallback,
         participants: labels.participants,
+        cameraOn: labels.cameraOn,
+        cameraOff: labels.cameraOff,
       ),
     );
   }

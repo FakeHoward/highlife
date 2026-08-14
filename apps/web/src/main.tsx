@@ -7,6 +7,10 @@ import "./styles.css";
 
 applyStoredTheme();
 
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <LocaleProvider>

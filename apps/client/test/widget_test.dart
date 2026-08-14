@@ -10,13 +10,19 @@ void main() {
     await tester.pumpWidget(
       highLifeTestApp(
         home: const AdaptiveMessengerShell(
+          rail: Text('Rail'),
           master: Text('Rooms'),
           detail: Text('Conversation'),
         ),
       ),
     );
 
+    expect(find.text('Rail'), findsOneWidget);
     expect(find.text('Rooms'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('space-rail'))).width,
+      AdaptiveMessengerShell.railWidth,
+    );
     expect(find.text('Conversation'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('rooms-master'))).width,

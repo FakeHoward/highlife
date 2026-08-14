@@ -52,6 +52,9 @@ import {
   isUserIgnored,
   listRoomMedia,
   mediaUrl,
+  resolveMediaObjectUrl,
+  enableRoomEncryption,
+  requestUserVerification,
   setUserIgnored,
   type SearchHit,
   type EncryptionDevice,
@@ -66,6 +69,7 @@ import {
   type MiniAppCard,
 } from "../protocol/aiomatrix";
 import { Avatar } from "./Avatar";
+import { IconBack } from "./Icons";
 import { applyTheme, THEME_STORAGE_KEY, type Theme } from "../theme";
 import { formatPresenceLabel } from "../matrix/messengerExtras";
 
@@ -414,7 +418,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
     <section className="profile-page" aria-label={t("profile.title")}>
       <header className="profile-head">
         <button className="icon-button" type="button" onClick={onClose} aria-label={t("chat.back")}>
-          ←
+          <IconBack />
         </button>
         <strong>{t("profile.title")}</strong>
       </header>
@@ -762,7 +766,7 @@ export function RoomDetails({
       </div>
       {room.topic && <p>{room.topic}</p>}
       <dl className="status-list">
-        <div><dt>{t("rooms.roomId")}</dt><dd>{room.roomId}</dd></div>
+        <div><dt>{t("rooms.roomId")}</dt><dd className="utility-id">{room.roomId}</dd></div>
         <div>
           <dt>{t("rooms.canonicalAlias")}</dt>
           <dd>
@@ -780,6 +784,20 @@ export function RoomDetails({
         </div>
         <div><dt>{t("rooms.encryption")}</dt><dd>{room.isEncrypted ? t("rooms.enabled") : t("rooms.off")}</dd></div>
       </dl>
+      {!room.isEncrypted && (
+        <button
+          className="button"
+          type="button"
+          onClick={() => {
+            if (!window.confirm(t("rooms.encryptConfirm"))) return;
+            void enableRoomEncryption(room.roomId)
+              .then(() => setStatus(t("rooms.enabled")))
+              .catch((error: Error) => setStatus(error.message || t("rooms.encryptFailed")));
+          }}
+        >
+          {t("rooms.enableE2ee")}
+        </button>
+      )}
       <div className="settings-section">
         <p className="eyebrow">{t("rooms.roomAvatar")}</p>
         <form className="inline-form" onSubmit={(event) => {
@@ -792,12 +810,15 @@ export function RoomDetails({
             })
             .catch((error: Error) => setStatus(error.message));
         }}>
-          <input
-            type="file"
-            accept="image/*"
-            aria-label={t("rooms.roomAvatar")}
-            onChange={(event) => setRoomAvatarFile(event.target.files?.[0])}
-          />
+          <label className="button file-button">
+            {t("rooms.roomAvatar")}
+            <input
+              type="file"
+              accept="image/*"
+              aria-label={t("rooms.roomAvatar")}
+              onChange={(event) => setRoomAvatarFile(event.target.files?.[0])}
+            />
+          </label>
           <button className="button" disabled={!roomAvatar}>{t("settings.save")}</button>
         </form>
       </div>
@@ -925,11 +946,7 @@ export function RoomDetails({
             {media.map((item) => (
               <li key={item.eventId}>
                 <button type="button" onClick={() => onJump?.(item.eventId)}>
-                  {item.kind === "image" && item.media && !item.media.encrypted ? (
-                    <img src={mediaUrl(item.media.mxcUrl)} alt={item.media.name} />
-                  ) : (
-                    <span>{item.media?.voice ? t("timeline.voice") : item.media?.name || item.body}</span>
-                  )}
+                  <SharedMediaThumb item={item} />
                 </button>
               </li>
             ))}
@@ -958,21 +975,26 @@ export function SearchSurface({
   onClose,
   onJump,
 }: {
-  roomId: string;
+  roomId?: string;
   onClose: (eventId?: string) => void;
-  onJump?: (eventId: string) => void;
+  onJump?: (eventId: string, roomId?: string) => void;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
-  async function run(event: FormEvent) {
-    event.preventDefault();
+  const [error, setError] = useState<string | null>(null);
+  const [scopeAll, setScopeAll] = useState(!roomId);
+  async function run(event?: FormEvent) {
+    event?.preventDefault();
     setBusy(true);
+    setError(null);
     try {
-      setHits(await searchMessages(query, roomId));
+      setHits(await searchMessages(query, scopeAll ? undefined : roomId));
       setSearched(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("search.failed"));
     } finally {
       setBusy(false);
     }
@@ -980,19 +1002,37 @@ export function SearchSurface({
   return (
     <Modal title={t("search.title")} onClose={() => onClose()}>
       <form className="inline-form" onSubmit={run}>
-        <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("search.placeholder")} />
+        <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={scopeAll ? t("search.placeholderAll") : t("search.placeholder")} />
         <button className="button">{busy ? t("search.busy") : t("search.action")}</button>
       </form>
+      {roomId && (
+        <div className="segmented" role="group">
+          <button type="button" className={scopeAll ? "" : "active"} onClick={() => setScopeAll(false)}>
+            {t("search.scopeRoom")}
+          </button>
+          <button type="button" className={scopeAll ? "active" : ""} onClick={() => setScopeAll(true)}>
+            {t("search.scopeAll")}
+          </button>
+        </div>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}{" "}
+          <button type="button" className="text-button" onClick={() => void run()}>
+            {t("search.retry")}
+          </button>
+        </p>
+      )}
       <div className="search-results">
         {!searched && !busy && <p className="muted small">{t("search.emptyHint")}</p>}
-        {searched && hits.length === 0 && <p className="muted small">{t("search.noResults")}</p>}
+        {searched && hits.length === 0 && !error && <p className="muted small">{t("search.noResults")}</p>}
         {hits.map((hit) => (
           <button
             key={hit.eventId}
             type="button"
             className="search-hit"
             onClick={() => {
-              onJump?.(hit.eventId);
+              onJump?.(hit.eventId, hit.roomId);
               onClose(hit.eventId);
             }}
           >
@@ -1189,10 +1229,12 @@ export function UserProfile({
   userId,
   onClose,
   onOpenedDm,
+  onVerify,
 }: {
   userId: string;
   onClose: () => void;
   onOpenedDm: (roomId: string) => void;
+  onVerify?: (userId: string) => void;
 }) {
   const { t } = useI18n();
   const profile = getUserProfileInfo(userId);
@@ -1259,6 +1301,18 @@ export function UserProfile({
           >
             {ignored ? t("user.unignore") : t("user.ignore")}
           </button>
+          {onVerify && (
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                setStatus(t("user.verifying"));
+                onVerify(userId);
+              }}
+            >
+              {t("user.verify")}
+            </button>
+          )}
         </div>
       )}
     </Modal>
@@ -1287,4 +1341,40 @@ export function ForwardPicker({
       </nav>
     </Modal>
   );
+}
+
+function SharedMediaThumb({ item }: { item: TimelineItem }) {
+  const { t } = useI18n();
+  const [source, setSource] = useState(() =>
+    item.media && !item.media.encrypted ? mediaUrl(item.media.mxcUrl) : "",
+  );
+
+  useEffect(() => {
+    let revoked: string | null = null;
+    let cancelled = false;
+    if (!item.media) return;
+    if (!item.media.encrypted) {
+      setSource(mediaUrl(item.media.mxcUrl));
+      return;
+    }
+    void resolveMediaObjectUrl(item.media)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setSource(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [item.media]);
+
+  if (item.kind === "image" && source) {
+    return <img src={source} alt={item.media?.name ?? t("timeline.image")} />;
+  }
+  return <span>{item.media?.voice ? t("timeline.voice") : item.media?.name || item.body}</span>;
 }

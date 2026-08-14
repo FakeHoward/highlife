@@ -35,6 +35,8 @@ export interface DirectCallSnapshot {
   peerName: string;
   peerUserId: string | null;
   microphoneMuted: boolean;
+  cameraMuted?: boolean;
+  video?: boolean;
   remoteStream: MediaStream | null;
   localStream: MediaStream | null;
   error: string | null;
@@ -63,11 +65,19 @@ function phaseForState(state: CallState): DirectCallPhase {
 function preferredStream(
   feeds: ReturnType<MatrixCall["getRemoteFeeds"]>,
 ): MediaStream | null {
+  const withVideo = feeds.find((feed) => {
+    const getVideoTracks = feed.stream.getVideoTracks;
+    return typeof getVideoTracks === "function" && getVideoTracks.call(feed.stream).length > 0;
+  });
   const withAudio = feeds.find((feed) => {
     const getAudioTracks = feed.stream.getAudioTracks;
     return typeof getAudioTracks === "function" && getAudioTracks.call(feed.stream).length > 0;
   });
-  return (withAudio ?? feeds[0])?.stream ?? null;
+  return (withVideo ?? withAudio ?? feeds[0])?.stream ?? null;
+}
+
+function streamHasVideo(stream: MediaStream | null): boolean {
+  return Boolean(stream && typeof stream.getVideoTracks === "function" && stream.getVideoTracks().length > 0);
 }
 
 export class DirectCallController {
@@ -106,23 +116,28 @@ export class DirectCallController {
     return () => this.listeners.delete(listener);
   }
 
-  async start(roomId: string): Promise<void> {
+  async start(roomId: string, options?: { video?: boolean }): Promise<void> {
     if (this.current.call) throw new Error("Another call is already active");
     const call = this.client.createCall(roomId);
     if (!call) throw new Error("This browser cannot start WebRTC calls");
-    this.attach(call, "outgoing");
+    this.attach(call, "outgoing", Boolean(options?.video));
     try {
-      await call.placeVoiceCall();
+      if (options?.video && typeof call.placeVideoCall === "function") {
+        await call.placeVideoCall();
+      } else {
+        await call.placeVoiceCall();
+      }
     } catch (reason) {
       this.failCurrent(call, reason);
       throw reason;
     }
   }
 
-  async accept(): Promise<void> {
+  async accept(options?: { video?: boolean }): Promise<void> {
     const call = this.requiredCall();
-    await call.answer(true, false);
-    this.refresh({ phase: "connecting" });
+    const video = Boolean(options?.video ?? this.current.video);
+    await call.answer(true, video);
+    this.refresh({ phase: "connecting", video });
   }
 
   reject(): void {
@@ -144,6 +159,15 @@ export class DirectCallController {
     const muted = !call.isMicrophoneMuted();
     await call.setMicrophoneMuted(muted);
     this.refresh({ microphoneMuted: muted });
+  }
+
+  async toggleCamera(): Promise<void> {
+    const call = this.requiredCall();
+    const muted = typeof call.isLocalVideoMuted === "function" ? !call.isLocalVideoMuted() : true;
+    if (typeof call.setLocalVideoMuted === "function") {
+      await call.setLocalVideoMuted(muted);
+    }
+    this.refresh({ cameraMuted: muted, video: true });
   }
 
   clearEnded(): void {
@@ -177,7 +201,7 @@ export class DirectCallController {
     });
   }
 
-  private attach(call: DirectMatrixCall, direction: Exclude<DirectCallDirection, null>): void {
+  private attach(call: DirectMatrixCall, direction: Exclude<DirectCallDirection, null>, video = false): void {
     if (this.current.call && this.current.call !== call) {
       if (direction === "incoming") call.reject();
       return;
@@ -196,6 +220,8 @@ export class DirectCallController {
       peerName: member?.name || member?.userId || "",
       peerUserId: member?.userId ?? null,
       microphoneMuted: call.isMicrophoneMuted(),
+      cameraMuted: typeof call.isLocalVideoMuted === "function" ? call.isLocalVideoMuted() : !video,
+      video,
       remoteStream: preferredStream(call.getRemoteFeeds()),
       localStream: preferredStream(call.getLocalFeeds()),
       error: null,
@@ -209,6 +235,8 @@ export class DirectCallController {
       ...(call
         ? {
             microphoneMuted: call.isMicrophoneMuted(),
+            cameraMuted: typeof call.isLocalVideoMuted === "function" ? call.isLocalVideoMuted() : this.current.cameraMuted,
+            video: this.current.video || streamHasVideo(preferredStream(call.getRemoteFeeds())) || streamHasVideo(preferredStream(call.getLocalFeeds())),
             remoteStream: preferredStream(call.getRemoteFeeds()),
             localStream: preferredStream(call.getLocalFeeds()),
           }

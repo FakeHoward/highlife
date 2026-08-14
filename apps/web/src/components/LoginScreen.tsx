@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../i18n";
 import { beginOidcOrSsoLogin, discoverMasIssuer } from "../matrix/oidc";
-import { login, probeSsoAvailable, register } from "../matrix/service";
+import { login, loginWithSsoToken, probeSsoAvailable, register } from "../matrix/service";
+import { probeBrowserCrypto } from "../matrix/browserCrypto";
 import { IconEye, IconEyeOff } from "./Icons";
 
 type Mode = "login" | "register";
@@ -28,6 +29,8 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
   const [error, setError] = useState(initialError);
   const [ssoAvailable, setSsoAvailable] = useState(false);
   const [masIssuer, setMasIssuer] = useState<string | null>(null);
+  const [ssoToken, setSsoToken] = useState("");
+  const cryptoProbe = probeBrowserCrypto();
 
   useEffect(() => {
     const hs = homeserver.trim();
@@ -96,6 +99,23 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
     }
   }
 
+  async function submitToken() {
+    if (!homeserver.trim()) {
+      setError(t("login.homeserverRequired"));
+      return;
+    }
+    if (!ssoToken.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await loginWithSsoToken({ homeserver, token: ssoToken.trim() });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("login.oidcFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startSso() {
     if (!homeserver.trim()) {
       setError(t("login.homeserverRequired"));
@@ -121,13 +141,13 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
         <form className="login-form" onSubmit={submit}>
           <div className="login-form-top">
             <div>
-              <h1>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h1>
+              <h1>{mode === "register" ? t("login.registerTitle") : t("login.headline")}</h1>
               <p className="muted">
                 {mode === "register"
                   ? masIssuer
                     ? t("login.registerMasHint")
                     : t("login.registerHint")
-                  : t("login.hint")}
+                  : t("login.blurb")}
               </p>
             </div>
           <div className="segmented login-locale" role="group" aria-label={t("login.language")}>
@@ -236,6 +256,9 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
           </>
         )}
         {error && <p className="error" role="alert">{error}</p>}
+        {!cryptoProbe.ready && (
+          <p className="error" role="status">{t("login.cryptoBanner")}</p>
+        )}
         <button className="button primary" disabled={busy}>
           {busy
             ? t("login.connecting")
@@ -254,6 +277,26 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
           >
             {t("login.signInWithSso")}
           </button>
+        )}
+        {mode === "login" && (
+          <label>
+            <span>{t("login.ssoToken")}</span>
+            <input
+              value={ssoToken}
+              onChange={(event) => setSsoToken(event.target.value)}
+              placeholder={t("login.ssoTokenPlaceholder")}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="button"
+              disabled={busy || !ssoToken.trim()}
+              onClick={() => void submitToken()}
+            >
+              {t("login.useToken")}
+            </button>
+          </label>
         )}
         <p className="form-note">{t("login.note")}</p>
         </form>

@@ -33,9 +33,11 @@ import {
   CryptoEvent,
   decodeRecoveryKey,
   encodeRecoveryKey,
+  type CryptoApi,
   type GeneratedSecretStorageKey,
   type KeyBackupInfo,
 } from "matrix-js-sdk/lib/crypto-api";
+import { DeviceVerification } from "matrix-js-sdk/lib/models/device";
 import {
   VerificationRequestEvent,
   VerifierEvent,
@@ -1158,9 +1160,61 @@ export async function setUserIgnored(userId: string, ignored: boolean): Promise<
 }
 
 export async function forwardMessage(fromRoomId: string, eventId: string, toRoomId: string): Promise<void> {
+  const active = requiredClient();
+  const source = active.getRoom(fromRoomId);
+  const event = source?.findEventById(eventId);
+  const content = event?.getContent() as Record<string, unknown> | undefined;
+  if (event && content && event.getType()) {
+    try {
+      await active.sendEvent(toRoomId, event.getType() as typeof EventType.RoomMessage, { ...content } as never);
+      return;
+    } catch {
+      // Quote fallback when the original type is rejected (redacted, policy, crypto).
+    }
+  }
   const item = roomTimeline(fromRoomId).find((entry) => entry.eventId === eventId);
   if (!item || item.redacted) throw new Error("Message is not available");
   await sendMessage(toRoomId, formatForwardedBody(item.senderName, item.body || item.media?.name || ""));
+}
+
+export async function retryFailedEvent(roomId: string, eventId: string): Promise<void> {
+  const active = requiredClient();
+  const room = active.getRoom(roomId);
+  if (!room) throw new Error("Room is not available");
+  const pending = room.getPendingEvents().find((item) => item.getId() === eventId);
+  const event = pending ?? room.findEventById(eventId);
+  if (!event) throw new Error("Event is not available");
+  const resend = (active as MatrixClient & {
+    resendEvent?: (event: MatrixEvent, room: Room) => Promise<unknown>;
+  }).resendEvent;
+  if (typeof resend !== "function") throw new Error("Retry is not available");
+  await resend.call(active, event, room);
+  publish();
+}
+
+export async function retryDecryptEvent(roomId: string, eventId: string): Promise<void> {
+  const active = requiredClient();
+  const room = active.getRoom(roomId);
+  const event = room?.findEventById(eventId);
+  const crypto = active.getCrypto();
+  if (!event || !crypto) throw new Error("Event is not available");
+  const attempt = event.attemptDecryption?.bind(event);
+  if (typeof attempt === "function") {
+    await attempt(crypto as never, { isRetry: true });
+  }
+  publish();
+}
+
+export async function enableRoomEncryption(roomId: string): Promise<void> {
+  const active = requiredClient();
+  assertCryptoForEncryptedRoom({
+    encrypted: true,
+    cryptoReady: Boolean(active.getCrypto()),
+  });
+  await active.sendStateEvent(roomId, EventType.RoomEncryption, {
+    algorithm: "m.megolm.v1.aes-sha2",
+  } as never);
+  publish();
 }
 
 export function listRoomMedia(roomId: string): TimelineItem[] {
@@ -1830,21 +1884,15 @@ export async function deleteOtherDevice(deviceId: string, password?: string): Pr
   }
 }
 
-export async function requestDeviceVerification(
-  deviceId: string | undefined,
+function bindVerificationRequest(
+  request: VerificationRequest,
   onSas: (challenge: SasChallenge) => void,
   onState: (state: string) => void,
-): Promise<{
+): {
   transactionId: string | undefined;
   otherDeviceId: string | undefined;
   cancel: () => Promise<void>;
-}> {
-  const active = requiredClient();
-  const crypto = active.getCrypto();
-  if (!crypto) throw new Error("Encryption is unavailable");
-  const request = deviceId
-    ? await crypto.requestDeviceVerification(active.getSafeUserId(), deviceId)
-    : await crypto.requestOwnUserVerification();
+} {
   let started = false;
   const advance = () => {
     onState(request.pending ? "Waiting for the other device…" : `Verification phase ${request.phase}`);
@@ -1870,6 +1918,56 @@ export async function requestDeviceVerification(
     otherDeviceId: request.otherDeviceId,
     cancel: () => request.cancel(),
   };
+}
+
+export async function requestDeviceVerification(
+  deviceId: string | undefined,
+  onSas: (challenge: SasChallenge) => void,
+  onState: (state: string) => void,
+): Promise<{
+  transactionId: string | undefined;
+  otherDeviceId: string | undefined;
+  cancel: () => Promise<void>;
+}> {
+  const active = requiredClient();
+  const crypto = active.getCrypto();
+  if (!crypto) throw new Error("Encryption is unavailable");
+  const request = deviceId
+    ? await crypto.requestDeviceVerification(active.getSafeUserId(), deviceId)
+    : await crypto.requestOwnUserVerification();
+  return bindVerificationRequest(request, onSas, onState);
+}
+
+export async function requestUserVerification(
+  userId: string,
+  onSas: (challenge: SasChallenge) => void,
+  onState: (state: string) => void,
+): Promise<{
+  transactionId: string | undefined;
+  otherDeviceId: string | undefined;
+  cancel: () => Promise<void>;
+}> {
+  const active = requiredClient();
+  const crypto = active.getCrypto();
+  if (!crypto) throw new Error("Encryption is unavailable");
+  const sharedRoomId = active
+    .getRooms()
+    .filter((room) => room.getMyMembership() === "join" && room.getMember(userId)?.membership === "join")
+    .sort((left, right) => left.getJoinedMemberCount() - right.getJoinedMemberCount())[0]?.roomId;
+  const request = sharedRoomId
+    ? await crypto.requestVerificationDM(userId, sharedRoomId)
+    : await crypto.requestDeviceVerification(userId, await firstUnverifiedDeviceId(crypto, userId));
+  return bindVerificationRequest(request, onSas, onState);
+}
+
+async function firstUnverifiedDeviceId(crypto: CryptoApi, userId: string): Promise<string> {
+  const devices = await crypto.getUserDeviceInfo([userId], true);
+  const map = devices.get(userId);
+  if (!map || map.size === 0) throw new Error("No devices to verify");
+  for (const [id, device] of map) {
+    if (device.verified !== DeviceVerification.Verified) return id;
+  }
+  throw new Error("No unverified device");
 }
 
 export function getCallCapability(roomId: string): {
@@ -1919,14 +2017,14 @@ export function getMatrixRtcSnapshot(): MatrixRtcSnapshot {
   return matrixRtcController?.snapshot ?? idleMatrixRtc;
 }
 
-export function startMatrixRtc(roomId: string): Promise<void> {
+export function startMatrixRtc(roomId: string, options?: { camera?: boolean }): Promise<void> {
   const capability = getCallCapability(roomId);
   if (!capability.available) {
     return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
   }
   if (!matrixRtcController) return Promise.reject(new Error("Sign in to call"));
   dismissedRtcInvites.delete(roomId);
-  return matrixRtcController.join(roomId);
+  return matrixRtcController.join(roomId, options);
 }
 
 export function leaveMatrixRtc(): Promise<void> {
@@ -1936,6 +2034,11 @@ export function leaveMatrixRtc(): Promise<void> {
 export function toggleMatrixRtcMicrophone(): Promise<void> {
   if (!matrixRtcController) return Promise.reject(new Error("No active call"));
   return matrixRtcController.toggleMicrophone();
+}
+
+export function toggleMatrixRtcCamera(): Promise<void> {
+  if (!matrixRtcController) return Promise.reject(new Error("No active call"));
+  return matrixRtcController.toggleCamera();
 }
 
 export function getGroupCallUrl(roomId: string): string | null {
@@ -1958,7 +2061,7 @@ export function getDirectCallSnapshot(): DirectCallSnapshot {
   return directCallController?.snapshot ?? idleDirectCall;
 }
 
-export function startDirectCall(roomId: string): Promise<void> {
+export function startDirectCall(roomId: string, options?: { video?: boolean }): Promise<void> {
   const capability = getCallCapability(roomId);
   if (!capability.available) {
     return Promise.reject(new Error(capability.reason ?? "Calls are unavailable"));
@@ -1968,10 +2071,10 @@ export function startDirectCall(roomId: string): Promise<void> {
   if (room?.hasEncryptionStateEvent() && !client?.getCrypto()) {
     return Promise.reject(new Error(DIRECT_CALL_CRYPTO_UNAVAILABLE));
   }
-  return directCallController.start(roomId);
+  return directCallController.start(roomId, options);
 }
 
-export async function startOutgoingCall(roomId: string): Promise<void> {
+export async function startOutgoingCall(roomId: string, options?: { video?: boolean }): Promise<void> {
   const capability = getCallCapability(roomId);
   if (!capability.available) {
     throw new Error(capability.reason ?? "Calls are unavailable");
@@ -1984,11 +2087,11 @@ export async function startOutgoingCall(roomId: string): Promise<void> {
     matrixRtcAvailable: Boolean(discoverLivekitFocus(client?.getClientWellKnown(), livekitFallbackUrl())),
   });
   if (mode === "matrixrtc") {
-    await startMatrixRtc(roomId);
+    await startMatrixRtc(roomId, options);
     return;
   }
   if (mode === "direct") {
-    await startDirectCall(roomId);
+    await startDirectCall(roomId, options);
     return;
   }
   throw new Error(DIRECT_CALL_CRYPTO_UNAVAILABLE);
@@ -2028,9 +2131,9 @@ export function dismissIncomingRtcCall(roomId: string): void {
   publish();
 }
 
-export function acceptDirectCall(): Promise<void> {
+export function acceptDirectCall(options?: { video?: boolean }): Promise<void> {
   if (!directCallController) return Promise.reject(new Error("No incoming call"));
-  return directCallController.accept();
+  return directCallController.accept(options);
 }
 
 export function rejectDirectCall(): void {
@@ -2046,6 +2149,11 @@ export function hangupDirectCall(): void {
 export function toggleDirectCallMicrophone(): Promise<void> {
   if (!directCallController) return Promise.reject(new Error("No active call"));
   return directCallController.toggleMicrophone();
+}
+
+export function toggleDirectCallCamera(): Promise<void> {
+  if (!directCallController) return Promise.reject(new Error("No active call"));
+  return directCallController.toggleCamera();
 }
 
 export function getSessionIdentity(): {

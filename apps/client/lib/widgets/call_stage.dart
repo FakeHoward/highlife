@@ -16,6 +16,8 @@ class CallStageLabels {
     this.decline,
     this.fallback,
     this.participants,
+    this.cameraOn,
+    this.cameraOff,
   });
 
   final String connecting;
@@ -29,6 +31,8 @@ class CallStageLabels {
   final String? decline;
   final String? fallback;
   final String? participants;
+  final String? cameraOn;
+  final String? cameraOff;
 }
 
 class CallStage extends StatefulWidget {
@@ -44,9 +48,12 @@ class CallStage extends StatefulWidget {
     required this.onToggleMicrophone,
     required this.labels,
     this.remoteStream,
+    this.localStream,
     this.onAnswer,
     this.onDecline,
     this.onFallback,
+    this.onToggleCamera,
+    this.cameraMuted = true,
     this.fallbackAvailable = false,
   });
 
@@ -57,11 +64,14 @@ class CallStage extends StatefulWidget {
   final bool incoming;
   final bool muted;
   final MediaStream? remoteStream;
+  final MediaStream? localStream;
   final Future<void> Function() onHangup;
   final Future<void> Function() onToggleMicrophone;
+  final Future<void> Function()? onToggleCamera;
   final VoidCallback? onAnswer;
   final VoidCallback? onDecline;
   final VoidCallback? onFallback;
+  final bool cameraMuted;
   final bool fallbackAvailable;
   final CallStageLabels labels;
 
@@ -123,13 +133,16 @@ class _CallStageState extends State<CallStage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.remoteStream != null)
-                _RemoteAudioSink(stream: widget.remoteStream),
-              CircleAvatar(
-                radius: 36,
-                backgroundColor: colors.primary.withValues(alpha: 0.16),
-                child: Icon(Icons.call, color: colors.primary, size: 28),
+              _CallVideo(
+                remoteStream: widget.remoteStream,
+                localStream: widget.localStream,
               ),
+              if (!_hasVideo(widget.remoteStream))
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: colors.primary.withValues(alpha: 0.16),
+                  child: Icon(Icons.call, color: colors.primary, size: 28),
+                ),
               const SizedBox(height: 12),
               Text(
                 widget.title,
@@ -182,7 +195,26 @@ class _CallStageState extends State<CallStage> {
                             : widget.labels.mute,
                         onPressed: () => unawaited(widget.onToggleMicrophone()),
                       ),
-                    if (!widget.failed) const SizedBox(width: 20),
+                    if (!widget.failed && widget.onToggleCamera != null) ...[
+                      const SizedBox(width: 12),
+                      _RoundCallButton(
+                        color: widget.cameraMuted
+                            ? colors.surfaceContainerHighest
+                            : colors.primary,
+                        foreground: widget.cameraMuted
+                            ? colors.onSurface
+                            : colors.onPrimary,
+                        icon: widget.cameraMuted
+                            ? Icons.videocam_off
+                            : Icons.videocam,
+                        label: widget.cameraMuted
+                            ? (widget.labels.cameraOn ?? widget.labels.mute)
+                            : (widget.labels.cameraOff ?? widget.labels.unmute),
+                        onPressed: () =>
+                            unawaited(widget.onToggleCamera!.call()),
+                      ),
+                    ],
+                    if (!widget.failed) const SizedBox(width: 12),
                     _RoundCallButton(
                       color: colors.error,
                       icon: Icons.call_end,
@@ -256,16 +288,75 @@ class _RoundCallButton extends StatelessWidget {
   }
 }
 
-class _RemoteAudioSink extends StatefulWidget {
-  const _RemoteAudioSink({required this.stream});
-
-  final MediaStream? stream;
-
-  @override
-  State<_RemoteAudioSink> createState() => _RemoteAudioSinkState();
+bool _hasVideo(MediaStream? stream) {
+  if (stream == null) return false;
+  return stream.getVideoTracks().isNotEmpty;
 }
 
-class _RemoteAudioSinkState extends State<_RemoteAudioSink> {
+class _CallVideo extends StatelessWidget {
+  const _CallVideo({this.remoteStream, this.localStream});
+
+  final MediaStream? remoteStream;
+  final MediaStream? localStream;
+
+  @override
+  Widget build(BuildContext context) {
+    final remoteVideo = _hasVideo(remoteStream);
+    if (!remoteVideo && remoteStream == null && localStream == null) {
+      return const SizedBox.shrink();
+    }
+    if (!remoteVideo) {
+      return _RemoteMedia(stream: remoteStream, compact: true);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: AspectRatio(
+          aspectRatio: 16 / 10,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _RemoteMedia(stream: remoteStream),
+              if (_hasVideo(localStream))
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SizedBox(
+                      width: 88,
+                      height: 120,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: _RemoteMedia(stream: localStream, mirror: true),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteMedia extends StatefulWidget {
+  const _RemoteMedia({
+    required this.stream,
+    this.compact = false,
+    this.mirror = false,
+  });
+
+  final MediaStream? stream;
+  final bool compact;
+  final bool mirror;
+
+  @override
+  State<_RemoteMedia> createState() => _RemoteMediaState();
+}
+
+class _RemoteMediaState extends State<_RemoteMedia> {
   final RTCVideoRenderer _renderer = RTCVideoRenderer();
   var _initialized = false;
 
@@ -276,7 +367,7 @@ class _RemoteAudioSinkState extends State<_RemoteAudioSink> {
   }
 
   @override
-  void didUpdateWidget(covariant _RemoteAudioSink oldWidget) {
+  void didUpdateWidget(covariant _RemoteMedia oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stream != widget.stream && _initialized) {
       _renderer.srcObject = widget.stream;
@@ -305,10 +396,17 @@ class _RemoteAudioSinkState extends State<_RemoteAudioSink> {
     if (!_initialized || widget.stream == null) {
       return const SizedBox.shrink();
     }
-    return SizedBox(
-      width: 1,
-      height: 1,
-      child: IgnorePointer(child: RTCVideoView(_renderer)),
+    if (widget.compact && !_hasVideo(widget.stream)) {
+      return SizedBox(
+        width: 1,
+        height: 1,
+        child: IgnorePointer(child: RTCVideoView(_renderer)),
+      );
+    }
+    return RTCVideoView(
+      _renderer,
+      mirror: widget.mirror,
+      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
     );
   }
 }

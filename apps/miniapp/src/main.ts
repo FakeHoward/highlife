@@ -1,18 +1,13 @@
 import "./styles.css";
+import {
+  escapeHtml,
+  parseStartParam,
+  seedFields,
+  type Field,
+  type FormKind,
+} from "./helpers";
 
-type FieldType = "text" | "single" | "multi" | "number" | "date" | "scale";
-type FormKind = "survey" | "rsvp" | "join" | "onboard";
 type FormPolicy = "public" | "private" | "moderators";
-
-interface Field {
-  id: string;
-  type: FieldType;
-  label: string;
-  required: boolean;
-  options?: string[];
-  min?: number;
-  max?: number;
-}
 
 interface FormView {
   id: string;
@@ -64,8 +59,10 @@ function startParam(): string {
     mini?.matrix?.startParam ||
     mini?.initDataUnsafe?.start_param ||
     mini?.initDataUnsafe?.matrix?.startParam;
-  if (fromBridge) return fromBridge;
-  return new URLSearchParams(location.search).get("start") ?? "build:survey";
+  return parseStartParam({
+    search: location.search,
+    bridgeParam: fromBridge,
+  });
 }
 
 function uid(prefix: string): string {
@@ -92,31 +89,8 @@ async function authToken(): Promise<string | null> {
   return result.token;
 }
 
-function seedFields(kind: FormKind): Field[] {
-  if (kind === "rsvp") {
-    return [
-      { id: uid("f"), type: "single", label: "Attendance", required: true, options: ["Going", "Maybe", "Can't make it"] },
-      { id: uid("f"), type: "text", label: "Comment (optional)", required: false },
-    ];
-  }
-  if (kind === "join") {
-    return [
-      { id: uid("f"), type: "text", label: "How do you know this community?", required: true },
-      { id: uid("f"), type: "text", label: "Why do you want to join?", required: true },
-    ];
-  }
-  if (kind === "onboard") {
-    return [
-      { id: uid("f"), type: "single", label: "I accept the room rules", required: true, options: ["Yes, I accept"] },
-      { id: uid("f"), type: "single", label: "Your role", required: true, options: ["Member", "Organizer", "Guest"] },
-      { id: uid("f"), type: "multi", label: "Interests", required: false, options: ["Events", "Dev", "Privacy", "Art"] },
-    ];
-  }
-  return [
-    { id: uid("f"), type: "text", label: "What should we improve?", required: true },
-    { id: uid("f"), type: "single", label: "How did you hear about us?", required: true, options: ["Friend", "Matrix", "Telegram", "Other"] },
-    { id: uid("f"), type: "scale", label: "Overall satisfaction", required: true, min: 1, max: 5 },
-  ];
+function seedForm(kind: FormKind): Field[] {
+  return seedFields(kind, uid);
 }
 
 function renderBuilder(kind: FormKind): void {
@@ -126,7 +100,7 @@ function renderBuilder(kind: FormKind): void {
   let anonymous = false;
   let oneResponse = true;
   let deadlineLocal = "";
-  let fields = seedFields(kind);
+  let fields = seedForm(kind);
 
   const paint = () => {
     root.innerHTML = `
@@ -388,14 +362,6 @@ function readFieldValue(field: Field): unknown {
   if (field.type === "number" || field.type === "scale") return Number(value);
   return value;
 
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function escapeAttr(value: string): string {

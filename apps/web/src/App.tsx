@@ -19,7 +19,9 @@ import {
   subscribeDirectCall,
   subscribeMatrixRtc,
   toggleDirectCallMicrophone,
+  toggleDirectCallCamera,
   toggleMatrixRtcMicrophone,
+  toggleMatrixRtcCamera,
 } from "./matrix/service";
 
 export function App() {
@@ -53,7 +55,7 @@ export function App() {
   return (
     <>
       {matrix.client ? <Workspace /> : <LoginScreen initialError={matrix.error} />}
-      {incomingRtc && matrixRtc.phase === "idle" && (
+      {incomingRtc && matrixRtc.phase === "idle" && (directCall.phase === "idle" || directCall.phase === "ended") && (
         <section className="direct-call" role="dialog" aria-label={t("call.dialog")}>
           <div className="direct-call-copy">
             <strong>{incomingRtc.name}</strong>
@@ -92,11 +94,14 @@ export function App() {
           unmute: t("call.unmute"),
           hangup: t("call.hangup"),
           micBlocked: t("call.micBlocked"),
+          cameraOn: t("call.cameraOn"),
+          cameraOff: t("call.cameraOff"),
         }}
         onAccept={() => void acceptDirectCall()}
         onReject={rejectDirectCall}
         onHangup={hangupDirectCall}
         onToggleMicrophone={() => void toggleDirectCallMicrophone()}
+        onToggleCamera={() => void toggleDirectCallCamera()}
       />
       <MatrixRtcSurface
         snapshot={matrixRtc}
@@ -110,9 +115,12 @@ export function App() {
           hangup: t("call.hangup"),
           fallback: t("call.fallback"),
           participants: t("call.participants"),
+          cameraOn: t("call.cameraOn"),
+          cameraOff: t("call.cameraOff"),
         }}
         onHangup={() => void leaveMatrixRtc()}
         onToggleMicrophone={() => void toggleMatrixRtcMicrophone()}
+        onToggleCamera={() => void toggleMatrixRtcCamera()}
         onFallback={() => {
           const roomId = matrixRtc.roomId;
           void leaveMatrixRtc();

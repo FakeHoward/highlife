@@ -1,17 +1,38 @@
-/* HighLife service worker — Web Push + offline shell placeholder. */
+/* HighLife service worker — Web Push + offline shell. */
+const SHELL = "highlife-shell-v1";
+const SHELL_URLS = ["/", "/index.html", "/favicon.ico"];
+
+function targetFromPush(payload) {
+  const roomId = payload && (payload.room_id || payload.roomId);
+  if (typeof roomId === "string" && roomId.charAt(0) === "!") {
+    return "/?room=" + encodeURIComponent(roomId);
+  }
+  return "/";
+}
+
 self.addEventListener("install", (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(SHELL).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match("/index.html").then((cached) => cached || caches.match("/"))),
+  );
+});
+
 self.addEventListener("push", (event) => {
   let title = "HighLife";
-  let body = "New Matrix activity";
+  let body = "New message";
+  let payload = null;
   try {
-    const payload = event.data ? event.data.json() : null;
+    payload = event.data ? event.data.json() : null;
     if (payload && typeof payload === "object") {
       if (typeof payload.title === "string") title = payload.title;
       if (typeof payload.body === "string") body = payload.body;
@@ -29,7 +50,7 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body,
       icon: "/favicon.ico",
-      data: { url: "/" },
+      data: { url: targetFromPush(payload) },
     }),
   );
 });

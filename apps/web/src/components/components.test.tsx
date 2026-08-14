@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RoomListItem, TimelineItem } from "@highlife/ui-contracts";
 import { LocaleProvider } from "../i18n";
-import { sendMessage } from "../matrix/service";
+import { retryFailedEvent, sendMessage } from "../matrix/service";
 import { Avatar } from "./Avatar";
 import { Composer } from "./Composer";
 import { LoginScreen } from "./LoginScreen";
@@ -24,7 +24,15 @@ vi.mock("../matrix/service", () => ({
   setTyping: vi.fn(async () => undefined),
   uploadFile: vi.fn(),
   login: vi.fn(),
+  loginWithSsoToken: vi.fn(),
   register: vi.fn(),
+  probeSsoAvailable: vi.fn(async () => false),
+  acceptInvite: vi.fn(),
+  rejectInvite: vi.fn(),
+  retryFailedEvent: vi.fn(),
+  retryDecryptEvent: vi.fn(),
+  enableRoomEncryption: vi.fn(),
+  requestUserVerification: vi.fn(),
   getJoinedMembers: () => ([
     { userId: "@alice:example.org", displayName: "Alice", membership: "join", powerLevel: 50 },
     { userId: "@bob:example.org", displayName: "Bob", membership: "join", powerLevel: 0 },
@@ -166,6 +174,27 @@ describe("responsive room navigation", () => {
     expect(screen.getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "All chats" }));
     expect(selectSpace).toHaveBeenCalledWith(null);
+  });
+
+  it("keeps invites out of the joined list with accept and decline", () => {
+    wrap(
+      <RoomSidebar
+        rooms={[
+          room,
+          { ...room, roomId: "!invite:example.org", name: "Invited room", membership: "invite" },
+        ]}
+        activeId={null}
+        query=""
+        onQuery={vi.fn()}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        onNewSpace={vi.fn()}
+        onSettings={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Invited room/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept invitation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
   });
 
   it("opens profile from the sidebar chip", () => {
@@ -319,6 +348,21 @@ describe("message actions", () => {
     expect(pin).toHaveBeenCalledWith(message);
     fireEvent.click(screen.getByRole("button", { name: "Forward" }));
     expect(forward).toHaveBeenCalledWith(message);
+  });
+
+  it("retries a failed send from the delivery mark", () => {
+    wrap(
+      <MessageTimeline
+        items={[{ ...message, deliveryStatus: "not_sent" }]}
+        roomId={room.roomId}
+        onComposeMode={vi.fn()}
+        onMiniApp={vi.fn()}
+        history={{ loading: false, exhausted: true, error: null }}
+        onLoadOlder={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retryFailedEvent).toHaveBeenCalledWith(room.roomId, message.eventId);
   });
 
   it("renders foreign thread relations as replies without thread controls", () => {

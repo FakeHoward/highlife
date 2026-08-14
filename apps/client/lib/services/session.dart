@@ -17,6 +17,8 @@ import 'auth_errors.dart';
 import 'call_uri.dart';
 import 'crypto_initializer.dart';
 import 'crypto_service.dart';
+import 'deep_links.dart';
+import 'local_notifications.dart';
 import 'matrix_rtc_service.dart';
 import 'native_call_service.dart';
 import 'push_service.dart';
@@ -54,6 +56,7 @@ class HighLifeSession extends ChangeNotifier {
   CryptoService? _crypto;
   PushService? _push;
   UnifiedPushService? _unifiedPush;
+  LocalNotifications? _notifications;
   NativeCallService? _nativeCalls;
   MatrixRtcService? _matrixRtc;
   SyncStatusUpdate? _syncStatus;
@@ -70,6 +73,8 @@ class HighLifeSession extends ChangeNotifier {
   bool _passwordLoginAvailable = false;
   Uri? _ssoRedirectUrl;
   Uri? _masIssuer;
+  String? _pendingLoginToken;
+  String? _pendingOpenRoomId;
 
   Client? get client => _client;
   String? get error => _error;
@@ -82,6 +87,8 @@ class HighLifeSession extends ChangeNotifier {
   CryptoService? get crypto => _crypto;
   PushService? get push => _push;
   NativeCallService? get nativeCalls => _nativeCalls;
+  String? get pendingLoginToken => _pendingLoginToken;
+  String? get pendingOpenRoomId => _pendingOpenRoomId;
   MatrixRtcService? get matrixRtc => _matrixRtc;
   bool get ssoAvailable => _ssoAvailable;
   bool get passwordLoginAvailable => _passwordLoginAvailable;
@@ -176,9 +183,17 @@ class HighLifeSession extends ChangeNotifier {
     final client = _client;
     if (client == null) return;
     _push = PushService(client);
+    _notifications ??= LocalNotifications(
+      onOpenRoom: (roomId) {
+        _pendingOpenRoomId = roomId;
+        notifyListeners();
+      },
+    );
+    unawaited(_notifications!.ensureReady());
     _unifiedPush?.dispose();
     _unifiedPush = UnifiedPushService(
       onEndpoint: (endpoint) => _maybeRegisterPush(pushkey: endpoint),
+      onMessage: (payload) => _notifications!.showPush(payload),
     );
     // Always try UnifiedPush on Android; HTTP pusher registers only when a
     // real endpoint arrives and HIGHLIFE_PUSH_GATEWAY_URL is set.
@@ -950,6 +965,29 @@ class HighLifeSession extends ChangeNotifier {
       if (others && !me) return IncomingRtcInvite(room: room);
     }
     return null;
+  }
+
+  void applyDeepLink(DeepLink link) {
+    if (link.loginToken != null && link.loginToken!.isNotEmpty) {
+      _pendingLoginToken = link.loginToken;
+    }
+    if (link.roomId != null) {
+      _pendingOpenRoomId = link.roomId;
+    }
+    notifyListeners();
+  }
+
+  String? takePendingLoginToken() {
+    final token = _pendingLoginToken;
+    _pendingLoginToken = null;
+    return token;
+  }
+
+  String? takePendingOpenRoom() {
+    final roomId = _pendingOpenRoomId;
+    _pendingOpenRoomId = null;
+    if (roomId != null) notifyListeners();
+    return roomId;
   }
 
   void dismissIncomingRtc(String roomId) {
