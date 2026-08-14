@@ -92,7 +92,7 @@ BEGIN
             VALUE "CompanyName", "app.highlife" "\0"
             VALUE "FileDescription", "HighLife" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "highlife_client" "\0"
+            VALUE "InternalName", "HighLife" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 app.highlife. All rights reserved." "\0"
             VALUE "OriginalFilename", "highlife_client.exe" "\0"
             VALUE "ProductName", "HighLife" "\0"

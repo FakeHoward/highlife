@@ -1,6 +1,5 @@
 import '../hl_kit.dart';
 import 'package:flutter/services.dart';
-import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 
 import '../l10n/messages.dart';

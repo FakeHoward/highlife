@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../hl_kit.dart';
+import '../platform/embedded_webview.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'element_call_widget_host.dart';
@@ -26,7 +27,7 @@ class CallWebView extends StatefulWidget {
   final WidgetSendEventFn? sendEvent;
   final VoidCallback? onReady;
 
-  static const supported = true;
+  static bool get supported => embeddedWebViewAvailable;
 
   @override
   State<CallWebView> createState() => _CallWebViewIoState();

@@ -92,7 +92,7 @@ import {
 } from "./messengerExtras";
 import { DIRECT_CALL_CRYPTO_UNAVAILABLE } from "./directCallErrors";
 import { assertCryptoForEncryptedRoom } from "./cryptoGuard";
-import { outgoingCallMode } from "./callRouting";
+import { matrixRtcCameraOptions, outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
 import {
   MSC3401_MEMBER_EVENT,
@@ -2087,7 +2087,7 @@ export async function startOutgoingCall(roomId: string, options?: { video?: bool
     matrixRtcAvailable: Boolean(discoverLivekitFocus(client?.getClientWellKnown(), livekitFallbackUrl())),
   });
   if (mode === "matrixrtc") {
-    await startMatrixRtc(roomId, options);
+    await startMatrixRtc(roomId, matrixRtcCameraOptions(options));
     return;
   }
   if (mode === "direct") {

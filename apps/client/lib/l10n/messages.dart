@@ -85,6 +85,10 @@ class AppStrings {
   String get ssoUnavailable => _('ssoUnavailable');
   String get ssoOpenFailed => _('ssoOpenFailed');
   String get ssoTokenRequired => _('ssoTokenRequired');
+  String get ssoWaitingRedirect => _('ssoWaitingRedirect');
+  String get ssoPasteInstead => _('ssoPasteInstead');
+  String get pushDistributor => _('pushDistributor');
+  String get pushDistributorHint => _('pushDistributorHint');
   String get displayName => _('displayName');
   String get changeAvatar => _('changeAvatar');
   String get authForbidden => _('auth.forbidden');
@@ -512,6 +516,24 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'ssoTokenRequired': {
     AppLocale.en: 'Paste the loginToken from the SSO redirect.',
     AppLocale.ru: 'Вставьте loginToken из перенаправления SSO.',
+  },
+  'ssoWaitingRedirect': {
+    AppLocale.en:
+        'Finish signing in in the browser. HighLife continues when the server sends you back.',
+    AppLocale.ru:
+        'Завершите вход в браузере. HighLife продолжит, когда сервер вернёт вас в приложение.',
+  },
+  'ssoPasteInstead': {
+    AppLocale.en: 'Paste token instead',
+    AppLocale.ru: 'Вставить токен вручную',
+  },
+  'pushDistributor': {
+    AppLocale.en: 'Notification delivery',
+    AppLocale.ru: 'Доставка уведомлений',
+  },
+  'pushDistributorHint': {
+    AppLocale.en: 'Choose which UnifiedPush app delivers notifications.',
+    AppLocale.ru: 'Выберите приложение UnifiedPush для уведомлений.',
   },
   'auth.forbidden': {
     AppLocale.en: 'Incorrect username or password.',

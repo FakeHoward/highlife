@@ -7,5 +7,9 @@ class UnifiedPushService {
 
   Future<void> start() async {}
 
+  Future<List<String>> distributors() async => const [];
+
+  Future<void> useDistributor(String distributor) async {}
+
   void dispose() {}
 }

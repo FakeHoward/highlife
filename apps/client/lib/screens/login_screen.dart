@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
 import '../services/auth_errors.dart';
+import '../services/protocol_registrar.dart';
 import '../services/session.dart';
 import '../theme.dart';
 import '../widgets/auth_web_flow.dart';
@@ -35,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   var _mode = _AuthMode.login;
   var _obscurePassword = true;
   var _showTokenField = false;
+  var _awaitingSso = false;
   String? _localError;
   String? _probedHs;
 
@@ -57,22 +59,26 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final session = context.read<HighLifeSession>();
+  void _consumePendingToken(HighLifeSession session) {
     if (session.pendingLoginToken == null) return;
-    final token = session.takePendingLoginToken();
-    if (token == null) return;
-    _loginToken.text = token;
-    _showTokenField = true;
-    final s = context.read<HighLifeLocales>().strings;
-    unawaited(_submitToken(session, s));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final token = session.takePendingLoginToken();
+      if (token == null) return;
+      _loginToken.text = token;
+      setState(() {
+        _showTokenField = true;
+        _awaitingSso = false;
+      });
+      final s = context.read<HighLifeLocales>().strings;
+      unawaited(_submitToken(session, s));
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<HighLifeSession>();
+    _consumePendingToken(session);
     final s = context.watch<HighLifeLocales>().strings;
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     final registering = _mode == _AuthMode.register;
@@ -247,6 +253,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     onSubmitted: (_) => _submit(session, s),
                   ),
                 ],
+                if (showSso && _awaitingSso && !_showTokenField) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    s.ssoWaitingRedirect,
+                    style: Theme.of(context).textTheme.bodySmall.copyWith(
+                          color: tokens.muted,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  HlButton.text(
+                    onPressed: session.busy
+                        ? null
+                        : () => setState(() => _showTokenField = true),
+                    label: Text(s.ssoPasteInstead),
+                  ),
+                ],
                 if (showSso && _showTokenField) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -380,10 +402,17 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (result.outcome == AuthBrowserOutcome.cancelled) return;
-    setState(() => _showTokenField = true);
+    await registerHighLifeProtocol();
+    setState(() {
+      _awaitingSso = true;
+      _showTokenField = false;
+    });
     final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!launched && mounted) {
-      setState(() => _localError = s.ssoOpenFailed);
+      setState(() {
+        _localError = s.ssoOpenFailed;
+        _showTokenField = true;
+      });
     }
   }
 
@@ -437,6 +466,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         if (result.outcome == AuthBrowserOutcome.cancelled) return;
         if (result.outcome == AuthBrowserOutcome.unsupported) {
+          await registerHighLifeProtocol();
           final launched = await launchUrl(
             masRegister,
             mode: LaunchMode.externalApplication,

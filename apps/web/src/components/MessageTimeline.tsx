@@ -27,7 +27,7 @@ import {
 import { IconDownload, IconExternal, IconLock } from "./Icons";
 import { Avatar } from "./Avatar";
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀"] as const;
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "🔥", "😢", "🙏"] as const;
 
 function sameCalendarDay(left: number, right: number): boolean {
   const a = new Date(left);

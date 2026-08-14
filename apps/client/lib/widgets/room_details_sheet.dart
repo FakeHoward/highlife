@@ -9,6 +9,7 @@ import '../services/session.dart';
 import '../theme.dart';
 import 'hl_button.dart';
 import 'matrix_avatar.dart';
+import 'matrix_media_tile.dart';
 import 'user_profile_sheet.dart';
 
 Future<void> showRoomDetailsSheet(
@@ -180,45 +181,46 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
       ];
     }
     return [
-      for (final event in events.take(24))
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          leading: Icon(
-            event.messageType == MessageTypes.Image
-                ? Icons.image_outlined
-                : event.messageType == MessageTypes.Video
-                    ? Icons.videocam_outlined
-                    : event.messageType == MessageTypes.Audio
-                        ? Icons.audio_file_outlined
-                        : Icons.insert_drive_file_outlined,
-            size: 20,
-            color: tokens.muted,
-          ),
-          title: Text(
-            event.body.isEmpty ? event.messageType : event.body,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onTap: () {
-            // ignore: deprecated_member_use
-            final uri = event.getAttachmentUrl();
-            if (uri == null) return;
-            if (event.messageType == MessageTypes.Image) {
-              showDialog<void>(
-                context: context,
-                builder: (context) => Dialog(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 420),
-                    child: Image.network(uri.toString(), fit: BoxFit.contain),
-                  ),
-                ),
-              );
-              return;
-            }
-            launchUrl(uri, mode: LaunchMode.externalApplication);
-          },
-        ),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final event in events.take(24))
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: event.messageType == MessageTypes.Image
+                  ? MatrixMediaImage(
+                      event: event,
+                      maxHeight: 72,
+                      onTap: () => showMatrixImageViewer(context, event),
+                    )
+                  : Material(
+                      color: tokens.surfaceMuted,
+                      borderRadius: BorderRadius.circular(6),
+                      child: InkWell(
+                        onTap: () {
+                          // ignore: deprecated_member_use
+                          final uri = event.getAttachmentUrl();
+                          if (uri == null) return;
+                          launchUrl(uri, mode: LaunchMode.externalApplication);
+                        },
+                        child: Center(
+                          child: Icon(
+                            event.messageType == MessageTypes.Video
+                                ? Icons.videocam_outlined
+                                : event.messageType == MessageTypes.Audio
+                                    ? Icons.mic_none_outlined
+                                    : Icons.insert_drive_file_outlined,
+                            size: 20,
+                            color: tokens.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+        ],
+      ),
     ];
   }
 

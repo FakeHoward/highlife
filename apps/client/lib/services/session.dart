@@ -990,6 +990,14 @@ class HighLifeSession extends ChangeNotifier {
     return roomId;
   }
 
+  Future<List<String>> pushDistributors() {
+    return _unifiedPush?.distributors() ?? Future.value(const []);
+  }
+
+  Future<void> selectPushDistributor(String distributor) {
+    return _unifiedPush?.useDistributor(distributor) ?? Future.value();
+  }
+
   void dismissIncomingRtc(String roomId) {
     _dismissedRtcInvites.add(roomId);
     notifyListeners();

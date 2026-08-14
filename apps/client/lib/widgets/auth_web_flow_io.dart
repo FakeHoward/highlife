@@ -1,15 +1,10 @@
-import 'package:flutter/foundation.dart';
+import '../platform/embedded_webview.dart';
+import '../hl_kit.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../hl_kit.dart';
 import '../services/auth_errors.dart';
 
-bool get _webviewSupported {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.macOS;
-}
+bool get _webviewSupported => embeddedWebViewAvailable;
 
 Future<AuthBrowserResult> showAuthWebFlow({
   required BuildContext context,

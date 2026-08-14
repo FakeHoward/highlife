@@ -32,6 +32,8 @@ void main() {
       expect(s.yesterday, 'Yesterday');
       expect(s.pinMessage, 'Pin');
       expect(s.muteNotifications, 'Mute notifications');
+      expect(s.ssoWaitingRedirect, contains('browser'));
+      expect(s.pushDistributor, 'Notification delivery');
     });
 
     test('every key exists in both EN and RU', () {

@@ -129,6 +129,18 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Build vodozemac WASM for Flutter web
+        working-directory: apps/client
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if ! command -v cargo >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y
+            # shellcheck disable=SC1091
+            source "$HOME/.cargo/env"
+          fi
+          bash scripts/build_vodozemac_wasm.sh
+
       - name: Build Flutter web
         id: flutter_web
         working-directory: apps/client

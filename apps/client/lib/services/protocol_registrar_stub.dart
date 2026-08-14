@@ -1,0 +1,1 @@
+Future<void> registerHighLifeProtocol() async {}

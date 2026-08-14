@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outgoingCallMode } from "./callRouting";
+import { matrixRtcCameraOptions, outgoingCallMode } from "./callRouting";
 
 describe("outgoingCallMode", () => {
   it("uses MatrixRTC for DMs so Element X can join", () => {
@@ -30,5 +30,11 @@ describe("outgoingCallMode", () => {
         matrixRtcAvailable: false,
       }),
     ).toBe("blocked");
+  });
+
+  it("maps the chat video flag onto MatrixRTC camera options", () => {
+    expect(matrixRtcCameraOptions()).toBeUndefined();
+    expect(matrixRtcCameraOptions({ video: true })).toEqual({ camera: true });
+    expect(matrixRtcCameraOptions({ video: false })).toEqual({ camera: false });
   });
 });

@@ -7,6 +7,7 @@ import 'l10n/highlife_locales.dart';
 import 'screens/login_screen.dart';
 import 'screens/room_list_screen.dart';
 import 'services/deep_links.dart';
+import 'services/protocol_registrar.dart';
 import 'services/session.dart';
 import 'theme.dart';
 import 'widgets/call_surface.dart';
@@ -149,6 +150,7 @@ class _HighLifeAppState extends State<HighLifeApp> {
     super.initState();
     _deepLinks = DeepLinkListener(onLink: widget.session.applyDeepLink);
     unawaited(_deepLinks.start());
+    unawaited(registerHighLifeProtocol());
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' as cupertino;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
@@ -908,6 +909,7 @@ class Material extends StatelessWidget {
     this.color,
     this.elevation,
     this.borderRadius,
+    this.shape,
     this.type = MaterialType.canvas,
   });
 
@@ -915,6 +917,7 @@ class Material extends StatelessWidget {
   final Color? color;
   final double? elevation;
   final BorderRadiusGeometry? borderRadius;
+  final ShapeBorder? shape;
   final MaterialType type;
 
   @override
@@ -923,12 +926,14 @@ class Material extends StatelessWidget {
         (type == MaterialType.transparency
             ? const Color(0x00000000)
             : shadcn.Theme.of(context).colorScheme.card);
+    final circle = shape is CircleBorder || type == MaterialType.circle;
     return Container(
       decoration: BoxDecoration(
         color: resolved,
-        borderRadius: borderRadius,
+        shape: circle ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circle ? null : borderRadius,
       ),
-      clipBehavior: borderRadius == null ? Clip.none : Clip.antiAlias,
+      clipBehavior: circle || borderRadius != null ? Clip.antiAlias : Clip.none,
       child: child,
     );
   }
@@ -943,19 +948,30 @@ class InkWell extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.borderRadius,
+    this.customBorder,
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final BorderRadius? borderRadius;
+  final ShapeBorder? customBorder;
 
   @override
   Widget build(BuildContext context) {
+    Widget body = child;
+    if (customBorder != null) {
+      body = ClipPath(
+        clipper: ShapeBorderClipper(shape: customBorder!),
+        child: child,
+      );
+    } else if (borderRadius != null) {
+      body = ClipRRect(borderRadius: borderRadius!, child: child);
+    }
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: child,
+      child: body,
     );
   }
 }
@@ -1375,6 +1391,34 @@ class VisualDensity {
   static const compact = VisualDensity(horizontal: -2, vertical: -2);
   static const comfortable = VisualDensity(horizontal: 0, vertical: 0);
   static const standard = VisualDensity();
+}
+
+class HighLifeDialog extends StatelessWidget {
+  const HighLifeDialog({
+    super.key,
+    this.child,
+    this.backgroundColor,
+    this.insetPadding,
+  });
+
+  final Widget? child;
+  final Color? backgroundColor;
+  final EdgeInsets? insetPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return Center(
+      child: Padding(
+        padding: insetPadding ?? const EdgeInsets.all(24),
+        child: Material(
+          color: backgroundColor ?? tokens.surface,
+          borderRadius: BorderRadius.circular(10),
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
 }
 
 class AlertDialog extends StatelessWidget {

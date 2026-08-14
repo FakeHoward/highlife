@@ -33,6 +33,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _displayName;
   Uri? _avatarUrl;
   var _checkingUpdates = false;
+  List<String> _pushDistributors = const [];
 
   @override
   void initState() {
@@ -45,11 +46,13 @@ class _ProfilePageState extends State<ProfilePage> {
     final info = await PackageInfo.fromPlatform();
     final name = await session.fetchDisplayName();
     final avatar = await session.fetchAvatarUrl();
+    final distributors = await session.pushDistributors();
     if (!mounted) return;
     setState(() {
       _packageInfo = info;
       _displayName = name;
       _avatarUrl = avatar;
+      _pushDistributors = distributors;
     });
   }
 
@@ -273,6 +276,28 @@ class _ProfilePageState extends State<ProfilePage> {
                       : s.callsNeedUrl,
                 ),
               ),
+              if (_pushDistributors.isNotEmpty)
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.notifications_outlined),
+                  title: Text(s.pushDistributor),
+                  subtitle: Text(s.pushDistributorHint),
+                  children: [
+                    for (final distributor in _pushDistributors)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(distributor),
+                        onTap: () async {
+                          await session.selectPushDistributor(distributor);
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(distributor)),
+                          );
+                        },
+                      ),
+                  ],
+                ),
               const Divider(),
               ListTile(
                 contentPadding: EdgeInsets.zero,

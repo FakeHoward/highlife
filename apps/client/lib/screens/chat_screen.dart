@@ -26,6 +26,7 @@ import '../widgets/create_poll_dialog.dart';
 import '../widgets/hl_button.dart';
 import '../widgets/inline_keyboard.dart';
 import '../widgets/matrix_avatar.dart';
+import '../widgets/matrix_media_tile.dart';
 import '../widgets/members_panel.dart';
 import '../widgets/message_search_dialog.dart';
 import '../widgets/mini_app_surface.dart';
@@ -301,9 +302,6 @@ class _ChatScreenState extends State<ChatScreen> {
             replyPreview: (replyPreview == null || replyPreview.isEmpty)
                 ? null
                 : replyPreview,
-            // Sync URL for timeline tiles; async getAttachmentUri is scanner-aware.
-            // ignore: deprecated_member_use
-            httpMediaUrl: event.getAttachmentUrl(),
           ),
         );
         previousSender = event.senderId;
@@ -580,7 +578,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     lastInGroup: row.lastInGroup,
                     highlighted: event.eventId == _highlightEventId,
                     replyPreview: row.replyPreview,
-                    httpMediaUrl: row.httpMediaUrl,
                     feedback: session.callbackFeedback[event.eventId] == null
                         ? null
                         : s.callbackFeedback(
@@ -631,12 +628,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     onRedact: event.canRedact
                         ? () => _confirmRedact(session, event)
                         : null,
-                    onOpenMedia: row.httpMediaUrl == null
-                        ? null
-                        : () => launchUrl(
-                              row.httpMediaUrl!,
-                              mode: LaunchMode.externalApplication,
-                            ),
+                    onOpenMedia: event.messageType == MessageTypes.Image ||
+                            event.messageType == MessageTypes.Audio ||
+                            event.messageType == MessageTypes.Video ||
+                            event.messageType == MessageTypes.File
+                        ? () => _openMedia(event)
+                        : null,
                     onPin: () => _togglePin(event),
                     onForward: () => _forward(session, s, event),
                     onOpenProfile: event.senderId == session.userId
@@ -1090,6 +1087,22 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _openMedia(Event event) async {
+    if (event.messageType == MessageTypes.Image) {
+      if (!mounted) return;
+      await showMatrixImageViewer(context, event);
+      return;
+    }
+    try {
+      await event.downloadAndDecryptAttachment();
+    } catch (_) {}
+    if (!mounted) return;
+    // ignore: deprecated_member_use
+    final uri = event.getAttachmentUrl();
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   Future<void> _confirmRedact(HighLifeSession session, Event event) async {
     final s = context.read<HighLifeLocales>().strings;
     final confirmed = await showDialog<bool>(
@@ -1311,7 +1324,6 @@ class _TimelineRow {
     this.grouped = false,
     this.lastInGroup = true,
     this.replyPreview,
-    this.httpMediaUrl,
     this.unread = false,
   });
 
@@ -1327,7 +1339,6 @@ class _TimelineRow {
     bool grouped = false,
     bool lastInGroup = true,
     String? replyPreview,
-    Uri? httpMediaUrl,
   }) {
     return _TimelineRow._(
       event: event,
@@ -1337,7 +1348,6 @@ class _TimelineRow {
       grouped: grouped,
       lastInGroup: lastInGroup,
       replyPreview: replyPreview,
-      httpMediaUrl: httpMediaUrl,
     );
   }
 
@@ -1349,7 +1359,6 @@ class _TimelineRow {
   final bool grouped;
   final bool lastInGroup;
   final String? replyPreview;
-  final Uri? httpMediaUrl;
   final bool unread;
 }
 
@@ -1445,7 +1454,6 @@ class _MessageTile extends StatelessWidget {
     required this.onPollVote,
     this.onEndPoll,
     this.replyPreview,
-    this.httpMediaUrl,
     this.onEdit,
     this.onRedact,
     this.onOpenMedia,
@@ -1464,7 +1472,6 @@ class _MessageTile extends StatelessWidget {
   final bool highlighted;
   final String? replyPreview;
   final void Function(ReactionSummary summary) onToggleReaction;
-  final Uri? httpMediaUrl;
   final ValueChanged<InlineButton> onButton;
   final ValueChanged<MiniAppCard> onMiniApp;
   final Future<void> Function(List<String> answerIds) onPollVote;
@@ -1621,8 +1628,8 @@ class _MessageTile extends StatelessWidget {
                   ),
                 ] else
                   _RichMessageBody(
+                    event: event,
                     item: item,
-                    httpMediaUrl: httpMediaUrl,
                     onOpenMedia: onOpenMedia,
                     attachmentLabel: strings.attachment,
                     voiceLabel: strings.recordVoice,
@@ -1818,6 +1825,7 @@ class _MessageTile extends StatelessWidget {
 
 class _RichMessageBody extends StatelessWidget {
   const _RichMessageBody({
+    required this.event,
     required this.item,
     required this.attachmentLabel,
     required this.systemLabel,
@@ -1825,10 +1833,10 @@ class _RichMessageBody extends StatelessWidget {
     this.encryptedLabel,
     this.retryLabel,
     this.onRetryDecrypt,
-    this.httpMediaUrl,
     this.onOpenMedia,
   });
 
+  final Event event;
   final TimelineItem item;
   final String attachmentLabel;
   final String systemLabel;
@@ -1836,7 +1844,6 @@ class _RichMessageBody extends StatelessWidget {
   final String? encryptedLabel;
   final String? retryLabel;
   final VoidCallback? onRetryDecrypt;
-  final Uri? httpMediaUrl;
   final VoidCallback? onOpenMedia;
 
   @override
@@ -1893,27 +1900,28 @@ class _RichMessageBody extends StatelessWidget {
     if (item is! MediaTimelineItem) {
       return MarkdownMessage(source: item.body);
     }
+    final media = item;
 
-    if (item.kind == TimelineItemKind.audio) {
-      final seconds = item.durationMs == null
+    if (media.kind == TimelineItemKind.audio) {
+      final seconds = media.durationMs == null
           ? null
-          : (item.durationMs! / 1000).round();
+          : (media.durationMs! / 1000).round();
       return InkWell(
         onTap: onOpenMedia,
         child: Row(
           children: [
             Icon(
-              item.isVoice ? Icons.mic : Icons.play_circle_outline,
+              media.isVoice ? Icons.mic : Icons.play_circle_outline,
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
-                item.isVoice
+                media.isVoice
                     ? (seconds == null
                         ? (voiceLabel ?? attachmentLabel)
                         : '${voiceLabel ?? attachmentLabel} · ${seconds}s')
-                    : (item.body.isEmpty ? attachmentLabel : item.body),
+                    : (media.body.isEmpty ? attachmentLabel : media.body),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1923,36 +1931,21 @@ class _RichMessageBody extends StatelessWidget {
       );
     }
 
-    if (item.kind == TimelineItemKind.image && httpMediaUrl != null) {
+    if (media.kind == TimelineItemKind.image) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: Image.network(
-                httpMediaUrl.toString(),
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _MediaFallback(
-                  item: item,
-                  onOpenMedia: onOpenMedia,
-                  attachmentLabel: attachmentLabel,
-                ),
-              ),
-            ),
-          ),
-          if (item.body.isNotEmpty) ...[
+          MatrixMediaImage(event: event, onTap: onOpenMedia),
+          if (media.body.isNotEmpty) ...[
             const SizedBox(height: 6),
-            MarkdownMessage(source: item.body),
+            MarkdownMessage(source: media.body),
           ],
         ],
       );
     }
 
     return _MediaFallback(
-      item: item,
+      item: media,
       onOpenMedia: onOpenMedia,
       attachmentLabel: attachmentLabel,
     );

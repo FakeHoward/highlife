@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
@@ -62,6 +61,21 @@ class UnifiedPushService {
       debugPrint('UnifiedPush start failed: $e\n$st');
       // Push remains optional — do not register a fake deviceID pushkey.
     }
+  }
+
+  Future<List<String>> distributors() async {
+    if (kIsWeb || !Platform.isAndroid) return const [];
+    try {
+      return UnifiedPush.getDistributors();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> useDistributor(String distributor) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await UnifiedPush.saveDistributor(distributor);
+    await UnifiedPush.register(instance: _instance);
   }
 
   void dispose() {

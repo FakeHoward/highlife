@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import '../hl_kit.dart';
+import '../platform/embedded_webview.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 /// Native WebView for aiomatrix MiniApps with postMessage bridge.
@@ -19,7 +19,7 @@ class MiniAppWebView extends StatefulWidget {
   final VoidCallback onUnsupported;
   final Map<String, dynamic>? initPayload;
 
-  static bool get supported => !kIsWeb;
+  static bool get supported => embeddedWebViewAvailable;
 
   @override
   State<MiniAppWebView> createState() => _MiniAppWebViewIoState();

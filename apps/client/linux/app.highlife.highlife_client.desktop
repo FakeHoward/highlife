@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=HighLife
+Exec=highlife_client %u
+Icon=highlife
+Type=Application
+StartupWMClass=app.highlife.highlife_client
+MimeType=x-scheme-handler/highlife;
+Categories=Network;InstantMessaging;
