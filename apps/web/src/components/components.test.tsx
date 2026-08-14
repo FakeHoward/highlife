@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RoomListItem, TimelineItem } from "@highlife/ui-contracts";
 import { LocaleProvider } from "../i18n";
@@ -171,8 +171,9 @@ describe("responsive room navigation", () => {
     );
 
     expect(screen.getByRole("navigation", { name: "Spaces" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "All chats" }));
+    const tabs = screen.getByRole("navigation", { name: "Spaces" });
+    expect(within(tabs).getByRole("button", { name: "Work" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(tabs).getByRole("button", { name: "All chats" }));
     expect(selectSpace).toHaveBeenCalledWith(null);
   });
 

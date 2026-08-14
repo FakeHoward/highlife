@@ -54,7 +54,7 @@ describe("messenger extras", () => {
   });
 
   it("deep-links push notifications into a room when room_id is present", () => {
-    expect(notificationTargetFromPush({ room_id: "!chat:example.org" })).toBe("/?room=%21chat%3Aexample.org");
+    expect(notificationTargetFromPush({ room_id: "!chat:example.org" })).toBe("/?room=!chat%3Aexample.org");
     expect(notificationTargetFromPush({})).toBe("/");
   });
 

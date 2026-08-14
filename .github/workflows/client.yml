@@ -114,26 +114,6 @@ jobs:
                   raise SystemExit("application closing tag not found")
               text = text.replace(needle, meta, 1)
           text = text.replace('android:label="highlife_client"', 'android:label="HighLife"')
-          if 'android:scheme="highlife"' not in text:
-              filters = '''
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="highlife" android:host="login"/>
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="highlife" android:host="room"/>
-            </intent-filter>
-'''
-              text = text.replace(
-                  "</activity>",
-                  filters + "        </activity>",
-                  1,
-              )
           path.write_text(text)
           PY
           grep -nE 'INTERNET|ACCESS_NETWORK_STATE|CAMERA|RECORD_AUDIO|MODIFY_AUDIO_SETTINGS|EnableImpeller' "$manifest"
