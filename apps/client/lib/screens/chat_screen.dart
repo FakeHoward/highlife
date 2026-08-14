@@ -625,6 +625,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             maxLines: 4,
                             decoration: InputDecoration(
                               hintText: s.messageHint,
+                              filled: true,
                             ),
                             onChanged: (_) => _onComposerChanged(session),
                             onSubmitted: (_) => _send(session),

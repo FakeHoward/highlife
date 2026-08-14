@@ -36,6 +36,16 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _probedHs;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_hs.text.trim().isNotEmpty && mounted) {
+        _probeHomeserver(context.read<HighLifeSession>());
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _hs.dispose();
     _user.dispose();
@@ -50,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final s = context.watch<HighLifeLocales>().strings;
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     final registering = _mode == _AuthMode.register;
+    final masSignup = registering && session.masRegisterUrl != null;
     final errorText = _localError ?? s.authError(session.error);
     final showSso = !registering && session.ssoAvailable;
     return Scaffold(
@@ -61,32 +72,43 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 360),
+                  constraints: const BoxConstraints(maxWidth: 400),
                   child: ListView(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
-                      vertical: 28,
+                      vertical: 24,
                     ),
                     shrinkWrap: true,
                     children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tokens.surface,
+                          border: Border.all(color: tokens.hairline),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
                 Center(
                   child: Column(
                     children: [
                       Container(
-                        width: 48,
-                        height: 48,
+                        width: 38,
+                        height: 38,
                         alignment: Alignment.center,
                         color: Theme.of(context).colorScheme.primary,
                         child: const Text(
                           'H',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
+                            height: 1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       Text(
                         s.appName,
                         style: Theme.of(context).textTheme.headlineSmall.copyWith(
@@ -95,84 +117,48 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        registering ? s.registerHint : s.loginTagline,
+                        masSignup
+                            ? s.registerMasHint
+                            : (registering ? s.registerHint : s.loginTagline),
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium.copyWith(
+                        style: Theme.of(context).textTheme.bodySmall.copyWith(
                               color: tokens.muted,
                             ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () =>
-                          context.read<HighLifeLocales>().setLocale(AppLocale.en),
-                      child: Text(s.languageEnglish),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          context.read<HighLifeLocales>().setLocale(AppLocale.ru),
-                      child: Text(s.languageRussian),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                _SegmentedTabs(
+                  labels: [s.languageEnglish, s.languageRussian],
+                  selected: context.watch<HighLifeLocales>().locale == AppLocale.en
+                      ? 0
+                      : 1,
+                  onSelect: (index) {
+                    context.read<HighLifeLocales>().setLocale(
+                          index == 0 ? AppLocale.en : AppLocale.ru,
+                        );
+                  },
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: session.busy
-                            ? null
-                            : () {
-                                session.clearError();
-                                setState(() {
-                                  _mode = _AuthMode.login;
-                                  _localError = null;
-                                  _showTokenField = false;
-                                });
-                              },
-                        child: Text(
-                          s.signIn,
-                          style: TextStyle(
-                            fontWeight: !registering
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            decoration: !registering
-                                ? TextDecoration.underline
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: TextButton(
-                        onPressed: session.busy
-                            ? null
-                            : () {
-                                session.clearError();
-                                setState(() {
-                                  _mode = _AuthMode.register;
-                                  _localError = null;
-                                  _showTokenField = false;
-                                });
-                              },
-                        child: Text(
-                          s.registerTitle,
-                          style: TextStyle(
-                            fontWeight: registering
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            decoration: registering
-                                ? TextDecoration.underline
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                _SegmentedTabs(
+                  labels: [s.signIn, s.registerTitle],
+                  selected: registering ? 1 : 0,
+                  onSelect: session.busy
+                      ? null
+                      : (index) {
+                          session.clearError();
+                          setState(() {
+                            _mode = index == 1
+                                ? _AuthMode.register
+                                : _AuthMode.login;
+                            _localError = null;
+                            _showTokenField = false;
+                          });
+                          if (_hs.text.trim().isNotEmpty) {
+                            _probeHomeserver(session);
+                          }
+                        },
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -195,53 +181,53 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   onEditingComplete: () => _probeHomeserver(session),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _user,
-                  enabled: !session.busy,
-                  autofillHints: registering
-                      ? const [AutofillHints.username]
-                      : const [AutofillHints.username],
-                  decoration: InputDecoration(
-                    labelText: registering ? s.username : s.userId,
-                    hintText: registering ? s.usernameHint : s.userIdHint,
+                if (!masSignup) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _user,
+                    enabled: !session.busy,
+                    autofillHints: const [AutofillHints.username],
+                    decoration: InputDecoration(
+                      labelText: registering ? s.username : s.userId,
+                      hintText: registering ? s.usernameHint : s.userIdHint,
+                    ),
+                    onChanged: registering
+                        ? null
+                        : (value) {
+                            final host = _serverFromMxid(value);
+                            if (host != null && _hs.text.trim().isEmpty) {
+                              _hs.text = 'https://$host';
+                              _probeHomeserver(session);
+                            }
+                          },
                   ),
-                  onChanged: registering
-                      ? null
-                      : (value) {
-                          final host = _serverFromMxid(value);
-                          if (host != null && _hs.text.trim().isEmpty) {
-                            _hs.text = 'https://$host';
-                            _probeHomeserver(session);
-                          }
-                        },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _pass,
-                  enabled: !session.busy,
-                  obscureText: _obscurePassword,
-                  autofillHints: registering
-                      ? const [AutofillHints.newPassword]
-                      : const [AutofillHints.password],
-                  decoration: InputDecoration(
-                    labelText: s.password,
-                    suffixIcon: IconButton(
-                      tooltip: _obscurePassword
-                          ? s.showPassword
-                          : s.hidePassword,
-                      onPressed: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _pass,
+                    enabled: !session.busy,
+                    obscureText: _obscurePassword,
+                    autofillHints: registering
+                        ? const [AutofillHints.newPassword]
+                        : const [AutofillHints.password],
+                    decoration: InputDecoration(
+                      labelText: s.password,
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePassword
+                            ? s.showPassword
+                            : s.hidePassword,
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
                       ),
                     ),
+                    onSubmitted: (_) => _submit(session, s),
                   ),
-                  onSubmitted: (_) => _submit(session, s),
-                ),
+                ],
                 if (showSso && _showTokenField) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -269,24 +255,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: tokens.dangerSoft,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border(
-                        left: BorderSide(color: tokens.danger, width: 3),
-                      ),
                     ),
                     child: Text(
                       errorText,
-                      style: TextStyle(color: tokens.danger),
+                      style: TextStyle(color: tokens.danger, fontSize: 13),
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                Text(
-                  s.loginSessionNote,
-                  style: Theme.of(context).textTheme.bodySmall.copyWith(
-                        color: tokens.muted,
-                      ),
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 if (showSso) ...[
                   HlButton.secondary(
                     onPressed:
@@ -313,9 +289,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   label: Text(
                     session.busy
                         ? (registering ? s.registering : s.signingIn)
-                        : (registering ? s.createAccount : s.signIn),
+                        : (masSignup
+                            ? s.createAccountOnServer
+                            : (registering ? s.createAccount : s.signIn)),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  s.loginSessionNote,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall.copyWith(
+                        color: tokens.muted,
+                      ),
+                ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -389,7 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (host != null && _hs.text.trim().isEmpty) {
       _hs.text = 'https://$host';
     }
-    final validation = _validate(s);
+    final validation = _validate(session, s);
     if (validation != null) {
       session.clearError();
       setState(() => _localError = validation);
@@ -398,6 +388,24 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _localError = null);
     await _probeHomeserver(session);
     if (_mode == _AuthMode.register) {
+      final masRegister = session.masRegisterUrl;
+      if (masRegister != null) {
+        final launched = await launchUrl(
+          masRegister,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched && mounted) {
+          setState(() => _localError = s.registerMasOpenFailed);
+          return;
+        }
+        if (mounted) {
+          setState(() {
+            _mode = _AuthMode.login;
+            _localError = s.registerMasOpened;
+          });
+        }
+        return;
+      }
       await session.register(
         homeserver: _hs.text,
         username: _user.text,
@@ -416,9 +424,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  String? _validate(AppStrings s) {
+  String? _validate(HighLifeSession session, AppStrings s) {
     if (_hs.text.trim().isEmpty) {
       return s.authError(AuthErrorKeys.homeserverRequired);
+    }
+    if (_mode == _AuthMode.register && session.masRegisterUrl != null) {
+      return null;
     }
     if (_user.text.trim().isEmpty) {
       return s.authError(
@@ -432,5 +443,57 @@ class _LoginScreenState extends State<LoginScreen> {
       return s.authError(AuthErrorKeys.passwordTooShort);
     }
     return null;
+  }
+}
+
+class _SegmentedTabs extends StatelessWidget {
+  const _SegmentedTabs({
+    required this.labels,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final List<String> labels;
+  final int selected;
+  final ValueChanged<int>? onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted.withValues(alpha: 0.72),
+        border: Border.all(color: tokens.hairline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Expanded(
+                child: GestureDetector(
+                  onTap: onSelect == null ? null : () => onSelect!(i),
+                  behavior: HitTestBehavior.opaque,
+                  child: ColoredBox(
+                    color: i == selected ? tokens.surface : const Color(0x00000000),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        labels[i],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: i == selected ? tokens.text : tokens.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

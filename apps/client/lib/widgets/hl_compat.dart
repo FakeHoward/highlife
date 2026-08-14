@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as shadcn;
@@ -77,6 +78,7 @@ class Scaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
     Widget child = body ?? const SizedBox.shrink();
     if (floatingActionButton != null) {
       child = Stack(
@@ -90,13 +92,15 @@ class Scaffold extends StatelessWidget {
         ],
       );
     }
-    return shadcn.Scaffold(
-      backgroundColor: backgroundColor,
-      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      headers: [
-        if (appBar != null) appBar!,
-      ],
-      child: child,
+    return ColoredBox(
+      color: backgroundColor ?? tokens.chatCanvas,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (appBar != null) appBar!,
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }
@@ -121,6 +125,7 @@ class AppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
     Widget? resolvedLeading = leading;
     if (resolvedLeading == null && automaticallyImplyLeading) {
       final parentRoute = ModalRoute.of(context);
@@ -131,18 +136,41 @@ class AppBar extends StatelessWidget {
         );
       }
     }
-    final bar = shadcn.AppBar(
-      backgroundColor: backgroundColor,
-      leading: [
-        if (resolvedLeading != null) resolvedLeading,
-      ],
-      title: title,
-      trailing: actions ?? const [],
+    final bar = ColoredBox(
+      color: backgroundColor ?? tokens.surface,
+      child: SizedBox(
+        height: 52,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              if (resolvedLeading != null) resolvedLeading,
+              Expanded(
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.text,
+                    height: 1.2,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  child: title ?? const SizedBox.shrink(),
+                ),
+              ),
+              if (actions != null) ...actions!,
+            ],
+          ),
+        ),
+      ),
     );
-    if (bottom == null) return bar;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [bar, bottom!],
+      children: [
+        bar,
+        Container(height: 1, color: tokens.hairline),
+        if (bottom != null) bottom!,
+      ],
     );
   }
 }
@@ -189,43 +217,92 @@ class TextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = HighLifeTokens.of(context);
     final d = decoration;
-    final features = <shadcn.InputFeature>[
-      if (d?.prefixIcon != null) shadcn.InputFeature.leading(d!.prefixIcon!),
-      if (d?.suffixIcon != null) shadcn.InputFeature.trailing(d!.suffixIcon!),
-    ];
-    final field = shadcn.TextField(
-      controller: controller,
-      focusNode: focusNode,
-      enabled: enabled,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      autofillHints: autofillHints,
-      maxLines: obscureText ? 1 : maxLines,
-      minLines: minLines,
-      autofocus: autofocus,
-      readOnly: readOnly,
-      style: style,
-      textInputAction: textInputAction,
-      hintText: d?.hintText,
-      placeholder: d?.hintText == null ? null : Text(d!.hintText!),
-      filled: d?.filled ?? true,
-      borderRadius: BorderRadius.circular(6),
-      padding: d?.contentPadding ??
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      features: features,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
-      onEditingComplete: onEditingComplete,
+    final filled = d?.filled ?? false;
+    final radius = filled && d?.labelText == null ? 18.0 : 6.0;
+    final field = Focus(
+      child: Builder(
+        builder: (context) {
+          final focused = Focus.of(context).hasFocus;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            decoration: BoxDecoration(
+              color: d?.fillColor ??
+                  (filled ? tokens.surfaceMuted : tokens.surface),
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: focused ? tokens.accent : tokens.hairline,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: maxLines == 1
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
+              children: [
+                if (d?.prefixIcon != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: d!.prefixIcon!,
+                  ),
+                Expanded(
+                  child: cupertino.CupertinoTextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: enabled,
+                    obscureText: obscureText,
+                    keyboardType: keyboardType,
+                    autofillHints: autofillHints,
+                    maxLines: obscureText ? 1 : maxLines,
+                    minLines: minLines,
+                    autofocus: autofocus,
+                    readOnly: readOnly,
+                    style: style ??
+                        TextStyle(
+                          fontSize: 15,
+                          height: 1.25,
+                          color: tokens.text,
+                        ),
+                    placeholder: d?.hintText,
+                    placeholderStyle: TextStyle(
+                      color: tokens.muted,
+                      fontSize: 15,
+                      height: 1.25,
+                    ),
+                    textInputAction: textInputAction,
+                    padding: d?.contentPadding ??
+                        const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 10,
+                        ),
+                    decoration: const BoxDecoration(),
+                    onChanged: onChanged,
+                    onSubmitted: onSubmitted,
+                    onEditingComplete: onEditingComplete,
+                  ),
+                ),
+                if (d?.suffixIcon != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: d!.suffixIcon!,
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
     if (d?.labelText == null) return field;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.only(bottom: 7),
           child: Text(
             d!.labelText!,
-            style: TextStyle(fontSize: 13, color: tokens.muted),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: tokens.text,
+            ),
           ),
         ),
         field,
@@ -464,7 +541,7 @@ class ListTile extends StatelessWidget {
         color: selected ? tokens.ownMessage : const Color(0x00000000),
         child: Padding(
           padding: contentPadding ??
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
               if (leading != null) ...[

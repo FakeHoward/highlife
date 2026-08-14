@@ -73,6 +73,10 @@ class AppStrings {
   String get username => _('username');
   String get createAccount => _('createAccount');
   String get registering => _('registering');
+  String get registerMasHint => _('registerMasHint');
+  String get registerMasOpened => _('registerMasOpened');
+  String get registerMasOpenFailed => _('registerMasOpenFailed');
+  String get createAccountOnServer => _('createAccountOnServer');
   String get loginSessionNote => _('loginSessionNote');
   String get continueWithSso => _('continueWithSso');
   String get ssoPasteTokenHint => _('ssoPasteTokenHint');
@@ -437,6 +441,27 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'registering': {
     AppLocale.en: 'Creating account…',
     AppLocale.ru: 'Создание аккаунта…',
+  },
+  'registerMasHint': {
+    AppLocale.en:
+        'This server uses Matrix Authentication Service. Create the account there, then come back and sign in.',
+    AppLocale.ru:
+        'Этот сервер использует Matrix Authentication Service. Создайте аккаунт там, затем вернитесь и войдите.',
+  },
+  'registerMasOpened': {
+    AppLocale.en:
+        'Finish signup in the browser, then sign in here with the same username and password.',
+    AppLocale.ru:
+        'Завершите регистрацию в браузере, затем войдите здесь тем же именем и паролем.',
+  },
+  'registerMasOpenFailed': {
+    AppLocale.en: 'Could not open the registration page. Try again or paste the auth server URL in a browser.',
+    AppLocale.ru:
+        'Не удалось открыть страницу регистрации. Попробуйте снова или откройте адрес auth-сервера в браузере.',
+  },
+  'createAccountOnServer': {
+    AppLocale.en: 'Create account on server',
+    AppLocale.ru: 'Создать аккаунт на сервере',
   },
   'loginSessionNote': {
     AppLocale.en:

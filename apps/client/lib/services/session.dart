@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:matrix/encryption.dart';
 import 'package:matrix/matrix.dart';
 import 'package:path_provider/path_provider.dart';
@@ -67,6 +69,7 @@ class HighLifeSession extends ChangeNotifier {
   bool _ssoAvailable = false;
   bool _passwordLoginAvailable = false;
   Uri? _ssoRedirectUrl;
+  Uri? _masIssuer;
 
   Client? get client => _client;
   String? get error => _error;
@@ -83,6 +86,12 @@ class HighLifeSession extends ChangeNotifier {
   bool get ssoAvailable => _ssoAvailable;
   bool get passwordLoginAvailable => _passwordLoginAvailable;
   Uri? get ssoRedirectUrl => _ssoRedirectUrl;
+  Uri? get masIssuer => _masIssuer;
+  Uri? get masRegisterUrl {
+    final issuer = _masIssuer;
+    if (issuer == null) return null;
+    return issuer.resolve('register');
+  }
   SyncStatusUpdate? get syncStatus => _syncStatus;
   /// True after the first successful sync cycle (finished/processing).
   /// Long-poll `waitingForResponse` is normal after this and must not look like
@@ -357,12 +366,16 @@ class HighLifeSession extends ChangeNotifier {
   static const ssoNativeRedirect = 'highlife://login';
 
   void clearLoginFlowProbe() {
-    if (!_ssoAvailable && !_passwordLoginAvailable && _ssoRedirectUrl == null) {
+    if (!_ssoAvailable &&
+        !_passwordLoginAvailable &&
+        _ssoRedirectUrl == null &&
+        _masIssuer == null) {
       return;
     }
     _ssoAvailable = false;
     _passwordLoginAvailable = false;
     _ssoRedirectUrl = null;
+    _masIssuer = null;
     notifyListeners();
   }
 
@@ -376,6 +389,7 @@ class HighLifeSession extends ChangeNotifier {
       _ssoAvailable = false;
       _passwordLoginAvailable = false;
       _ssoRedirectUrl = null;
+      _masIssuer = null;
       _error = mapAuthError(e);
       notifyListeners();
     }
@@ -395,6 +409,7 @@ class HighLifeSession extends ChangeNotifier {
     _passwordLoginAvailable = hasPassword;
     _ssoAvailable = hasSso;
     _ssoRedirectUrl = hasSso ? buildSsoRedirectUrl(homeserver) : null;
+    _masIssuer = await _discoverMasIssuer(uri);
     notifyListeners();
     if (requirePassword && !hasPassword) {
       // Softened: SSO-only homeservers are valid for the SSO button path;
@@ -409,6 +424,28 @@ class HighLifeSession extends ChangeNotifier {
     return type == AuthenticationTypes.sso ||
         type == 'm.login.sso' ||
         type == 'm.login.cas';
+  }
+
+  static Future<Uri?> _discoverMasIssuer(Uri homeserver) async {
+    try {
+      final wellKnown = Uri(
+        scheme: homeserver.scheme,
+        host: homeserver.host,
+        port: homeserver.hasPort ? homeserver.port : null,
+        path: '/.well-known/matrix/client',
+      );
+      final res = await http.get(wellKnown);
+      if (res.statusCode != 200) return null;
+      final json = jsonDecode(res.body);
+      if (json is! Map) return null;
+      final auth = json['org.matrix.msc2965.authentication'];
+      if (auth is! Map) return null;
+      final issuer = auth['issuer']?.toString();
+      if (issuer == null || issuer.isEmpty) return null;
+      return Uri.parse(issuer);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Spec: `/_matrix/client/v3/login/sso/redirect?redirectUrl=...`

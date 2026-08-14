@@ -22,6 +22,9 @@ const en = {
   "login.hint": "Server URL and your account on that server.",
   "login.registerHint":
     "Works when the server allows open signup (no email or captcha). Otherwise create the account there, then sign in here.",
+  "login.registerMasHint":
+    "This server uses Matrix Authentication Service. Create the account there, then come back and sign in.",
+  "login.createAccountOnServer": "Create account on server",
   "login.mode": "Sign-in or registration",
   "login.homeserver": "Homeserver",
   "login.homeserverPlaceholder": "https://matrix.example.org",
@@ -426,6 +429,9 @@ const ru: Record<MessageKey, string> = {
   "login.hint": "Адрес сервера и ваш аккаунт на нём.",
   "login.registerHint":
     "Работает, если сервер разрешает открытую регистрацию (без email и captcha). Иначе создайте аккаунт у них и войдите здесь.",
+  "login.registerMasHint":
+    "Этот сервер использует Matrix Authentication Service. Создайте аккаунт там, затем вернитесь и войдите.",
+  "login.createAccountOnServer": "Создать аккаунт на сервере",
   "login.mode": "Вход или регистрация",
   "login.homeserver": "Сервер",
   "login.homeserverPlaceholder": "https://matrix.example.org",

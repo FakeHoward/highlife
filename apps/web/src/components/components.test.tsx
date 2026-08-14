@@ -50,6 +50,7 @@ vi.mock("../matrix/service", () => ({
 
 vi.mock("../matrix/oidc", () => ({
   beginOidcOrSsoLogin: vi.fn(),
+  discoverMasIssuer: vi.fn(async () => null),
   maybeCompleteAuthCallback: vi.fn(async () => ({ handled: false, error: null })),
   isAuthCallbackUrl: () => false,
 }));

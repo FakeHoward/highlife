@@ -55,7 +55,7 @@ function clearAuthQuery(): void {
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 }
 
-async function beginOauth2(homeserver: string): Promise<void> {
+async function beginOauth2(homeserver: string, prompt?: string): Promise<void> {
   const guest = createClient({ baseUrl: homeserver });
   const metadata = await guest.getAuthMetadata();
   const redirect = redirectUri();
@@ -81,7 +81,11 @@ async function beginOauth2(homeserver: string): Promise<void> {
     metadata,
   };
   sessionStorage.setItem(OAUTH_STORAGE_KEY, JSON.stringify(stored));
-  const url = await oauth.generateAuthorizationCodeGrantUrl(state, "query", "login");
+  const url = await oauth.generateAuthorizationCodeGrantUrl(
+    state,
+    "query",
+    prompt,
+  );
   window.location.assign(url);
 }
 
@@ -106,19 +110,62 @@ async function beginSsoRedirect(homeserver: string): Promise<void> {
   window.location.assign(ssoUrl);
 }
 
-/** Start SSO / OAuth2 login for the given homeserver (redirects away). */
-export async function beginOidcOrSsoLogin(homeserverInput: string): Promise<void> {
+/** Start SSO / OAuth2 login for the given homeserver (redirects away).
+ * Pass `prompt: "create"` to send the user through MAS registration (OIDC prompt=create). */
+export async function beginOidcOrSsoLogin(
+  homeserverInput: string,
+  options?: { prompt?: string },
+): Promise<void> {
   const homeserver = resolveHomeserver(homeserverInput);
   if (!homeserver) throw new Error("Homeserver is required");
+  const prompt = options?.prompt;
 
   try {
-    await beginOauth2(homeserver);
+    await beginOauth2(homeserver, prompt);
     return;
   } catch {
+    if (prompt === "create") {
+      const registerUrl = await masRegisterUrl(homeserver);
+      if (registerUrl) {
+        window.location.assign(registerUrl);
+        return;
+      }
+      throw new Error("MAS_REGISTER_UNAVAILABLE");
+    }
     // Fall through to classic SSO redirect.
   }
 
   await beginSsoRedirect(homeserver);
+}
+
+async function masRegisterUrl(homeserver: string): Promise<string | null> {
+  const issuer = await discoverMasIssuer(homeserver);
+  if (!issuer) return null;
+  return new URL("register", issuer.endsWith("/") ? issuer : `${issuer}/`).href;
+}
+
+export async function discoverMasIssuer(homeserverInput: string): Promise<string | null> {
+  const homeserver = resolveHomeserver(homeserverInput);
+  if (!homeserver) return null;
+  try {
+    const guest = createClient({ baseUrl: homeserver });
+    const metadata = await guest.getAuthMetadata();
+    const issuer = metadata?.issuer;
+    if (issuer) return issuer;
+  } catch {
+    /* well-known fallback */
+  }
+  try {
+    const wellKnown = new URL("/.well-known/matrix/client", `${homeserver.replace(/\/$/, "")}/`);
+    const res = await fetch(wellKnown);
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      "org.matrix.msc2965.authentication"?: { issuer?: string };
+    };
+    return json["org.matrix.msc2965.authentication"]?.issuer ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function readCodeAndState(): { code: string; state: string } | null {

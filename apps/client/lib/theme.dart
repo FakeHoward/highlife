@@ -66,21 +66,32 @@ class HighLifeTokens {
 }
 
 class HighLifeTextStyles {
-  const HighLifeTextStyles(this._typography);
+  const HighLifeTextStyles();
 
-  final Typography _typography;
+  static const _base = TextStyle(
+    fontFamily: null,
+    height: 1.25,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
 
-  TextStyle get headlineSmall => _typography.h3;
-  TextStyle get titleLarge => _typography.h4;
-  TextStyle get titleMedium => _typography.textLarge;
-  TextStyle get titleSmall => _typography.textSmall;
-  TextStyle get bodyMedium => _typography.p;
-  TextStyle get bodySmall => _typography.small;
-  TextStyle get labelSmall => _typography.xSmall;
+  TextStyle get headlineSmall =>
+      _base.copyWith(fontSize: 17, fontWeight: FontWeight.w700);
+  TextStyle get titleLarge =>
+      _base.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
+  TextStyle get titleMedium =>
+      _base.copyWith(fontSize: 15, fontWeight: FontWeight.w600);
+  TextStyle get titleSmall =>
+      _base.copyWith(fontSize: 13, fontWeight: FontWeight.w600);
+  TextStyle get bodyMedium =>
+      _base.copyWith(fontSize: 15, fontWeight: FontWeight.w400, height: 1.35);
+  TextStyle get bodySmall =>
+      _base.copyWith(fontSize: 13, fontWeight: FontWeight.w400, height: 1.35);
+  TextStyle get labelSmall =>
+      _base.copyWith(fontSize: 11, fontWeight: FontWeight.w500, height: 1.3);
 }
 
 extension HighLifeThemeAccessors on ThemeData {
-  HighLifeTextStyles get textTheme => HighLifeTextStyles(typography);
+  HighLifeTextStyles get textTheme => const HighLifeTextStyles();
 
   Color get dividerColor => colorScheme.border;
 

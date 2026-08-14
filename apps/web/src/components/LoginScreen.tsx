@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../i18n";
-import { beginOidcOrSsoLogin } from "../matrix/oidc";
+import { beginOidcOrSsoLogin, discoverMasIssuer } from "../matrix/oidc";
 import { login, probeSsoAvailable, register } from "../matrix/service";
 import { IconEye, IconEyeOff } from "./Icons";
 
@@ -27,11 +27,13 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
   const [ssoAvailable, setSsoAvailable] = useState(false);
+  const [masIssuer, setMasIssuer] = useState<string | null>(null);
 
   useEffect(() => {
     const hs = homeserver.trim();
-    if (!hs || mode !== "login") {
+    if (!hs) {
       setSsoAvailable(false);
+      setMasIssuer(null);
       return;
     }
     let cancelled = false;
@@ -39,12 +41,15 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
       void probeSsoAvailable(hs).then((available) => {
         if (!cancelled) setSsoAvailable(available);
       });
+      void discoverMasIssuer(hs).then((issuer) => {
+        if (!cancelled) setMasIssuer(issuer);
+      });
     }, 350);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [homeserver, mode]);
+  }, [homeserver]);
 
   function applyMxidHomeserver(value: string) {
     const host = serverFromMxid(value);
@@ -76,6 +81,10 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
     setError(null);
     try {
       if (mode === "register") {
+        if (masIssuer) {
+          await beginOidcOrSsoLogin(homeserver, { prompt: "create" });
+          return;
+        }
         await register({ homeserver, username, password });
       } else {
         await login({ homeserver, userId, password });
@@ -114,7 +123,11 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
             <div>
               <h1>{mode === "register" ? t("login.registerTitle") : t("login.title")}</h1>
               <p className="muted">
-                {mode === "register" ? t("login.registerHint") : t("login.hint")}
+                {mode === "register"
+                  ? masIssuer
+                    ? t("login.registerMasHint")
+                    : t("login.registerHint")
+                  : t("login.hint")}
               </p>
             </div>
           <div className="segmented login-locale" role="group" aria-label={t("login.language")}>
@@ -170,60 +183,66 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
             required
           />
         </label>
-        {mode === "login" ? (
-          <label>
-            <span>{t("login.userId")}</span>
-            <input
-              value={userId}
-              onChange={(event) => {
-                const next = event.target.value;
-                setUserId(next);
-                applyMxidHomeserver(next);
-              }}
-              placeholder={t("login.userIdPlaceholder")}
-              autoComplete="username"
-              required
-            />
-          </label>
-        ) : (
-          <label>
-            <span>{t("login.username")}</span>
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder={t("login.usernamePlaceholder")}
-              autoComplete="username"
-              required
-            />
-          </label>
+        {!(mode === "register" && masIssuer) && (
+          <>
+            {mode === "login" ? (
+              <label>
+                <span>{t("login.userId")}</span>
+                <input
+                  value={userId}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setUserId(next);
+                    applyMxidHomeserver(next);
+                  }}
+                  placeholder={t("login.userIdPlaceholder")}
+                  autoComplete="username"
+                  required
+                />
+              </label>
+            ) : (
+              <label>
+                <span>{t("login.username")}</span>
+                <input
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder={t("login.usernamePlaceholder")}
+                  autoComplete="username"
+                  required
+                />
+              </label>
+            )}
+            <label className="password-field">
+              <span>{t("login.password")}</span>
+              <div className="password-input">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  required
+                  minLength={mode === "register" ? 8 : undefined}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
+                  onClick={() => setShowPassword((value) => !value)}
+                >
+                  {showPassword ? <IconEyeOff /> : <IconEye />}
+                </button>
+              </div>
+            </label>
+          </>
         )}
-        <label className="password-field">
-          <span>{t("login.password")}</span>
-          <div className="password-input">
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              required
-              minLength={mode === "register" ? 8 : undefined}
-            />
-            <button
-              type="button"
-              className="icon-button"
-              aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
-              onClick={() => setShowPassword((value) => !value)}
-            >
-              {showPassword ? <IconEyeOff /> : <IconEye />}
-            </button>
-          </div>
-        </label>
         {error && <p className="error" role="alert">{error}</p>}
         <button className="button primary" disabled={busy}>
           {busy
             ? t("login.connecting")
             : mode === "register"
-              ? t("login.createAccount")
+              ? masIssuer
+                ? t("login.createAccountOnServer")
+                : t("login.createAccount")
               : t("login.continue")}
         </button>
         {mode === "login" && ssoAvailable && (

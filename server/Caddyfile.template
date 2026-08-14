@@ -32,7 +32,8 @@ __MATRIX_DOMAIN__ {
 		respond `{"m.homeserver":{"base_url":"https://__MATRIX_DOMAIN__"},"org.matrix.msc2965.authentication":{"issuer":"https://auth.__MATRIX_DOMAIN__/","account":"https://auth.__MATRIX_DOMAIN__/account/"},"org.matrix.msc4143.rtc_foci":[{"type":"livekit","livekit_service_url":"https://rtc.__MATRIX_DOMAIN__/livekit/jwt"}]}` 200
 	}
 
-	# Legacy Matrix login/logout/refresh compatibility layer (MAS).
+	# Legacy password login/logout/refresh (MAS compat). Registration is not
+	# on Synapse: clients use MAS /register or OIDC prompt=create.
 	@mas_compat path_regexp mas_compat ^/_matrix/client/(.*)/(login|logout|refresh)$
 	handle @mas_compat {
 		reverse_proxy mas:8080

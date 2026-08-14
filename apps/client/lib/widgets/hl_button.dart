@@ -1,5 +1,7 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import '../theme.dart';
+
 enum _HlVariant { primary, secondary, outline, text, danger }
 
 /// HighLife buttons on shadcn_flutter, matching web `.button` density.
@@ -118,44 +120,60 @@ class HlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = height ?? 40.0;
-    late final Widget button;
-    switch (variant) {
-      case _HlVariant.primary:
-        button = Button.primary(
-          onPressed: onPressed,
-          leading: leading,
-          child: label,
-        );
-      case _HlVariant.secondary:
-        button = Button.secondary(
-          onPressed: onPressed,
-          leading: leading,
-          child: label,
-        );
-      case _HlVariant.outline:
-        button = Button.outline(
-          onPressed: onPressed,
-          leading: leading,
-          child: label,
-        );
-      case _HlVariant.text:
-        button = Button.text(
-          onPressed: onPressed,
-          leading: leading,
-          child: label,
-        );
-      case _HlVariant.danger:
-        button = Button.destructive(
-          onPressed: onPressed,
-          leading: leading,
-          child: label,
-        );
-    }
-    return SizedBox(
-      width: isFullWidth ? double.infinity : null,
-      height: h,
-      child: button,
+    final tokens = HighLifeTokens.of(context);
+    final enabled = onPressed != null;
+    final (Color bg, Color fg, Color? border) = switch (variant) {
+      _HlVariant.primary => (
+          tokens.accent,
+          const Color(0xFFFFFFFF),
+          tokens.accent,
+        ),
+      _HlVariant.secondary => (
+          tokens.surfaceMuted,
+          tokens.text,
+          tokens.hairline,
+        ),
+      _HlVariant.outline => (tokens.surface, tokens.text, tokens.hairline),
+      _HlVariant.text => (const Color(0x00000000), tokens.accent, null),
+      _HlVariant.danger => (tokens.dangerSoft, tokens.danger, tokens.danger),
+    };
+    final child = Row(
+      mainAxisSize: isFullWidth ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (leading != null) ...[leading!, const SizedBox(width: 8)],
+        DefaultTextStyle.merge(
+          style: TextStyle(
+            color: fg,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+          child: IconTheme(
+            data: IconThemeData(color: fg, size: 18),
+            child: label,
+          ),
+        ),
+      ],
+    );
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: GestureDetector(
+        onTap: onPressed,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: isFullWidth ? double.infinity : null,
+          height: height ?? 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(6),
+            border: border == null ? null : Border.all(color: border),
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }

@@ -151,7 +151,16 @@ class HighLifeApp extends StatelessWidget {
             theme: buildHighLifeTheme(Brightness.light),
             darkTheme: buildHighLifeTheme(Brightness.dark),
             themeMode: locales.themeMode,
-            home: Consumer<HighLifeSession>(
+            home: Builder(
+              builder: (context) {
+                final tokens = HighLifeTokens.of(context);
+                return DefaultTextStyle(
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.35,
+                    color: tokens.text,
+                  ),
+                  child: Consumer<HighLifeSession>(
               builder: (context, session, _) {
                 if (!session.ready) {
                   return const Scaffold(
@@ -279,6 +288,9 @@ class HighLifeApp extends StatelessWidget {
                         ),
                       ),
                   ],
+                );
+              },
+            ),
                 );
               },
             ),
