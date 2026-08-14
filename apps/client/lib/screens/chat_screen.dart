@@ -1849,6 +1849,7 @@ class _RichMessageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
+    final item = this.item;
     if (item.kind == TimelineItemKind.system) {
       return Row(
         children: [
