@@ -285,6 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<HighLifeSession>();
     final s = context.watch<HighLifeLocales>().strings;
+    final tokens = HighLifeTokens.of(context);
     final rows = _buildRows(session);
     final suggestions = filterSuggestions(
       session.commandsFor(widget.room),
@@ -320,6 +321,8 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -330,12 +333,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (_typingLabel(session, s) != null)
                     Text(
                       _typingLabel(session, s)!,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall.copyWith(
+                            color: tokens.accent,
+                            fontSize: 12,
+                          ),
                     )
                   else if (_presenceLabel(s) != null)
                     Text(
                       _presenceLabel(s)!,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall.copyWith(
+                            color: tokens.muted,
+                            fontSize: 12,
+                          ),
                     ),
                 ],
               ),
@@ -588,7 +597,16 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           SafeArea(
-            child: Column(
+            top: false,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surface,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: tokens.hairline),
+                  ),
+                ),
+                child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (_replyTo != null || _editing != null)
@@ -604,21 +622,22 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 if (_uploading) const LinearProgressIndicator(minHeight: 2),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 7, 10, 10),
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       SizedBox.square(
-                        dimension: 40,
+                        dimension: 44,
                         child: IconButton(
                           tooltip: s.attachFile,
                           onPressed: _uploading ? null : () => _attach(session),
-                          icon: const Icon(Icons.attach_file, size: 20),
+                          icon: const Icon(Icons.attach_file, size: 22),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 40),
+                          constraints: const BoxConstraints(minHeight: 44),
                           child: TextField(
                             controller: _composer,
                             minLines: 1,
@@ -633,20 +652,42 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      SizedBox.square(
-                        dimension: 40,
-                        child: IconButton.filled(
-                          tooltip: s.sendMessage,
-                          onPressed: _composer.text.trim().isEmpty
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 0),
+                        child: GestureDetector(
+                          onTap: _composer.text.trim().isEmpty
                               ? null
                               : () => _send(session),
-                          icon: const Icon(Icons.send, size: 18),
+                          child: Tooltip(
+                            message: s.sendMessage,
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 120),
+                              opacity:
+                                  _composer.text.trim().isEmpty ? 0.38 : 1,
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: tokens.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.send,
+                                  size: 18,
+                                  color: Color(0xFFFFFFFF),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
+                ),
+              ),
             ),
           ),
         ],
@@ -1119,15 +1160,31 @@ class _DaySeparator extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final target = DateTime(day.year, day.month, day.day);
+    final yesterday = today.subtract(const Duration(days: 1));
     final label = target == today
         ? strings.today
-        : '${day.day}.${day.month.toString().padLeft(2, '0')}.${day.year}';
+        : target == yesterday
+            ? strings.yesterday
+            : '${day.day}.${day.month.toString().padLeft(2, '0')}.${day.year}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Center(
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 12, color: tokens.muted),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: tokens.muted,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1143,12 +1200,23 @@ class _UnreadSeparator extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: tokens.muted),
-        ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Container(height: 1, color: tokens.accent)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: tokens.accent,
+              ),
+            ),
+          ),
+          Expanded(child: Container(height: 1, color: tokens.accent)),
+        ],
       ),
     );
   }
@@ -1393,73 +1461,45 @@ class _MessageTile extends StatelessWidget {
                     ),
                   ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    children: [
-                      if (item.edited)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Text(
-                            strings.edited,
-                            style: TextStyle(fontSize: 10, color: tokens.muted),
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.edited)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Text(
+                              strings.edited,
+                              style: TextStyle(fontSize: 11, color: tokens.muted),
+                            ),
                           ),
+                        Text(
+                          time,
+                          style: TextStyle(fontSize: 11, color: tokens.muted),
                         ),
-                      Text(
-                        time,
-                        style: TextStyle(fontSize: 10, color: tokens.muted),
-                      ),
-                      if (own) ...[
-                        const SizedBox(width: 3),
-                        Icon(
-                          event.status.isSending
-                              ? Icons.schedule
-                              : event.status.isError
-                                  ? Icons.error_outline
-                                  : event.receipts.any(
-                                      (receipt) =>
-                                          receipt.user.id != event.senderId,
-                                    )
-                                      ? Icons.done_all
-                                      : Icons.done,
-                          size: 13,
-                          color: event.status.isError
-                              ? tokens.danger
-                              : Theme.of(context).colorScheme.primary,
-                        ),
+                        if (own) ...[
+                          const SizedBox(width: 3),
+                          Icon(
+                            event.status.isSending
+                                ? Icons.schedule
+                                : event.status.isError
+                                    ? Icons.error_outline
+                                    : event.receipts.any(
+                                        (receipt) =>
+                                            receipt.user.id != event.senderId,
+                                      )
+                                        ? Icons.done_all
+                                        : Icons.done,
+                            size: 14,
+                            color: event.status.isError
+                                ? tokens.danger
+                                : tokens.accent,
+                          ),
+                        ],
                       ],
-                      const Spacer(),
-                      IconButton(
-                        tooltip: strings.reply,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
-                        ),
-                        padding: EdgeInsets.zero,
-                        iconSize: 18,
-                        onPressed: onReply,
-                        icon: const Icon(Icons.reply_outlined),
-                      ),
-                      IconButton(
-                        tooltip: strings.react,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
-                        ),
-                        padding: EdgeInsets.zero,
-                        iconSize: 18,
-                        onPressed: () {
-                          final box = context.findRenderObject() as RenderBox?;
-                          final origin = box?.localToGlobal(
-                                Offset(box.size.width, 0),
-                              ) ??
-                              Offset.zero;
-                          _showActions(context, origin);
-                        },
-                        icon: const Icon(Icons.more_horiz),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 if (feedback != null)

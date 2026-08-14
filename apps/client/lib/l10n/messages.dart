@@ -170,6 +170,7 @@ class AppStrings {
   String get invitation => _('invitation');
   String get accept => _('accept');
   String get today => _('today');
+  String get yesterday => _('yesterday');
   String get decline => _('decline');
   String get enableEncryption => _('enableEncryption');
   String get startDirectMessage => _('startDirectMessage');
@@ -444,16 +445,17 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'registerMasHint': {
     AppLocale.en:
-        'This server uses Matrix Authentication Service. Create the account there, then come back and sign in.',
+        'This server creates accounts in Matrix Authentication Service. Finish signup in the next screen, then sign in here with the same username and password.',
     AppLocale.ru:
-        'Этот сервер использует Matrix Authentication Service. Создайте аккаунт там, затем вернитесь и войдите.',
+        'Этот сервер создаёт аккаунты через Matrix Authentication Service. Завершите регистрацию на следующем экране, затем войдите здесь тем же именем и паролем.',
   },
   'registerMasOpened': {
     AppLocale.en:
-        'Finish signup in the browser, then sign in here with the same username and password.',
+        'If the account is ready, sign in here with the same username and password.',
     AppLocale.ru:
-        'Завершите регистрацию в браузере, затем войдите здесь тем же именем и паролем.',
+        'Если аккаунт уже создан, войдите здесь тем же именем и паролем.',
   },
+  'yesterday': {AppLocale.en: 'Yesterday', AppLocale.ru: 'Вчера'},
   'registerMasOpenFailed': {
     AppLocale.en: 'Could not open the registration page. Try again or paste the auth server URL in a browser.',
     AppLocale.ru:

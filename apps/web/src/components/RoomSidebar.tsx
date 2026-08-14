@@ -1,5 +1,6 @@
 import type { RoomListItem, SpaceSummary } from "@highlife/ui-contracts";
 import { useI18n } from "../i18n";
+import { formatRoomListTime } from "../matrix/messengerExtras";
 import { IconFolderPlus, IconLock, IconPlus, IconSearch, IconSettings } from "./Icons";
 import { Avatar } from "./Avatar";
 
@@ -112,7 +113,11 @@ export function RoomSidebar({
             <span className="room-copy">
               <span className="room-title">
                 <strong>{room.name}</strong>
-                <time>{room.lastActive ? new Date(room.lastActive).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</time>
+                <time>
+                  {room.lastActive
+                    ? formatRoomListTime(room.lastActive, t("timeline.yesterday"))
+                    : ""}
+                </time>
               </span>
               <span className="room-preview">
                 {room.isEncrypted && (

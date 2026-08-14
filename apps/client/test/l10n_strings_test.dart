@@ -29,6 +29,7 @@ void main() {
       expect(s.callAnswer, 'Answer');
       expect(s.callHangup, 'Hang up');
       expect(s.callFallback, 'Use Element Call');
+      expect(s.yesterday, 'Yesterday');
       expect(s.pinMessage, 'Pin');
       expect(s.muteNotifications, 'Mute notifications');
     });

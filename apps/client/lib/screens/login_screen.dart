@@ -7,6 +7,7 @@ import '../l10n/messages.dart';
 import '../services/auth_errors.dart';
 import '../services/session.dart';
 import '../theme.dart';
+import '../widgets/auth_web_flow.dart';
 import '../widgets/crypto_status_banner.dart';
 import '../widgets/hl_button.dart';
 
@@ -74,19 +75,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 24,
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      24,
+                      20,
+                      24 + MediaQuery.viewInsetsOf(context).bottom,
                     ),
                     shrinkWrap: true,
                     children: [
                       DecoratedBox(
                         decoration: BoxDecoration(
                           color: tokens.surface,
+                          borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: tokens.hairline),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                          padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -94,10 +98,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     children: [
                       Container(
-                        width: 38,
-                        height: 38,
+                        width: 40,
+                        height: 40,
                         alignment: Alignment.center,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: tokens.accent,
                         child: const Text(
                           'H',
                           style: TextStyle(
@@ -268,6 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed:
                         session.busy ? null : () => _continueWithSso(session, s),
                     isFullWidth: true,
+                    height: 44,
                     label: Text(s.continueWithSso),
                   ),
                   const SizedBox(height: 10),
@@ -286,6 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 HlButton.primary(
                   onPressed: session.busy ? null : () => _submit(session, s),
                   isFullWidth: true,
+                  height: 44,
                   label: Text(
                     session.busy
                         ? (registering ? s.registering : s.signingIn)
@@ -339,10 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
-    setState(() {
-      _localError = null;
-      _showTokenField = true;
-    });
+    setState(() => _localError = null);
     session.clearError();
     await session.probeLoginFlows(_hs.text);
     final url = session.ssoRedirectUrl;
@@ -350,6 +353,19 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _localError = s.ssoUnavailable);
       return;
     }
+    final result = await showAuthWebFlow(
+      context: context,
+      uri: url,
+      title: s.continueWithSso,
+      doneLabel: s.done,
+    );
+    if (!mounted) return;
+    if (result.hasToken) {
+      await session.loginWithToken(homeserver: _hs.text, token: result.token!);
+      return;
+    }
+    if (result.outcome == AuthBrowserOutcome.cancelled) return;
+    setState(() => _showTokenField = true);
     final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!launched && mounted) {
       setState(() => _localError = s.ssoOpenFailed);
@@ -390,13 +406,30 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_mode == _AuthMode.register) {
       final masRegister = session.masRegisterUrl;
       if (masRegister != null) {
-        final launched = await launchUrl(
-          masRegister,
-          mode: LaunchMode.externalApplication,
+        final result = await showAuthWebFlow(
+          context: context,
+          uri: masRegister,
+          title: s.registerTitle,
+          doneLabel: s.done,
         );
-        if (!launched && mounted) {
-          setState(() => _localError = s.registerMasOpenFailed);
+        if (!mounted) return;
+        if (result.hasToken) {
+          await session.loginWithToken(
+            homeserver: _hs.text,
+            token: result.token!,
+          );
           return;
+        }
+        if (result.outcome == AuthBrowserOutcome.cancelled) return;
+        if (result.outcome == AuthBrowserOutcome.unsupported) {
+          final launched = await launchUrl(
+            masRegister,
+            mode: LaunchMode.externalApplication,
+          );
+          if (!launched && mounted) {
+            setState(() => _localError = s.registerMasOpenFailed);
+            return;
+          }
         }
         if (mounted) {
           setState(() {
@@ -462,11 +495,11 @@ class _SegmentedTabs extends StatelessWidget {
     final tokens = HighLifeTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: tokens.surfaceMuted.withValues(alpha: 0.72),
-        border: Border.all(color: tokens.hairline),
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(3),
         child: Row(
           children: [
             for (var i = 0; i < labels.length; i++)
@@ -474,8 +507,12 @@ class _SegmentedTabs extends StatelessWidget {
                 child: GestureDetector(
                   onTap: onSelect == null ? null : () => onSelect!(i),
                   behavior: HitTestBehavior.opaque,
-                  child: ColoredBox(
-                    color: i == selected ? tokens.surface : const Color(0x00000000),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    decoration: BoxDecoration(
+                      color: i == selected ? tokens.surface : const Color(0x00000000),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Text(

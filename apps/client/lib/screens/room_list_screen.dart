@@ -44,6 +44,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<HighLifeSession>();
     final s = context.watch<HighLifeLocales>().strings;
+    final tokens = HighLifeTokens.of(context);
     _maybeShowIncomingVerification(session, s);
 
     final query = _query.toLowerCase();
@@ -71,6 +72,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
     return AdaptiveMessengerShell(
       showMasterOnCompact: _selected == null && !_showProfile,
       master: Scaffold(
+        backgroundColor: tokens.surface,
         appBar: AppBar(
           title: Text(s.appName),
           actions: [
@@ -111,6 +113,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
                 decoration: InputDecoration(
                   hintText: s.searchConversations,
                   prefixIcon: const Icon(Icons.search, size: 20),
+                  filled: true,
                 ),
               ),
             ),
@@ -398,7 +401,7 @@ class _FolderTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final tokens = HighLifeTokens.of(context);
     return SizedBox(
       height: 40,
       child: ListView(
@@ -422,7 +425,7 @@ class _FolderTabs extends StatelessWidget {
             tooltip: createTooltip,
             onPressed: onCreate,
             visualDensity: VisualDensity.compact,
-            icon: Icon(Icons.add, size: 18, color: colors.onSurfaceVariant),
+            icon: Icon(Icons.add, size: 18, color: tokens.muted),
           ),
         ],
       ),
@@ -435,25 +438,25 @@ class _FolderTabs extends StatelessWidget {
     required bool selected,
     required VoidCallback onTap,
   }) {
-    final colors = Theme.of(context).colorScheme;
+    final tokens = HighLifeTokens.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: selected ? colors.primary.withValues(alpha: 0.12) : null,
-            borderRadius: BorderRadius.circular(6),
+            color: selected ? tokens.accent.withValues(alpha: 0.12) : null,
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 13,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? colors.primary : colors.onSurfaceVariant,
+              color: selected ? tokens.accent : tokens.muted,
             ),
           ),
         ),
@@ -529,42 +532,123 @@ class _RoomTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
-    return Material(
-      color: selected ? colors.primary.withValues(alpha: 0.1) : colors.surface,
-      child: ListTile(
-        leading: room.highLifeAvatar(radius: 22),
-        title: Text(
-          room.getLocalizedDisplayname(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          _roomPreview(room, emptySubtitle),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: tokens.muted),
-        ),
-        trailing: room.pushRuleState == PushRuleState.dontNotify ||
-                room.notificationCount > 0
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (room.pushRuleState == PushRuleState.dontNotify)
-                    Icon(Icons.notifications_off_outlined, size: 16, color: tokens.muted),
-                  if (room.notificationCount > 0) ...[
-                    if (room.pushRuleState == PushRuleState.dontNotify)
-                      const SizedBox(width: 6),
-                    Badge(label: Text('${room.notificationCount}')),
-                  ],
-                ],
-              )
-            : null,
+    final muted = room.pushRuleState == PushRuleState.dontNotify;
+    final unread = room.notificationCount;
+    final last = room.lastEvent;
+    final when = last == null
+        ? null
+        : _listTime(last.originServerTs, HighLifeLocales.stringsOf(context));
+    return ColoredBox(
+      color: selected ? tokens.surfaceMuted : const Color(0x00000000),
+      child: GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              room.highLifeAvatar(radius: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            room.getLocalizedDisplayname(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.text,
+                            ),
+                          ),
+                        ),
+                        if (when != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            when,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: unread > 0 ? tokens.accent : tokens.muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _roomPreview(room, emptySubtitle),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: tokens.muted,
+                            ),
+                          ),
+                        ),
+                        if (muted)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Icon(
+                              Icons.notifications_off_outlined,
+                              size: 16,
+                              color: tokens.muted,
+                            ),
+                          ),
+                        if (unread > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: muted ? tokens.muted : tokens.accent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$unread',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFFFFFFFF),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  String _listTime(DateTime originServerTs, AppStrings strings) {
+    final dt = originServerTs.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final clock =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (day == today) return clock;
+    if (day == today.subtract(const Duration(days: 1))) return strings.yesterday;
+    return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}';
   }
 
   String _roomPreview(Room room, String emptySubtitle) {

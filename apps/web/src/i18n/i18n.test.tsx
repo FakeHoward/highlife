@@ -42,7 +42,7 @@ describe("i18n messages", () => {
       name: "Alice",
       alias: "#team:example.org",
     })).toBe("Alice установил(а) адрес комнаты #team:example.org");
-    expect(translate("en", "call.answer")).toBe("Answer");
+    expect(translate("en", "login.registerMasHint")).toMatch(/Matrix Authentication Service/);
     expect(translate("ru", "call.hangup")).toBe("Завершить");
     expect(translate("en", "call.dialog")).toBe("Voice call");
     expect(translate("en", "call.fallback")).toBe("Use Element Call");

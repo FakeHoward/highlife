@@ -161,7 +161,8 @@ class HlButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onPressed,
         behavior: HitTestBehavior.opaque,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
           width: isFullWidth ? double.infinity : null,
           height: height ?? 40,
           padding: const EdgeInsets.symmetric(horizontal: 14),

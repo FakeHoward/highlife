@@ -97,7 +97,11 @@ class Scaffold extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (appBar != null) appBar!,
+          if (appBar != null)
+            ColoredBox(
+              color: tokens.surface,
+              child: SafeArea(bottom: false, child: appBar!),
+            ),
           Expanded(child: child),
         ],
       ),
@@ -139,9 +143,9 @@ class AppBar extends StatelessWidget {
     final bar = ColoredBox(
       color: backgroundColor ?? tokens.surface,
       child: SizedBox(
-        height: 52,
+        height: 56,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Row(
             children: [
               if (resolvedLeading != null) resolvedLeading,
@@ -154,7 +158,6 @@ class AppBar extends StatelessWidget {
                     height: 1.2,
                   ),
                   overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
                   child: title ?? const SizedBox.shrink(),
                 ),
               ),
@@ -538,7 +541,7 @@ class ListTile extends StatelessWidget {
       onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
       child: ColoredBox(
-        color: selected ? tokens.ownMessage : const Color(0x00000000),
+        color: selected ? tokens.surfaceMuted : const Color(0x00000000),
         child: Padding(
           padding: contentPadding ??
               const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -673,24 +676,18 @@ class PopupMenuButton<T> extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final items = itemBuilder(context).whereType<PopupMenuItem<T>>().toList();
-    final selected = await showDialog<T>(
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final size = box?.size ?? Size.zero;
+    final selected = await showMenu<T>(
       context: context,
-      builder: (context) => shadcn.AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final item in items)
-              shadcn.Button.ghost(
-                onPressed: () => Navigator.pop(context, item.value),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: item.child,
-                ),
-              ),
-          ],
-        ),
+      position: RelativeRect.fromLTRB(
+        origin.dx,
+        origin.dy + size.height,
+        origin.dx + size.width,
+        origin.dy,
       ),
+      items: List<PopupMenuEntry<T>>.from(items),
     );
     if (selected != null) onSelected?.call(selected);
   }
@@ -756,32 +753,73 @@ Future<T?> showMenu<T>({
   required RelativeRect position,
   required List<PopupMenuEntry<T>> items,
 }) {
-  return showDialog<T>(
+  final media = MediaQuery.sizeOf(context);
+  final tokens = HighLifeTokens.of(context);
+  var left = position.left;
+  var top = position.top;
+  const menuWidth = 240.0;
+  if (left + menuWidth > media.width - 8) {
+    left = media.width - menuWidth - 8;
+  }
+  if (left < 8) left = 8;
+  if (top > media.height - 280) {
+    top = media.height - 280;
+  }
+  if (top < 8) top = 8;
+  return showGeneralDialog<T>(
     context: context,
-    builder: (context) => AlertDialog(
-      content: SizedBox(
-        width: 240,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final item in items)
-              if (item is PopupMenuItem<T>)
-                GestureDetector(
-                  onTap: () => Navigator.pop(context, item.value),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                    child: item.child,
-                  ),
+    barrierDismissible: true,
+    barrierLabel: 'Dismiss',
+    barrierColor: const Color(0x42000000),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return Stack(
+        children: [
+          Positioned(
+            left: left,
+            top: top,
+            width: menuWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tokens.hairline),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final item in items)
+                      if (item is PopupMenuItem<T>)
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context, item.value),
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            child: DefaultTextStyle.merge(
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: tokens.text,
+                              ),
+                              child: item.child,
+                            ),
+                          ),
+                        ),
+                  ],
                 ),
-          ],
-        ),
-      ),
-    ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
   );
 }
 

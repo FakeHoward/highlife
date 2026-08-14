@@ -21,6 +21,31 @@ String localpartOf(String userIdOrName) {
   return trimmed.split(':').first;
 }
 
+/// Outcome of an in-app MAS/SSO browser sheet.
+enum AuthBrowserOutcome { token, finished, cancelled, unsupported }
+
+class AuthBrowserResult {
+  const AuthBrowserResult(this.outcome, [this.token]);
+
+  final AuthBrowserOutcome outcome;
+  final String? token;
+
+  bool get hasToken => token != null && token!.trim().isNotEmpty;
+}
+
+/// Pull `loginToken` from a classic SSO redirect (`highlife://login?loginToken=`).
+String? loginTokenFromRedirect(Uri uri) {
+  final query = uri.queryParameters['loginToken'] ??
+      uri.queryParameters['login_token'];
+  if (query != null && query.trim().isNotEmpty) return query.trim();
+  final fragment = uri.fragment;
+  if (fragment.isEmpty) return null;
+  final hash = Uri.splitQueryString(fragment);
+  final hashed = hash['loginToken'] ?? hash['login_token'];
+  if (hashed == null || hashed.trim().isEmpty) return null;
+  return hashed.trim();
+}
+
 /// Stable auth error keys resolved in the UI via [AppStrings.authError].
 abstract final class AuthErrorKeys {
   static const forbidden = 'auth.forbidden';

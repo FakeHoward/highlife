@@ -30,6 +30,27 @@ void main() {
     });
   });
 
+  group('loginTokenFromRedirect', () {
+    test('extracts loginToken from query and fragment', () {
+      expect(
+        loginTokenFromRedirect(
+          Uri.parse('highlife://login?loginToken=abc'),
+        ),
+        'abc',
+      );
+      expect(
+        loginTokenFromRedirect(
+          Uri.parse('https://example.org/#loginToken=xyz'),
+        ),
+        'xyz',
+      );
+      expect(
+        loginTokenFromRedirect(Uri.parse('highlife://login')),
+        isNull,
+      );
+    });
+  });
+
   group('localpartOf', () {
     test('strips MXID to localpart', () {
       expect(localpartOf('@viewer:testhighlife.strangled.net'), 'viewer');

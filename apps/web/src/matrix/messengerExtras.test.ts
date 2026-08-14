@@ -6,6 +6,7 @@ import {
   isRoomMutedByPushRules,
   isVoiceMessageContent,
   togglePinnedIds,
+  formatRoomListTime,
 } from "./messengerExtras";
 
 describe("messenger extras", () => {
@@ -37,5 +38,12 @@ describe("messenger extras", () => {
     ).toBe("Online");
     expect(formatForwardedBody("Ada", "hello")).toBe("Ada:\nhello");
     expect(isVoiceMessageContent({ "org.matrix.msc3245.voice": {} })).toBe(true);
+  });
+
+  it("formats room list times as clock, yesterday, or date", () => {
+    const now = new Date(2026, 7, 14, 15, 30).getTime();
+    expect(formatRoomListTime(new Date(2026, 7, 14, 9, 5).getTime(), "Yesterday", now)).toBe("09:05");
+    expect(formatRoomListTime(new Date(2026, 7, 13, 22, 1).getTime(), "Yesterday", now)).toBe("Yesterday");
+    expect(formatRoomListTime(new Date(2026, 6, 3, 8, 0).getTime(), "Yesterday", now)).toBe("03.07");
   });
 });

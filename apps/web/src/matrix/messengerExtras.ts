@@ -48,3 +48,30 @@ export function formatForwardedBody(senderName: string, body: string): string {
   if (!trimmed) return senderName;
   return `${senderName}:\n${trimmed}`;
 }
+
+function startOfLocalDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/** Compact Telegram-style room list timestamp. */
+export function formatRoomListTime(
+  timestampMs: number,
+  yesterdayLabel: string,
+  nowMs = Date.now(),
+): string {
+  const dt = new Date(timestampMs);
+  const now = new Date(nowMs);
+  const today = startOfLocalDay(now);
+  const yesterday = startOfLocalDay(
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1),
+  );
+  const day = startOfLocalDay(dt);
+  const clock = `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  if (day === today) return clock;
+  if (day === yesterday) return yesterdayLabel;
+  return `${pad2(dt.getDate())}.${pad2(dt.getMonth() + 1)}`;
+}
