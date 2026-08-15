@@ -278,8 +278,8 @@ bool slidingSyncSupported(Map<String, dynamic>? unstable) {
       unstable['org.matrix.msc3575'] == true;
 }
 
-class RoomSummary {
-  const RoomSummary({
+class MscRoomSummary {
+  const MscRoomSummary({
     required this.roomId,
     this.name,
     this.topic,
@@ -296,8 +296,8 @@ class RoomSummary {
   final int? numJoinedMembers;
 }
 
-RoomSummary parseRoomSummary(Map<String, dynamic> payload, String fallbackId) {
-  return RoomSummary(
+MscRoomSummary parseRoomSummary(Map<String, dynamic> payload, String fallbackId) {
+  return MscRoomSummary(
     roomId: payload['room_id'] as String? ?? fallbackId,
     name: payload['name'] as String?,
     topic: payload['topic'] as String?,

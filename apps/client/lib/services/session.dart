@@ -806,7 +806,7 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<RoomSummary?> fetchRoomSummary(String roomIdOrAlias) async {
+  Future<MscRoomSummary?> fetchRoomSummary(String roomIdOrAlias) async {
     final repository = _rooms;
     if (repository == null || roomIdOrAlias.trim().isEmpty) return null;
     return repository.fetchRoomSummary(roomIdOrAlias);

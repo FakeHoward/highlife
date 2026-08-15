@@ -323,7 +323,7 @@ class MatrixRoomRepository {
     return out;
   }
 
-  Future<RoomSummary> fetchRoomSummary(String roomIdOrAlias) async {
+  Future<MscRoomSummary> fetchRoomSummary(String roomIdOrAlias) async {
     final id = normalizeRoomReference(
       roomIdOrAlias,
       homeserver: client.homeserver?.host,

@@ -287,7 +287,7 @@ class _RoomListScreenState extends State<RoomListScreen> {
     final isCreate = action == 'create';
     final isSpace = action == 'space';
     final isJoin = action == 'join';
-    RoomSummary? preview;
+    MscRoomSummary? preview;
     var previewBusy = false;
     var knockMode = false;
     final colors = Theme.of(context).colorScheme;
