@@ -187,7 +187,9 @@ class _HighLifeAppState extends State<HighLifeApp> {
                     height: 1.35,
                     color: tokens.text,
                   ),
-                  child: Consumer<HighLifeSession>(
+                  child: IconTheme(
+                    data: IconThemeData(color: tokens.text, size: 22),
+                    child: Consumer<HighLifeSession>(
               builder: (context, session, _) {
                 if (!session.ready) {
                   return const Scaffold(
@@ -340,6 +342,7 @@ class _HighLifeAppState extends State<HighLifeApp> {
                 );
               },
             ),
+                  ),
                 );
               },
             ),

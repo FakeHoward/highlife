@@ -144,7 +144,7 @@ class AppBar extends StatelessWidget {
     final bar = ColoredBox(
       color: backgroundColor ?? tokens.surface,
       child: SizedBox(
-        height: 56,
+        height: 54,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Row(
@@ -155,13 +155,13 @@ class AppBar extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: DefaultTextStyle.merge(
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: tokens.text,
-                      height: 1.2,
+                      height: 1.15,
                     ),
                     overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
+                    maxLines: 1,
                     child: title ?? const SizedBox.shrink(),
                   ),
                 ),
@@ -230,7 +230,8 @@ class TextField extends StatelessWidget {
     final tokens = HighLifeTokens.of(context);
     final d = decoration;
     final filled = d?.filled ?? false;
-    final radius = filled && d?.labelText == null ? 18.0 : 6.0;
+    final pill = filled && d?.labelText == null;
+    final radius = pill ? 20.0 : 6.0;
     final field = Focus(
       child: Builder(
         builder: (context) {
@@ -241,9 +242,11 @@ class TextField extends StatelessWidget {
               color: d?.fillColor ??
                   (filled ? tokens.surfaceMuted : tokens.surface),
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: focused ? tokens.accent : tokens.hairline,
-              ),
+              border: pill
+                  ? null
+                  : Border.all(
+                      color: focused ? tokens.accent : tokens.hairline,
+                    ),
             ),
             child: Row(
               crossAxisAlignment: maxLines == 1
@@ -281,9 +284,9 @@ class TextField extends StatelessWidget {
                     ),
                     textInputAction: textInputAction,
                     padding: d?.contentPadding ??
-                        const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 10,
+                        EdgeInsets.symmetric(
+                          horizontal: pill ? 14 : 11,
+                          vertical: pill ? 8 : 10,
                         ),
                     decoration: const BoxDecoration(),
                     onChanged: onChanged,
@@ -389,10 +392,10 @@ class IconButton extends StatelessWidget {
     final tokens = HighLifeTokens.of(context);
     final size = custom?.minimumSize ??
         (constraints == null
-            ? (compact ? const Size(36, 36) : const Size(44, 44))
+            ? (compact ? const Size(36, 36) : const Size(40, 40))
             : Size(constraints!.minWidth, constraints!.minHeight));
     final fg = custom?.foregroundColor ??
-        (_filled ? const Color(0xFFFFFFFF) : tokens.muted);
+        (_filled ? const Color(0xFFFFFFFF) : tokens.text);
     Widget glyph = IconTheme.merge(
       data: IconThemeData(size: iconSize ?? 22, color: fg),
       child: icon,

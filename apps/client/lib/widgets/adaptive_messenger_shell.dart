@@ -69,7 +69,7 @@ class EmptyConversation extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.forum_outlined, size: 44, color: colors.primary),
+              Icon(Icons.forum_outlined, size: 36, color: colors.onSurfaceVariant),
               const SizedBox(height: 16),
               Text(
                 s.selectConversation,

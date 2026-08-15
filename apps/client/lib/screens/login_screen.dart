@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 400),
+                  constraints: const BoxConstraints(maxWidth: 377),
                   child: ListView(
                     padding: EdgeInsets.fromLTRB(
                       20,

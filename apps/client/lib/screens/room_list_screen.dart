@@ -95,23 +95,11 @@ class _RoomListScreenState extends State<RoomListScreen> {
         appBar: AppBar(
           title: Text(s.appName),
           actions: [
-            IconButton(
-              tooltip: s.searchMessages,
-              onPressed: () {
-                final client = session.client;
-                if (client == null) return;
-                showMessageSearchDialog(
-                  context,
-                  client: client,
-                  strings: s,
-                );
-              },
-              icon: const Icon(Icons.travel_explore_outlined),
-            ),
             PopupMenuButton<String>(
               tooltip: s.roomActions,
               onSelected: (value) => _roomAction(session, s, value),
               itemBuilder: (_) => [
+                PopupMenuItem(value: 'search', child: Text(s.searchMessages)),
                 PopupMenuItem(value: 'create', child: Text(s.newRoom)),
                 PopupMenuItem(value: 'dm', child: Text(s.startDirectMessage)),
                 PopupMenuItem(value: 'join', child: Text(s.joinRoom)),
@@ -125,13 +113,17 @@ class _RoomListScreenState extends State<RoomListScreen> {
             const CryptoStatusBanner(),
             const SyncStatusBanner(),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
               child: TextField(
                 key: const ValueKey('room-search'),
                 onChanged: (value) => setState(() => _query = value),
                 decoration: InputDecoration(
                   hintText: s.searchConversations,
-                  prefixIcon: const Icon(Icons.search, size: 20),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 18,
+                    color: tokens.muted,
+                  ),
                   filled: true,
                 ),
               ),
@@ -196,26 +188,31 @@ class _RoomListScreenState extends State<RoomListScreen> {
                       ],
                     ),
             ),
-            Material(
-              color: Theme.of(context).colorScheme.surface,
-              child: ListTile(
-                leading: MatrixAvatar(
-                  name: session.userId ?? 'H',
-                  identity: session.userId,
-                  mxc: _ownAvatarMxc(session.client),
-                  client: session.client,
-                  radius: 18,
-                ),
-                title: Text(s.profile),
-                subtitle: Text(
-                  session.userId ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => setState(() {
-                  _showProfile = true;
-                  _selected = null;
-                }),
+            ColoredBox(
+              color: tokens.surface,
+              child: Column(
+                children: [
+                  Container(height: 1, color: tokens.hairline),
+                  ListTile(
+                    leading: MatrixAvatar(
+                      name: session.userId ?? 'H',
+                      identity: session.userId,
+                      mxc: _ownAvatarMxc(session.client),
+                      client: session.client,
+                      radius: 18,
+                    ),
+                    title: Text(s.profile),
+                    subtitle: Text(
+                      session.userId ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => setState(() {
+                      _showProfile = true;
+                      _selected = null;
+                    }),
+                  ),
+                ],
               ),
             ),
           ],
@@ -279,6 +276,16 @@ class _RoomListScreenState extends State<RoomListScreen> {
         _showProfile = true;
         _selected = null;
       });
+      return;
+    }
+    if (action == 'search') {
+      final client = session.client;
+      if (client == null) return;
+      await showMessageSearchDialog(
+        context,
+        client: client,
+        strings: s,
+      );
       return;
     }
 
@@ -591,7 +598,7 @@ class _SpaceRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = HighLifeTokens.of(context);
     return ColoredBox(
-      color: tokens.surface,
+      color: tokens.chatCanvas,
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
@@ -643,21 +650,24 @@ class _SpaceRail extends StatelessWidget {
   }) {
     final tokens = HighLifeTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Tooltip(
         message: tooltip,
         child: Center(
-          child: Material(
-            color: selected ? tokens.accent : tokens.surface,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: SizedBox(
-                width: 36,
-                height: 36,
-                child: Center(child: child),
+          child: GestureDetector(
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected
+                    ? (child is Text ? tokens.accent : tokens.surfaceMuted)
+                    : const Color(0x00000000),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: child,
             ),
           ),
         ),
@@ -689,7 +699,7 @@ class _FolderTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = HighLifeTokens.of(context);
     return SizedBox(
-      height: 40,
+      height: 44,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(12, 0, 8, 6),
@@ -734,8 +744,12 @@ class _FolderTabs extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: selected ? tokens.accent.withValues(alpha: 0.12) : null,
-            borderRadius: BorderRadius.circular(8),
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? tokens.accent : const Color(0x00000000),
+                width: 2,
+              ),
+            ),
           ),
           child: Text(
             label,
@@ -790,8 +804,8 @@ class _InviteTile extends StatelessWidget {
                 identity: room.id,
                 mxc: room.avatar,
                 client: room.client,
-                radius: 22,
-                backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+                radius: 21,
+                backgroundColor: HighLifeTokens.of(context).surfaceMuted,
                 fallbackIcon: Icons.mail_outline,
               ),
               const SizedBox(width: 12),
@@ -875,96 +889,109 @@ class _RoomTile extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Row(
-            children: [
-              room.highLifeAvatar(radius: 21),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: Row(
+                children: [
+                  room.highLifeAvatar(radius: 21),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            room.getLocalizedDisplayname(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.text,
-                            ),
-                          ),
-                        ),
-                        if (when != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            when,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: unread > 0 ? tokens.accent : tokens.muted,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _roomPreview(room, emptySubtitle),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: tokens.muted,
-                            ),
-                          ),
-                        ),
-                        if (muted)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Icon(
-                              Icons.notifications_off_outlined,
-                              size: 16,
-                              color: tokens.muted,
-                            ),
-                          ),
-                        if (unread > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Container(
-                              constraints: const BoxConstraints(minWidth: 20),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: muted ? tokens.muted : tokens.accent,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                        Row(
+                          children: [
+                            Expanded(
                               child: Text(
-                                '$unread',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Color(0xFFFFFFFF),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                                room.getLocalizedDisplayname(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: unread > 0
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  color: tokens.text,
+                                  height: 1.2,
                                 ),
                               ),
                             ),
-                          ),
+                            if (when != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                when,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: unread > 0 ? tokens.accent : tokens.muted,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _roomPreview(room, emptySubtitle),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: tokens.muted,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ),
+                            if (muted)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Icon(
+                                  Icons.notifications_off_outlined,
+                                  size: 16,
+                                  color: tokens.muted,
+                                ),
+                              ),
+                            if (unread > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Container(
+                                  constraints: const BoxConstraints(minWidth: 20),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: muted ? tokens.muted : tokens.accent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$unread',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFFFFFFFF),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 66),
+              child: Container(height: 1, color: tokens.hairline),
+            ),
+          ],
         ),
       ),
     );

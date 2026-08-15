@@ -180,6 +180,21 @@ Widget highLifeTestApp({required Widget home}) {
   return ShadcnApp(
     debugShowCheckedModeBanner: false,
     theme: buildHighLifeTheme(Brightness.light),
-    home: home,
+    home: Builder(
+      builder: (context) {
+        final tokens = HighLifeTokens.of(context);
+        return DefaultTextStyle(
+          style: TextStyle(
+            fontSize: 15,
+            height: 1.35,
+            color: tokens.text,
+          ),
+          child: IconTheme(
+            data: IconThemeData(color: tokens.text, size: 22),
+            child: home,
+          ),
+        );
+      },
+    ),
   );
 }

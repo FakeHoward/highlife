@@ -71,6 +71,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final packageInfo = _packageInfo;
 
     return Scaffold(
+      backgroundColor: HighLifeTokens.of(context).surface,
       appBar: AppBar(
         title: Text(s.profile),
         leading: IconButton(

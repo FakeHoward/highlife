@@ -25,6 +25,7 @@ import '../theme.dart';
 import '../widgets/call_surface.dart';
 import '../widgets/create_poll_dialog.dart';
 import '../widgets/hl_button.dart';
+import '../widgets/hl_chrome.dart';
 import '../widgets/inline_keyboard.dart';
 import '../widgets/matrix_avatar.dart';
 import '../widgets/matrix_media_tile.dart';
@@ -344,50 +345,57 @@ class _ChatScreenState extends State<ChatScreen> {
             }
           },
           child: Row(
-          children: [
-            MatrixAvatar(
-              name: widget.room.getLocalizedDisplayname(),
-              identity: widget.room.id,
-              mxc: widget.room.avatar,
-              client: widget.room.client,
-              radius: 16,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.room.getLocalizedDisplayname(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (_typingLabel(session, s) != null)
-                    Text(
-                      _typingLabel(session, s)!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall.copyWith(
-                            color: tokens.accent,
-                            fontSize: 12,
-                          ),
-                    )
-                  else if (_presenceLabel(s) != null)
-                    Text(
-                      _presenceLabel(s)!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall.copyWith(
-                            color: tokens.muted,
-                            fontSize: 12,
-                          ),
-                    ),
-                ],
+            children: [
+              MatrixAvatar(
+                name: widget.room.getLocalizedDisplayname(),
+                identity: widget.room.id,
+                mxc: widget.room.avatar,
+                client: widget.room.client,
+                radius: 20,
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.room.getLocalizedDisplayname(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (_typingLabel(session, s) != null)
+                      Text(
+                        _typingLabel(session, s)!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: tokens.accent,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      )
+                    else if (_presenceLabel(s) != null)
+                      Text(
+                        _presenceLabel(s)!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: tokens.muted,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -445,91 +453,97 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           const SyncStatusBanner(),
           if (widget.room.pinnedEventIds.isNotEmpty)
-            Material(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: PopupMenuButton<String>(
-                tooltip: s.pinned,
-                onSelected: (id) => unawaited(_revealEvent(id)),
-                itemBuilder: (_) => [
-                  for (final id in widget.room.pinnedEventIds)
-                    PopupMenuItem(
-                      value: id,
-                      child: Text(
-                        _pinnedPreviewFor(id),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+            PopupMenuButton<String>(
+              tooltip: s.pinned,
+              onSelected: (id) => unawaited(_revealEvent(id)),
+              itemBuilder: (_) => [
+                for (final id in widget.room.pinnedEventIds)
+                  PopupMenuItem(
+                    value: id,
+                    child: Text(
+                      _pinnedPreviewFor(id),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              child: HlStrip(
+                child: Row(
+                  children: [
+                    Icon(Icons.push_pin_outlined, size: 16, color: tokens.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.pinned,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.accent,
+                            ),
+                          ),
+                          Text(
+                            _pinnedPreview(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, color: tokens.muted),
+                          ),
+                        ],
                       ),
                     ),
-                ],
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.push_pin_outlined, size: 18),
-                  title: Text(s.pinned),
-                  subtitle: Text(
-                    _pinnedPreview(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
                 ),
               ),
             ),
           if (callActive)
-            Material(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.call, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        s.callBannerActive,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+            HlStrip(
+              color: tokens.accent.withValues(alpha: 0.12),
+              child: Row(
+                children: [
+                  Icon(Icons.call, size: 18, color: tokens.accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      s.callBannerActive,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 8),
-                    HlButton.primary(
-                      height: 32,
-                      onPressed: () => _joinMatrixRtc(session),
-                      label: Text(s.joinCall),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  HlButton.primary(
+                    height: 32,
+                    onPressed: () => _joinMatrixRtc(session),
+                    label: Text(s.joinCall),
+                  ),
+                ],
               ),
             ),
           if (_actionError != null)
-            Material(
-              color: Theme.of(context).extension<HighLifeTokens>()!.dangerSoft,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _actionError!,
-                        style: TextStyle(
-                          color: Theme.of(context)
-                              .extension<HighLifeTokens>()!
-                              .danger,
-                        ),
-                      ),
+            HlStrip(
+              color: tokens.dangerSoft,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _actionError!,
+                      style: TextStyle(color: tokens.danger, fontSize: 13),
                     ),
-                    if (_failedText != null)
-                      HlButton.text(
-                        onPressed: () {
-                          _composer.text = _failedText!;
-                          setState(() {
-                            _actionError = null;
-                            _failedText = null;
-                          });
-                          _send(session);
-                        },
-                        label: Text(s.retrySend),
-                      ),
-                  ],
-                ),
+                  ),
+                  if (_failedText != null)
+                    HlButton.text(
+                      onPressed: () {
+                        _composer.text = _failedText!;
+                        setState(() {
+                          _actionError = null;
+                          _failedText = null;
+                        });
+                        _send(session);
+                      },
+                      label: Text(s.retrySend),
+                    ),
+                ],
               ),
             ),
           Expanded(
@@ -667,21 +681,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: [
                   for (final cmd in suggestions)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ActionChip(
-                        label: Text('/${cmd.name}'),
-                        onPressed: () {
-                          _composer.text = completeCommand(
-                            cmd,
-                            typed: _composer.text,
-                          );
-                          _composer.selection = TextSelection.collapsed(
-                            offset: _composer.text.length,
-                          );
-                          setState(() {});
-                        },
-                      ),
+                    HlCommandChip(
+                      label: '/${cmd.name}',
+                      onPressed: () {
+                        _composer.text = completeCommand(
+                          cmd,
+                          typed: _composer.text,
+                        );
+                        _composer.selection = TextSelection.collapsed(
+                          offset: _composer.text.length,
+                        );
+                        setState(() {});
+                      },
                     ),
                 ],
               ),
@@ -728,6 +739,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPressed: _uploading
                               ? null
                               : () => _composerExtras(session, s),
+                          style: IconButton.styleFrom(
+                            foregroundColor: tokens.muted,
+                          ),
                           icon: const Icon(Icons.attach_file, size: 22),
                         ),
                       ),
@@ -1765,6 +1779,14 @@ class _MessageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item.kind == TimelineItemKind.system) {
+      final text = item.body == 'decline'
+          ? strings.declinedCall
+          : (item.body.isEmpty
+              ? strings.roomUpdate
+              : '${strings.roomUpdate}: ${item.body}');
+      return HlSystemEvent(text: text);
+    }
     final content = Map<String, dynamic>.from(event.content);
     final miniApp = MiniAppCard.tryParse(content);
     var keyboard = KeyboardContent.tryParse(content);
@@ -1779,82 +1801,96 @@ class _MessageTile extends StatelessWidget {
     final bg = own ? tokens.ownMessage : tokens.incomingMessage;
     final time =
         '${item.timestamp.hour.toString().padLeft(2, '0')}:${item.timestamp.minute.toString().padLeft(2, '0')}';
+    final senderName =
+        event.senderFromMemoryOrFallback.displayName ?? event.senderId;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxW = math.min(520.0, constraints.maxWidth * 0.618);
         return Align(
-      alignment: align,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW),
-        child: GestureDetector(
-          onSecondaryTapDown: (details) => _showActions(
-            context,
-            details.globalPosition,
-          ),
-          onLongPressStart: (details) =>
-              _showActions(context, details.globalPosition),
-          child: Container(
-            margin: EdgeInsets.only(top: grouped ? 1 : 6, bottom: lastInGroup ? 6 : 1),
-            padding: const EdgeInsets.fromLTRB(10, 7, 9, 5),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(own || grouped ? 14 : 14),
-                topRight: Radius.circular(own && grouped ? 5 : 14),
-                bottomLeft: Radius.circular(!own && lastInGroup ? 5 : 14),
-                bottomRight: Radius.circular(own && lastInGroup ? 5 : 14),
+          alignment: align,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW),
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: grouped ? 1 : 8,
+                bottom: lastInGroup ? 6 : 1,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 1,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-              border: highlighted
-                  ? Border.all(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    )
-                  : null,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (showSender)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: GestureDetector(
-                      onTap: onOpenProfile,
-                      child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MatrixAvatar(
-                          name:
-                              event.senderFromMemoryOrFallback.calcDisplayname(),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!own) ...[
+                    if (!grouped)
+                      GestureDetector(
+                        onTap: onOpenProfile,
+                        child: MatrixAvatar(
+                          name: senderName,
                           identity: event.senderId,
                           mxc: event.senderFromMemoryOrFallback.avatarUrl,
                           client: event.room.client,
-                          radius: 10,
+                          radius: 13,
                         ),
-                        const SizedBox(width: 6),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: math.max(72, maxW - 44),
+                      )
+                    else
+                      const SizedBox(width: 26),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: own
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (showSender)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 3, bottom: 3),
+                            child: GestureDetector(
+                              onTap: onOpenProfile,
+                              child: Text(
+                                senderName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: tokens.accent,
+                                ),
+                              ),
+                            ),
                           ),
-                          child: Text(
-                            event.senderFromMemoryOrFallback.displayName ??
-                                event.senderId,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                        GestureDetector(
+                          onSecondaryTapDown: (details) => _showActions(
+                            context,
+                            details.globalPosition,
                           ),
-                        ),
-                      ],
-                    ),
-                    ),
-                  ),
+                          onLongPressStart: (details) =>
+                              _showActions(context, details.globalPosition),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(10, 7, 9, 4),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              borderRadius: messageBubbleRadius(
+                                own: own,
+                                grouped: grouped,
+                                lastInGroup: lastInGroup,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: highlighted
+                                      ? tokens.accent.withValues(alpha: 0.45)
+                                      : Colors.black.withValues(alpha: 0.06),
+                                  blurRadius: highlighted ? 0 : 1,
+                                  spreadRadius: highlighted ? 2 : 0,
+                                  offset: highlighted
+                                      ? Offset.zero
+                                      : const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                 if (replyPreview != null)
                   Container(
                     width: double.infinity,
@@ -1863,14 +1899,10 @@ class _MessageTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border(
                         left: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 2,
+                          color: tokens.accent,
+                          width: 3,
                         ),
                       ),
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.55),
                     ),
                     child: Text(
                       replyPreview!,
@@ -2084,10 +2116,16 @@ class _MessageTile extends StatelessWidget {
                     ),
                   ),
               ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
         );
       },
     );
@@ -2397,14 +2435,13 @@ class _ComposerContext extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final tokens = HighLifeTokens.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: tokens.surface,
         border: Border(
-          top: BorderSide(color: Theme.of(context).dividerColor),
-          left: BorderSide(color: colors.primary, width: 3),
+          left: BorderSide(color: tokens.accent, width: 3),
         ),
       ),
       child: Row(
@@ -2413,8 +2450,20 @@ class _ComposerContext extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(color: colors.primary)),
-                Text(body, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: tokens.accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  body,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: tokens.muted),
+                ),
               ],
             ),
           ),
@@ -2515,7 +2564,9 @@ class _ThreadSheetState extends State<_ThreadSheet> {
               ),
             ),
             Expanded(
-              child: ListView.builder(
+              child: ColoredBox(
+                color: tokens.chatCanvas,
+                child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                 itemCount: items.length,
                 itemBuilder: (context, index) {
@@ -2558,9 +2609,10 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                   );
                 },
               ),
+              ),
             ),
             ColoredBox(
-              color: Theme.of(context).colorScheme.surface,
+              color: tokens.surface,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                 child: Row(
@@ -2580,7 +2632,10 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                         controller: _composer,
                         minLines: 1,
                         maxLines: 4,
-                        decoration: InputDecoration(hintText: s.messageHint),
+                        decoration: InputDecoration(
+                          hintText: s.messageHint,
+                          filled: true,
+                        ),
                         onSubmitted: (_) => _send(),
                       ),
                     ),
