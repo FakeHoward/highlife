@@ -421,7 +421,7 @@ export function MessageTimeline({
               {!item.redacted && item.kind !== "poll" && (
                 <div className="message-actions">
                     <button type="button" onClick={() => onComposeMode({ type: "reply", item })}>{t("timeline.reply")}</button>
-                    {onOpenThread && item.kind !== "system" && (
+                    {onOpenThread && (
                       <button type="button" onClick={() => onOpenThread(item)}>
                         {item.threadReplyCount
                           ? t("timeline.threadCount", { count: item.threadReplyCount })

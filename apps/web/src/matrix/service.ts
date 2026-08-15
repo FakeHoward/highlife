@@ -2248,10 +2248,10 @@ export async function dismissIncomingRtcCall(roomId: string): Promise<void> {
   dismissedRtcInvites.add(roomId);
   publish();
   try {
-    await requiredClient().sendEvent(roomId, MSC4310_DECLINE, rtcDeclineContent() as never);
+    await requiredClient().sendEvent(roomId, MSC4310_DECLINE as typeof EventType.RoomMessage, rtcDeclineContent() as never);
   } catch {
     try {
-      await requiredClient().sendEvent(roomId, MSC4310_DECLINE_UNSTABLE, rtcDeclineContent() as never);
+      await requiredClient().sendEvent(roomId, MSC4310_DECLINE_UNSTABLE as typeof EventType.RoomMessage, rtcDeclineContent() as never);
     } catch {
       /* older homeserver */
     }
@@ -2380,7 +2380,7 @@ export function listImagePacks(): ImagePackItem[] {
   const active = client;
   if (!active) return [];
   const fromAccount = parseImagePack(
-    (active.getAccountData(MSC2545_USER_EMOTES)?.getContent() ?? {}) as Record<string, unknown>,
+    (active.getAccountData(MSC2545_USER_EMOTES as typeof EventType.Direct)?.getContent() ?? {}) as Record<string, unknown>,
   );
   const fromRooms = active.getRooms().flatMap((room) => {
     const event = room.currentState.getStateEvents(MSC2545_PACK_STATE, "");
@@ -2399,7 +2399,7 @@ export function listImagePacks(): ImagePackItem[] {
 export async function sendSticker(roomId: string, item: ImagePackItem, threadRootId?: string): Promise<void> {
   const content: Record<string, unknown> = stickerContent(item);
   if (threadRootId) content["m.relates_to"] = threadRelation(threadRootId, threadRootId, false);
-  await requiredClient().sendEvent(roomId, STICKER_EVENT, content as never);
+  await requiredClient().sendEvent(roomId, STICKER_EVENT as typeof EventType.RoomMessage, content as never);
 }
 
 export function commandsForRoom(roomId: string): AdvertisedCommand[] {
@@ -2426,7 +2426,7 @@ export async function sendConversationReply(
 ): Promise<void> {
   await requiredClient().sendEvent(
     roomId,
-    MSC4139_REPLY,
+    MSC4139_REPLY as typeof EventType.RoomMessage,
     conversationReplyContent(promptId, label, rootEventId) as never,
   );
   void subscribeToThread(roomId, rootEventId).catch(() => undefined);
