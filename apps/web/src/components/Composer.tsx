@@ -1,7 +1,18 @@
 import type { TimelineItem } from "@highlife/ui-contracts";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { useI18n } from "../i18n";
-import { sendMessage, setTyping, uploadFile, CryptoUnavailableError } from "../matrix/service";
+import {
+  listImagePacks,
+  mediaUrl,
+  sendLocation,
+  sendMessage,
+  sendSticker,
+  setTyping,
+  suggestCommands,
+  uploadFile,
+  CryptoUnavailableError,
+} from "../matrix/service";
+import { completeCommand } from "../matrix/specFeatures";
 import { IconAttach, IconMic, IconSend, IconStop } from "./Icons";
 
 export type ComposeMode = { type: "reply" | "edit"; item: TimelineItem } | null;
@@ -23,10 +34,12 @@ export function Composer({
   roomId,
   mode,
   onMode,
+  threadRootId,
 }: {
   roomId: string;
   mode: ComposeMode;
   onMode: (mode: ComposeMode) => void;
+  threadRootId?: string;
 }) {
   const { t } = useI18n();
   const [text, setText] = useState("");
@@ -35,6 +48,7 @@ export function Composer({
   const [uploadRatio, setUploadRatio] = useState<number | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [stickersOpen, setStickersOpen] = useState(false);
   const typingTimer = useRef<number | undefined>(undefined);
   const file = useRef<HTMLInputElement>(null);
   const previousRoom = useRef(roomId);
@@ -44,6 +58,9 @@ export function Composer({
   const stream = useRef<MediaStream | null>(null);
   const startedAt = useRef(0);
   const tick = useRef<number | undefined>(undefined);
+
+  const commands = suggestCommands(roomId, text);
+  const packs = stickersOpen ? listImagePacks().filter((item) => item.usage.includes("sticker")) : [];
 
   function stopTracks() {
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -70,6 +87,7 @@ export function Composer({
       previousRoom.current = roomId;
       setText("");
       setError(null);
+      setStickersOpen(false);
       discardRecording();
       void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
     }
@@ -103,6 +121,7 @@ export function Composer({
       await sendMessage(roomId, body, {
         editEventId: mode?.type === "edit" ? mode.item.eventId : undefined,
         replyEventId: mode?.type === "reply" ? mode.item.eventId : undefined,
+        ...(threadRootId && mode?.type !== "edit" ? { threadRootId } : {}),
       });
       setText("");
       onMode(null);
@@ -115,6 +134,11 @@ export function Composer({
   }
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Tab" && commands[0]) {
+      event.preventDefault();
+      setText(completeCommand(commands[0], text));
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void submit();
@@ -140,6 +164,7 @@ export function Composer({
     try {
       await uploadFile(roomId, selected, {
         replyEventId: mode?.type === "reply" ? mode.item.eventId : undefined,
+        threadRootId,
         onProgress: (ratio) => setUploadRatio(ratio),
       });
       if (mode?.type === "reply") onMode(null);
@@ -149,6 +174,45 @@ export function Composer({
       setBusy(false);
       setUploadRatio(null);
       event.target.value = "";
+    }
+  }
+
+  async function shareLocation() {
+    setBusy(true);
+    setError(null);
+    try {
+      const coords = await new Promise<GeolocationCoordinates>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error(t("composer.locationDenied")));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => resolve(position.coords),
+          () => reject(new Error(t("composer.locationDenied"))),
+          { enableHighAccuracy: true, timeout: 8000 },
+        );
+      });
+      await sendLocation(roomId, coords.latitude, coords.longitude, undefined, threadRootId);
+    } catch (reason) {
+      const typed = window.prompt(t("composer.locationHint"));
+      if (!typed) {
+        setError(reason instanceof Error ? reason.message : t("composer.locationDenied"));
+        setBusy(false);
+        return;
+      }
+      const match = typed.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+      if (!match) {
+        setError(t("composer.locationDenied"));
+        setBusy(false);
+        return;
+      }
+      try {
+        await sendLocation(roomId, Number(match[1]), Number(match[2]), undefined, threadRootId);
+      } catch (fallback) {
+        setError(composeFailure(fallback, t("composer.sendFailed"), t("composer.cryptoUnavailable")));
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -205,6 +269,7 @@ export function Composer({
     try {
       await uploadFile(roomId, voice, {
         replyEventId: mode?.type === "reply" ? mode.item.eventId : undefined,
+        threadRootId,
         voice: true,
         durationMs,
         onProgress: (ratio) => setUploadRatio(ratio),
@@ -222,6 +287,11 @@ export function Composer({
   const canRecord = typeof MediaRecorder !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
   return (
     <div className="composer-wrap">
+      {threadRootId && (
+        <div className="compose-mode">
+          <span>{t("composer.thread")}</span>
+        </div>
+      )}
       {mode && (
         <div className="compose-mode">
           <span>{mode.type === "edit" ? t("composer.editing") : t("composer.replyingTo")} <strong>{mode.item.senderName}</strong>: {mode.item.body.slice(0, 80)}</span>
@@ -238,11 +308,61 @@ export function Composer({
           </button>
         </div>
       )}
+      {commands.length > 0 && (
+        <div className="command-suggest" role="listbox" aria-label={t("composer.commands")}>
+          {commands.map((command) => (
+            <button
+              key={command.name}
+              type="button"
+              role="option"
+              onClick={() => setText(completeCommand(command, text))}
+            >
+              /{command.name}
+              {command.description ? <small>{command.description}</small> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {stickersOpen && (
+        <div className="sticker-picker" role="listbox" aria-label={t("composer.stickers")}>
+          {packs.length === 0 && <p className="muted small">{t("composer.noStickers")}</p>}
+          {packs.map((item) => (
+            <button
+              key={`${item.shortcode}-${item.url}`}
+              type="button"
+              onClick={() => {
+                void sendSticker(roomId, item, threadRootId).catch((reason: unknown) => {
+                  setError(composeFailure(reason, t("composer.sendFailed"), t("composer.cryptoUnavailable")));
+                });
+                setStickersOpen(false);
+              }}
+            >
+              <img src={mediaUrl(item.url)} alt={item.body} />
+            </button>
+          ))}
+        </div>
+      )}
       {error && <p className="composer-error" role="alert">{error}</p>}
       {uploadRatio != null && (
         <div className="upload-progress" role="status" aria-live="polite">
           <div className="upload-progress-bar" style={{ width: `${Math.round(uploadRatio * 100)}%` }} />
           <span>{t("composer.uploadProgress", { percent: Math.round(uploadRatio * 100) })}</span>
+        </div>
+      )}
+      {!recording && mode?.type !== "edit" && (
+        <div className="composer-tools">
+          <button type="button" className="text-button" onClick={() => void shareLocation()} disabled={busy}>
+            {t("composer.location")}
+          </button>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setStickersOpen((open) => !open)}
+            aria-expanded={stickersOpen}
+            disabled={busy}
+          >
+            {t("composer.stickers")}
+          </button>
         </div>
       )}
       <form className={`composer${recording ? " is-recording" : ""}`} onSubmit={submit}>

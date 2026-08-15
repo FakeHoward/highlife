@@ -37,6 +37,8 @@ import {
   searchMessages,
   sendMiniAppData,
   sendWidgetRoomEvent,
+  widgetDownloadContent,
+  widgetUploadContent,
   setOwnPresence,
   setupRecoveryAndKeyBackup,
   startDirectMessage,
@@ -56,6 +58,13 @@ import {
   enableRoomEncryption,
   requestUserVerification,
   setUserIgnored,
+  fetchRoomSummary,
+  knockOnRoom,
+  listRoomKnocks,
+  approveKnock,
+  denyKnock,
+  beginLinkDeviceQr,
+  isQrLoginAvailable,
   type SearchHit,
   type EncryptionDevice,
   type KeyBackupDetails,
@@ -70,8 +79,10 @@ import {
 } from "../protocol/aiomatrix";
 import { Avatar } from "./Avatar";
 import { IconBack } from "./Icons";
+import { QrLoginPanel } from "./QrLoginPanel";
 import { applyTheme, THEME_STORAGE_KEY, type Theme } from "../theme";
 import { formatPresenceLabel } from "../matrix/messengerExtras";
+import type { RoomSummary } from "../matrix/specFeatures";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -135,6 +146,8 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
   const [alias, setAlias] = useState("");
   const [encrypted, setEncrypted] = useState(cryptoReady);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<RoomSummary | null>(null);
+  const [knocked, setKnocked] = useState(false);
 
   function switchTab(next: typeof tab) {
     setTab(next);
@@ -143,7 +156,32 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
     setAlias("");
     setError(null);
     setEncrypted(cryptoReady);
+    setPreview(null);
+    setKnocked(false);
   }
+
+  useEffect(() => {
+    if (tab !== "join") return;
+    const address = value.trim();
+    if (!address) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void fetchRoomSummary(address)
+        .then((summary) => {
+          if (!cancelled) setPreview(summary);
+        })
+        .catch(() => {
+          if (!cancelled) setPreview(null);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [tab, value]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -151,6 +189,11 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
     try {
       let roomId: string;
       if (tab === "join") {
+        if (preview?.joinRule === "knock" || preview?.joinRule === "knock_restricted") {
+          await knockOnRoom(value.trim());
+          setKnocked(true);
+          return;
+        }
         roomId = await joinRoom(value.trim());
       } else if (tab === "dm") {
         roomId = await startDirectMessage(value.trim(), encrypted && cryptoReady);
@@ -170,6 +213,16 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
         return;
       }
       if (reason instanceof JoinRoomFailure) {
+        if (reason.kind === "forbidden" && tab === "join") {
+          try {
+            await knockOnRoom(value.trim());
+            setKnocked(true);
+            setError(null);
+            return;
+          } catch {
+            /* fall through to join error */
+          }
+        }
         const key =
           reason.kind === "banned"
             ? "rooms.joinBanned"
@@ -192,7 +245,9 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
   }
 
   const submitLabel = tab === "join"
-    ? t("rooms.joinRoom")
+    ? (preview?.joinRule === "knock" || preview?.joinRule === "knock_restricted" || knocked
+      ? t("rooms.knock")
+      : t("rooms.joinRoom"))
     : tab === "dm"
       ? t("rooms.startDm")
       : t("rooms.createRoom");
@@ -227,6 +282,16 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
           />
         </label>
         {tab === "join" && <p className="muted small">{t("rooms.joinHint")}</p>}
+        {tab === "join" && preview && (
+          <div className="room-preview">
+            <strong>{preview.name ?? preview.roomId}</strong>
+            {preview.topic && <p className="muted small">{preview.topic}</p>}
+            {preview.numJoinedMembers != null && (
+              <p className="muted small">{t("rooms.membersCount", { count: preview.numJoinedMembers })}</p>
+            )}
+          </div>
+        )}
+        {knocked && <p className="muted small" role="status">{t("rooms.knockSent")}</p>}
         {tab === "create" && (
           <>
             <label>
@@ -365,6 +430,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [copiedHs, setCopiedHs] = useState(false);
   const [notif, setNotif] = useState(browserNotificationPermission);
   const [sessionPassword, setSessionPassword] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
   const identity = getSessionIdentity();
   const crypto = getCryptoStatus();
   const incoming = useSyncExternalStore(subscribeIncomingVerification, getIncomingVerification, () => null);
@@ -634,6 +700,23 @@ export function Settings({ onClose }: { onClose: () => void }) {
       </div>
       <div className="settings-section">
         <p className="eyebrow">{t("profile.sessions")}</p>
+        <p className="muted small">{t("settings.linkNewDeviceHint")}</p>
+        {qrOpen ? (
+          <QrLoginPanel start={beginLinkDeviceQr} onClose={() => setQrOpen(false)} />
+        ) : (
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              void isQrLoginAvailable().then((available) => {
+                if (available) setQrOpen(true);
+                else setCryptoMessage(t("login.qrUnavailable"));
+              }).catch(() => setQrOpen(true));
+            }}
+          >
+            {t("settings.linkNewDevice")}
+          </button>
+        )}
         {incoming && (
           <div className="incoming-verification">
             <strong>{t("settings.incomingVerification")}</strong>
@@ -749,10 +832,12 @@ export function RoomDetails({
   const [roomAvatar, setRoomAvatarFile] = useState<File | undefined>();
   const media = listRoomMedia(room.roomId);
   const spaces = listSpaces().filter((space) => space.roomId !== room.roomId);
+  const [knocks, setKnocks] = useState(() => listRoomKnocks(room.roomId));
 
   useEffect(() => {
     setMembers(getJoinedMembers(room.roomId));
     setAliases(getRoomAliases(room.roomId));
+    setKnocks(listRoomKnocks(room.roomId));
   }, [room.roomId]);
 
   return (
@@ -877,6 +962,42 @@ export function RoomDetails({
                 </div>
               </button>
               <span>{t("rooms.power", { level: member.powerLevel })}</span>
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="settings-section">
+        <p className="eyebrow">{t("rooms.pendingKnocks")}</p>
+        <div className="member-list">
+          {knocks.length === 0 && <p className="muted small">{t("rooms.noKnocks")}</p>}
+          {knocks.map((knock) => (
+            <article key={knock.userId}>
+              <div>
+                <strong>{knock.name}</strong>
+                <small>{knock.userId}</small>
+              </div>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  void approveKnock(room.roomId, knock.userId)
+                    .then(() => setKnocks(listRoomKnocks(room.roomId)))
+                    .catch((error: Error) => setStatus(error.message));
+                }}
+              >
+                {t("rooms.approveKnock")}
+              </button>
+              <button
+                type="button"
+                className="text-button danger-text"
+                onClick={() => {
+                  void denyKnock(room.roomId, knock.userId)
+                    .then(() => setKnocks(listRoomKnocks(room.roomId)))
+                    .catch((error: Error) => setStatus(error.message));
+                }}
+              >
+                {t("rooms.denyKnock")}
+              </button>
             </article>
           ))}
         </div>
@@ -1193,6 +1314,8 @@ export function GroupCallSurface({ roomId, onClose }: { roomId: string; onClose:
       getContentWindow: () => frame.current?.contentWindow,
       sendEvent: sendWidgetRoomEvent,
       getOpenIdToken: fetchOpenIdToken,
+      uploadContent: widgetUploadContent,
+      downloadContent: widgetDownloadContent,
       onCapabilityChange: () => setReady(true),
     });
   }, [roomId, targetOrigin, url]);

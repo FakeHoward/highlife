@@ -221,7 +221,7 @@ describe("normalizeTimeline", () => {
     expect(normalizeTimeline(events, base)[0]?.body).toBe("Published RSVP: Event RSVP");
   });
 
-  it("treats foreign thread events as ordinary timeline replies", () => {
+  it("keeps thread fallbacks on the main timeline and hides in-thread replies", () => {
     const events = [
       {
         eventId: "$root",
@@ -247,16 +247,34 @@ describe("normalizeTimeline", () => {
           },
         },
       },
+      {
+        eventId: "$hidden",
+        type: "m.room.message",
+        sender: "@me:example.org",
+        timestamp: 2,
+        content: {
+          msgtype: "m.text",
+          body: "inside the thread",
+          "m.relates_to": {
+            rel_type: "m.thread",
+            event_id: "$root",
+            is_falling_back: false,
+          },
+        },
+      },
     ];
 
-    expect(normalizeTimeline(events, base)[0]).toEqual(
-      expect.objectContaining({ eventId: "$root" }),
+    const items = normalizeTimeline(events, base);
+    expect(items.map((item) => item.eventId)).toEqual(["$root", "$image"]);
+    expect(items[0]).toEqual(
+      expect.objectContaining({ eventId: "$root", threadReplyCount: 2, threadRootId: "$root" }),
     );
-    expect(normalizeTimeline(events, base)[1]).toEqual(
+    expect(items[1]).toEqual(
       expect.objectContaining({
         kind: "image",
         media: expect.objectContaining({ mxcUrl: "mxc://example.org/media" }),
         replyToEventId: "$root",
+        threadRootId: "$root",
         replyPreview: {
           senderId: "@bot:example.org",
           senderName: "HighLife Bot",

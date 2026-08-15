@@ -242,8 +242,15 @@ void main() {
       expect(items.single.replyToEventId, 'root');
     });
 
-    test('keeps foreign thread events in the normal timeline as replies', () {
+    test('hides in-thread replies and keeps fallbacks on the main timeline', () {
       final items = buildTimelineItems([
+        RawRoomEvent(
+          eventId: 'root',
+          type: 'm.room.message',
+          senderId: '@alice:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 10),
+          content: const {'msgtype': 'm.text', 'body': 'root'},
+        ),
         RawRoomEvent(
           eventId: 'thread-reply',
           type: 'm.room.message',
@@ -259,11 +266,112 @@ void main() {
             },
           },
         ),
+        RawRoomEvent(
+          eventId: 'fallback',
+          type: 'm.room.message',
+          senderId: '@carol:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 12),
+          content: const {
+            'msgtype': 'm.text',
+            'body': 'fallback preview',
+            'm.relates_to': {
+              'rel_type': 'm.thread',
+              'event_id': 'root',
+              'is_falling_back': true,
+              'm.in_reply_to': {'event_id': 'root'},
+            },
+          },
+        ),
       ]);
 
-      expect(items, hasLength(1));
-      expect(items.single.body, 'answer from another client');
-      expect(items.single.replyToEventId, 'root');
+      expect(items.map((item) => item.eventId), ['root', 'fallback']);
+      expect(items.first.threadReplyCount, 2);
+      expect(items.last.threadRootId, 'root');
+    });
+
+    test('keeps thread replies when building a thread panel', () {
+      final items = buildTimelineItems(
+        [
+          RawRoomEvent(
+            eventId: 'root',
+            type: 'm.room.message',
+            senderId: '@alice:example.org',
+            timestamp: DateTime.utc(2026, 8, 5, 10),
+            content: const {'msgtype': 'm.text', 'body': 'root'},
+          ),
+          RawRoomEvent(
+            eventId: 'thread-reply',
+            type: 'm.room.message',
+            senderId: '@bob:example.org',
+            timestamp: DateTime.utc(2026, 8, 5, 11),
+            content: const {
+              'msgtype': 'm.text',
+              'body': 'in thread',
+              'm.relates_to': {
+                'rel_type': 'm.thread',
+                'event_id': 'root',
+                'm.in_reply_to': {'event_id': 'root'},
+              },
+            },
+          ),
+        ],
+        forThreadRootId: 'root',
+      );
+      expect(items.map((item) => item.eventId), ['root', 'thread-reply']);
+    });
+
+    test('classifies stickers and location fields', () {
+      final items = buildTimelineItems([
+        RawRoomEvent(
+          eventId: 'sticker',
+          type: 'm.sticker',
+          senderId: '@alice:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 13),
+          content: const {
+            'body': 'wave',
+            'url': 'mxc://example.org/sticker',
+            'info': {'mimetype': 'image/png'},
+          },
+        ),
+        RawRoomEvent(
+          eventId: 'place',
+          type: 'm.room.message',
+          senderId: '@bob:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 14),
+          content: const {
+            'msgtype': 'm.location',
+            'body': 'Red Square',
+            'geo_uri': 'geo:55.75,37.62',
+          },
+        ),
+        RawRoomEvent(
+          eventId: 'prompt-reply',
+          type: 'org.matrix.msc4139.conversation.reply',
+          senderId: '@carol:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 15),
+          content: const {
+            'msgtype': 'm.text',
+            'body': '1d6',
+          },
+        ),
+        RawRoomEvent(
+          eventId: 'decline',
+          type: 'm.rtc.decline',
+          senderId: '@dave:example.org',
+          timestamp: DateTime.utc(2026, 8, 5, 16),
+          content: const {},
+        ),
+      ]);
+
+      expect(items[0].kind, TimelineItemKind.sticker);
+      expect(items[0], isA<MediaTimelineItem>());
+      expect(items[1].kind, TimelineItemKind.location);
+      expect(items[1].latitude, 55.75);
+      expect(items[1].longitude, 37.62);
+      expect(items[1].geoUri, 'geo:55.75,37.62');
+      expect(items[2].kind, TimelineItemKind.text);
+      expect(items[2].body, '1d6');
+      expect(items[3].kind, TimelineItemKind.system);
     });
   });
 }

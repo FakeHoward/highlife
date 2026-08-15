@@ -133,6 +133,38 @@ class _CallSurfaceState extends State<CallSurface> {
                     widgetId: _widgetId,
                     roomId: widget.room.id,
                     sendEvent: _sendEvent,
+                    uploadContent: ({
+                      required bytes,
+                      required filename,
+                      mimeType,
+                    }) async {
+                      final mxc = await widget.room.client.uploadContent(
+                        bytes,
+                        filename: filename,
+                        contentType: mimeType,
+                      );
+                      return mxc.toString();
+                    },
+                    downloadContent: (mxc) async {
+                      final uri =
+                          Uri.parse(mxc).getDownloadLink(widget.room.client);
+                      final headers = <String, String>{};
+                      final token = widget.room.client.accessToken;
+                      if (token != null) {
+                        headers['Authorization'] = 'Bearer $token';
+                      }
+                      final resp = await widget.room.client.httpClient.get(
+                        uri,
+                        headers: headers,
+                      );
+                      return {
+                        'filename': 'download.bin',
+                        'contentType':
+                            resp.headers['content-type'] ??
+                            'application/octet-stream',
+                        'data': base64Encode(resp.bodyBytes),
+                      };
+                    },
                     onWidgetMessage: _onWidgetMessage,
                     onReady: () {
                       if (mounted) {

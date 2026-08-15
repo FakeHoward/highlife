@@ -30,8 +30,12 @@ import {
   startMatrixRtc,
   subscribeIncomingVerification,
   togglePinnedEvent,
+  threadTimeline,
+  markThreadRead,
+  fetchRoomSummary,
   type SasChallenge,
 } from "../matrix/service";
+import type { RoomSummary } from "../matrix/specFeatures";
 import { firstUnreadEventId, formatPresenceLabel } from "../matrix/messengerExtras";
 import { checkWebUpdate, WEB_APP_VERSION } from "../matrix/updateCheck";
 import { classifyDirectCallFailure, DIRECT_CALL_CRYPTO_UNAVAILABLE, DIRECT_CALL_MIC_BLOCKED } from "../matrix/directCallErrors";
@@ -88,6 +92,8 @@ export function Workspace() {
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [forwardEventId, setForwardEventId] = useState<string | null>(null);
   const [unreadEventId, setUnreadEventId] = useState<string | null>(null);
+  const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [inviteSummary, setInviteSummary] = useState<RoomSummary | null>(null);
   const unreadCapturedFor = useRef<string | null>(null);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [sas, setSas] = useState<SasChallenge | null>(null);
@@ -149,6 +155,36 @@ export function Workspace() {
     }
     void markRead(activeId).catch(() => undefined);
   }, [activeId, timeline.length]);
+
+  useEffect(() => {
+    setThreadRootId(null);
+    setMode(null);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (!activeId || !threadRootId) return;
+    const items = threadTimeline(activeId, threadRootId);
+    const last = items[items.length - 1];
+    if (last) void markThreadRead(activeId, last.eventId).catch(() => undefined);
+  }, [activeId, threadRootId, matrix.version]);
+
+  useEffect(() => {
+    if (!activeRoom || activeRoom.membership !== "invite") {
+      setInviteSummary(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchRoomSummary(activeRoom.roomId)
+      .then((summary) => {
+        if (!cancelled) setInviteSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setInviteSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoom?.roomId, activeRoom?.membership]);
 
   useEffect(() => {
     const toast = matrix.toast;
@@ -517,8 +553,11 @@ export function Workspace() {
             )}
             {activeRoom.membership === "invite" ? (
               <div className="timeline-empty invite-state">
-                <strong>{t("chat.inviteTitle", { name: activeRoom.name })}</strong>
-                <p>{t("chat.inviteBody")}</p>
+                <strong>{inviteSummary?.name ?? t("chat.inviteTitle", { name: activeRoom.name })}</strong>
+                <p>{inviteSummary?.topic || t("chat.inviteBody")}</p>
+                {inviteSummary?.numJoinedMembers != null && (
+                  <p className="muted small">{t("rooms.membersCount", { count: inviteSummary.numJoinedMembers })}</p>
+                )}
                 <div>
                   <button className="button primary" onClick={() => void acceptInvite(activeRoom.roomId)}>{t("chat.acceptInvite")}</button>
                   <button className="button danger" onClick={() => void rejectInvite(activeRoom.roomId).then(() => setActiveId(null))}>{t("chat.rejectInvite")}</button>
@@ -540,8 +579,43 @@ export function Workspace() {
                   onForward={(item) => setForwardEventId(item.eventId)}
                   onOpenProfile={(item) => setProfileUserId(item.senderId)}
                   onJumpToEvent={setHighlightEventId}
+                  onOpenThread={(item) => setThreadRootId(item.threadRootId ?? item.eventId)}
                 />
-                <Composer roomId={activeRoom.roomId} mode={mode} onMode={setMode} />
+                <Composer roomId={activeRoom.roomId} mode={threadRootId ? null : mode} onMode={setMode} />
+                {threadRootId && (
+                  <aside className="thread-panel" aria-label={t("timeline.thread")}>
+                    <header className="thread-panel-head">
+                      <strong>{t("timeline.thread")}</strong>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => setThreadRootId(null)}
+                        aria-label={t("chat.threadClose")}
+                      >
+                        ×
+                      </button>
+                    </header>
+                    <MessageTimeline
+                      items={threadTimeline(activeRoom.roomId, threadRootId)}
+                      roomId={activeRoom.roomId}
+                      onComposeMode={setMode}
+                      onMiniApp={(miniApp, item) => setSurface({ miniApp, item })}
+                      history={{ loading: false, exhausted: true, error: null }}
+                      onLoadOlder={async () => undefined}
+                      highlightEventId={highlightEventId}
+                      onJumpToEvent={setHighlightEventId}
+                      onOpenProfile={(item) => setProfileUserId(item.senderId)}
+                      onForward={(item) => setForwardEventId(item.eventId)}
+                      onPin={(item) => void togglePinnedEvent(activeRoom.roomId, item.eventId)}
+                    />
+                    <Composer
+                      roomId={activeRoom.roomId}
+                      mode={mode}
+                      onMode={setMode}
+                      threadRootId={threadRootId}
+                    />
+                  </aside>
+                )}
               </>
             )}
           </>

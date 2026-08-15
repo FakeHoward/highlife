@@ -15,6 +15,7 @@ import '../aiomatrix/markdown.dart';
 import '../aiomatrix/protocol.dart';
 import '../domain/call_routing.dart';
 import '../domain/messenger_extras.dart';
+import '../domain/spec_features.dart';
 import '../domain/timeline_models.dart';
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
@@ -96,7 +97,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (!mounted) return;
     setState(() => _timeline = timeline);
-    await timeline.setReadMarker();
+    await timeline.setReadMarker(public: false);
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpEnd());
   }
 
@@ -629,16 +630,26 @@ class _ChatScreenState extends State<ChatScreen> {
                         ? () => _confirmRedact(session, event)
                         : null,
                     onOpenMedia: event.messageType == MessageTypes.Image ||
+                            event.type == stickerEventType ||
                             event.messageType == MessageTypes.Audio ||
                             event.messageType == MessageTypes.Video ||
                             event.messageType == MessageTypes.File
                         ? () => _openMedia(event)
-                        : null,
+                        : row.item!.kind == TimelineItemKind.location
+                            ? () => _openLocation(row.item!)
+                            : null,
                     onPin: () => _togglePin(event),
                     onForward: () => _forward(session, s, event),
                     onOpenProfile: event.senderId == session.userId
                         ? null
                         : () => _openProfile(session, s, event.senderId),
+                    onThread: () => _openThread(session, s, row.item!),
+                    onPrompt: (prompt) => session.sendConversationReply(
+                      widget.room,
+                      rootEventId: event.eventId,
+                      promptId: prompt.id,
+                      label: prompt.label,
+                    ),
                     strings: s,
                     ),
                   );
@@ -712,7 +723,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         dimension: 44,
                         child: IconButton(
                           tooltip: s.attachFile,
-                          onPressed: _uploading ? null : () => _attach(session),
+                          onPressed: _uploading
+                              ? null
+                              : () => _composerExtras(session, s),
                           icon: const Icon(Icons.attach_file, size: 22),
                         ),
                       ),
@@ -992,7 +1005,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _send(HighLifeSession session) async {
+  Future<void> _send(HighLifeSession session, {String? threadRootId}) async {
     final text = _composer.text.trim();
     if (text.isEmpty) return;
     _composer.clear();
@@ -1007,6 +1020,7 @@ class _ChatScreenState extends State<ChatScreen> {
         text,
         replyTo: _replyTo,
         edit: _editing,
+        threadRootId: threadRootId,
       );
       _stopTyping(session);
       setState(() {
@@ -1031,6 +1045,261 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       if (mounted) setState(() => _loadingHistory = false);
     }
+  }
+
+  Future<void> _composerExtras(HighLifeSession session, AppStrings s) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.attach_file),
+              title: Text(s.attachFile),
+              onTap: () => Navigator.pop(context, 'file'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: Text(s.shareLocation),
+              onTap: () => Navigator.pop(context, 'location'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: Text(s.stickers),
+              onTap: () => Navigator.pop(context, 'stickers'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'file') await _attach(session);
+    if (action == 'location') await _shareLocation(session, s);
+    if (action == 'stickers') await _pickSticker(session, s);
+  }
+
+  Future<void> _shareLocation(
+    HighLifeSession session,
+    AppStrings s, {
+    String? threadRootId,
+  }) async {
+    final lat = TextEditingController();
+    final lon = TextEditingController();
+    final geo = TextEditingController();
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.shareLocation),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              s.locationHint,
+              style: TextStyle(color: HighLifeTokens.of(context).muted),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: geo,
+              decoration: InputDecoration(labelText: s.geoUri),
+              onChanged: (value) {
+                final parsed = parseGeoUri(value);
+                if (parsed == null) return;
+                lat.text = '${parsed.lat}';
+                lon.text = '${parsed.lon}';
+              },
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: lat,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
+              decoration: InputDecoration(labelText: s.latitude),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: lon,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
+              decoration: InputDecoration(labelText: s.longitude),
+            ),
+          ],
+        ),
+        actions: [
+          HlButton.text(
+            onPressed: () => Navigator.pop(context, false),
+            label: Text(s.cancel),
+          ),
+          HlButton.primary(
+            onPressed: () => Navigator.pop(context, true),
+            label: Text(s.sendLocation),
+          ),
+        ],
+      ),
+    );
+    final latitude = double.tryParse(lat.text.trim());
+    final longitude = double.tryParse(lon.text.trim());
+    lat.dispose();
+    lon.dispose();
+    geo.dispose();
+    if (sent != true || latitude == null || longitude == null) return;
+    try {
+      await session.sendLocation(
+        widget.room,
+        latitude,
+        longitude,
+        threadRootId: threadRootId,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _actionError = error.toString());
+    }
+  }
+
+  Future<void> _pickSticker(
+    HighLifeSession session,
+    AppStrings s, {
+    String? threadRootId,
+  }) async {
+    final items = session.listImagePacks(room: widget.room);
+    final selected = await showModalBottomSheet<ImagePackItem>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        final tokens = HighLifeTokens.of(context);
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          s.stickers,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: s.done,
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: items.isEmpty
+                      ? Center(
+                          child: Text(
+                            s.noStickers,
+                            style: TextStyle(color: tokens.muted),
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                          ),
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            final http = Uri.parse(item.url)
+                                .getDownloadLink(widget.room.client);
+                            final token = widget.room.client.accessToken;
+                            return InkWell(
+                              onTap: () => Navigator.pop(context, item),
+                              child: Image.network(
+                                http.toString(),
+                                headers: {
+                                  if (token != null)
+                                    'Authorization': 'Bearer $token',
+                                },
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Center(
+                                  child: Text(
+                                    item.body,
+                                    maxLines: 2,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: tokens.muted,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected == null) return;
+    try {
+      await session.sendSticker(
+        widget.room,
+        selected,
+        threadRootId: threadRootId,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _actionError = error.toString());
+    }
+  }
+
+  Future<void> _openLocation(TimelineItem item) async {
+    final lat = item.latitude;
+    final lon = item.longitude;
+    if (lat == null || lon == null) return;
+    final uri = Uri.parse(openStreetMapUrl(lat, lon));
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openThread(
+    HighLifeSession session,
+    AppStrings s,
+    TimelineItem item,
+  ) async {
+    final rootId = item.threadRootId ?? item.eventId;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _ThreadSheet(
+        room: widget.room,
+        rootId: rootId,
+        events: _timeline?.events ?? const [],
+        session: session,
+        strings: s,
+        onSend: (text) async {
+          await session.roomRepository?.sendText(
+            widget.room,
+            text,
+            threadRootId: rootId,
+          );
+        },
+        onLocation: () => _shareLocation(
+          session,
+          s,
+          threadRootId: rootId,
+        ),
+        onSticker: () => _pickSticker(
+          session,
+          s,
+          threadRootId: rootId,
+        ),
+      ),
+    );
   }
 
   Future<void> _attach(HighLifeSession session) async {
@@ -1088,7 +1357,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _openMedia(Event event) async {
-    if (event.messageType == MessageTypes.Image) {
+    if (event.messageType == MessageTypes.Image ||
+        event.type == stickerEventType) {
       if (!mounted) return;
       await showMatrixImageViewer(context, event);
       return;
@@ -1460,6 +1730,8 @@ class _MessageTile extends StatelessWidget {
     this.onPin,
     this.onForward,
     this.onOpenProfile,
+    this.onThread,
+    this.onPrompt,
     this.feedback,
   });
 
@@ -1484,6 +1756,8 @@ class _MessageTile extends StatelessWidget {
   final VoidCallback? onPin;
   final VoidCallback? onForward;
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onThread;
+  final ValueChanged<Msc4139Prompt>? onPrompt;
   final String? feedback;
   final AppStrings strings;
 
@@ -1497,6 +1771,7 @@ class _MessageTile extends StatelessWidget {
       if (keyboard.inline.isEmpty) keyboard = null;
     }
     final poll = item is PollTimelineItem ? item as PollTimelineItem : null;
+    final prompts = parseMsc4139Prompts(content);
     final align = own ? Alignment.centerRight : Alignment.centerLeft;
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     final bg = own ? tokens.ownMessage : tokens.incomingMessage;
@@ -1634,6 +1909,8 @@ class _MessageTile extends StatelessWidget {
                     attachmentLabel: strings.attachment,
                     voiceLabel: strings.recordVoice,
                     systemLabel: strings.roomUpdate,
+                    declinedLabel: strings.declinedCall,
+                    openMapLabel: strings.openMap,
                     encryptedLabel: event.type == EventTypes.Encrypted
                         ? strings.encryptedMessage
                         : null,
@@ -1650,6 +1927,53 @@ class _MessageTile extends StatelessWidget {
                   ),
                 if (keyboard != null)
                   InlineKeyboardView(keyboard: keyboard, onPressed: onButton),
+                if (prompts != null && onPrompt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (prompts.intro != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              prompts.intro!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: tokens.muted,
+                              ),
+                            ),
+                          ),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            for (final prompt in prompts.prompts)
+                              HlButton.secondary(
+                                height: 34,
+                                onPressed: () => onPrompt!(prompt),
+                                label: Text(prompt.label),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                if ((item.threadReplyCount ?? 0) > 0 && onThread != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: InkWell(
+                      onTap: onThread,
+                      child: Text(
+                        strings.threadCount(item.threadReplyCount!),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (item.reactions.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
@@ -1777,6 +2101,7 @@ class _MessageTile extends StatelessWidget {
       ),
       items: [
         PopupMenuItem(value: 'reply', child: Text(strings.reply)),
+        PopupMenuItem(value: 'thread', child: Text(strings.thread)),
         PopupMenuItem(value: 'copy', child: Text(strings.copyMessage)),
         for (final emoji in kQuickReactions)
           PopupMenuItem(value: 'react:$emoji', child: Text(emoji)),
@@ -1807,6 +2132,8 @@ class _MessageTile extends StatelessWidget {
     switch (action) {
       case 'reply':
         onReply();
+      case 'thread':
+        onThread?.call();
       case 'copy':
         await Clipboard.setData(ClipboardData(text: event.plaintextBody));
       case 'edit':
@@ -1832,6 +2159,8 @@ class _RichMessageBody extends StatelessWidget {
     this.voiceLabel,
     this.encryptedLabel,
     this.retryLabel,
+    this.declinedLabel,
+    this.openMapLabel,
     this.onRetryDecrypt,
     this.onOpenMedia,
   });
@@ -1843,6 +2172,8 @@ class _RichMessageBody extends StatelessWidget {
   final String? voiceLabel;
   final String? encryptedLabel;
   final String? retryLabel;
+  final String? declinedLabel;
+  final String? openMapLabel;
   final VoidCallback? onRetryDecrypt;
   final VoidCallback? onOpenMedia;
 
@@ -1851,13 +2182,16 @@ class _RichMessageBody extends StatelessWidget {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     final item = this.item;
     if (item.kind == TimelineItemKind.system) {
+      final text = item.body == 'decline'
+          ? (declinedLabel ?? systemLabel)
+          : (item.body.isEmpty ? systemLabel : '$systemLabel: ${item.body}');
       return Row(
         children: [
           const Icon(Icons.info_outline, size: 15),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              item.body.isEmpty ? systemLabel : '$systemLabel: ${item.body}',
+              text,
               style: TextStyle(fontSize: 12, color: tokens.muted),
             ),
           ),
@@ -1899,6 +2233,36 @@ class _RichMessageBody extends StatelessWidget {
       );
     }
     if (item is! MediaTimelineItem) {
+      if (item.kind == TimelineItemKind.location) {
+        return InkWell(
+          onTap: onOpenMedia,
+          child: Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.body.isEmpty
+                          ? (openMapLabel ?? attachmentLabel)
+                          : item.body,
+                    ),
+                    Text(
+                      openMapLabel ?? attachmentLabel,
+                      style: TextStyle(fontSize: 11, color: tokens.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       return MarkdownMessage(source: item.body);
     }
     final media = item;
@@ -1932,7 +2296,8 @@ class _RichMessageBody extends StatelessWidget {
       );
     }
 
-    if (media.kind == TimelineItemKind.image) {
+    if (media.kind == TimelineItemKind.image ||
+        media.kind == TimelineItemKind.sticker) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1968,7 +2333,8 @@ class _MediaFallback extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<HighLifeTokens>()!;
     final icon = switch (item.kind) {
-      TimelineItemKind.image => Icons.image_outlined,
+      TimelineItemKind.image || TimelineItemKind.sticker =>
+        Icons.image_outlined,
       TimelineItemKind.video => Icons.videocam_outlined,
       TimelineItemKind.audio => Icons.audio_file_outlined,
       TimelineItemKind.file => Icons.insert_drive_file_outlined,
@@ -2045,5 +2411,176 @@ class _ComposerContext extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ThreadSheet extends StatefulWidget {
+  const _ThreadSheet({
+    required this.room,
+    required this.rootId,
+    required this.events,
+    required this.session,
+    required this.strings,
+    required this.onSend,
+    required this.onLocation,
+    required this.onSticker,
+  });
+
+  final Room room;
+  final String rootId;
+  final List<Event> events;
+  final HighLifeSession session;
+  final AppStrings strings;
+  final Future<void> Function(String text) onSend;
+  final Future<void> Function() onLocation;
+  final Future<void> Function() onSticker;
+
+  @override
+  State<_ThreadSheet> createState() => _ThreadSheetState();
+}
+
+class _ThreadSheetState extends State<_ThreadSheet> {
+  final _composer = TextEditingController();
+
+  @override
+  void dispose() {
+    _composer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    final s = widget.strings;
+    final byId = {for (final event in widget.events) event.eventId: event};
+    final raw = widget.events.map(
+      (event) => RawRoomEvent(
+        eventId: event.eventId,
+        type: event.type,
+        senderId: event.senderId,
+        timestamp: event.originServerTs,
+        content: Map<String, dynamic>.from(event.content),
+        redacted: event.redacted,
+      ),
+    );
+    final items = buildTimelineItems(
+      raw,
+      ownUserId: widget.session.userId,
+      forThreadRootId: widget.rootId,
+    );
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.75,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      s.thread,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: s.done,
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final event = byId[item.eventId];
+                  if (event == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.senderFromMemoryOrFallback.calcDisplayname(),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        _RichMessageBody(
+                          event: event,
+                          item: item,
+                          attachmentLabel: s.attachment,
+                          systemLabel: s.roomUpdate,
+                          declinedLabel: s.declinedCall,
+                          openMapLabel: s.openMap,
+                          onOpenMedia: item.kind == TimelineItemKind.location
+                              ? () {
+                                  final lat = item.latitude;
+                                  final lon = item.longitude;
+                                  if (lat == null || lon == null) return;
+                                  launchUrl(
+                                    Uri.parse(openStreetMapUrl(lat, lon)),
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                }
+                              : item is MediaTimelineItem
+                                  ? () => showMatrixImageViewer(context, event)
+                                  : null,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            ColoredBox(
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: s.shareLocation,
+                      onPressed: () => unawaited(widget.onLocation()),
+                      icon: const Icon(Icons.location_on_outlined, size: 22),
+                    ),
+                    IconButton(
+                      tooltip: s.stickers,
+                      onPressed: () => unawaited(widget.onSticker()),
+                      icon: const Icon(Icons.emoji_emotions_outlined, size: 22),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _composer,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: InputDecoration(hintText: s.messageHint),
+                        onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: s.sendMessage,
+                      onPressed: _send,
+                      icon: Icon(Icons.send, color: tokens.accent),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _send() async {
+    final text = _composer.text.trim();
+    if (text.isEmpty) return;
+    _composer.clear();
+    await widget.onSend(text);
+    if (mounted) setState(() {});
   }
 }

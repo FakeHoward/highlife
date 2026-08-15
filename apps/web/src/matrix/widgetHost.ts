@@ -12,6 +12,9 @@ export type WidgetOpenIdFn = () => Promise<{
   expires_in: number;
 } | null>;
 
+export type WidgetUploadFn = (file: Blob, filename: string, mimeType?: string) => Promise<{ content_uri: string }>;
+export type WidgetDownloadFn = (mxcUrl: string) => Promise<{ filename?: string; contentType?: string; data: string }>;
+
 export interface WidgetHostOptions {
   widgetId: string;
   roomId: string;
@@ -19,6 +22,8 @@ export interface WidgetHostOptions {
   getContentWindow: () => Window | null | undefined;
   sendEvent?: WidgetSendEventFn;
   getOpenIdToken?: WidgetOpenIdFn;
+  uploadContent?: WidgetUploadFn;
+  downloadContent?: WidgetDownloadFn;
   onCapabilityChange?: (capabilities: string[]) => void;
 }
 
@@ -38,6 +43,7 @@ const SUPPORTED_API_VERSIONS = [
   "org.matrix.msc2876",
   "org.matrix.msc2931",
   "org.matrix.msc2974",
+  "org.matrix.msc4039",
 ];
 
 const DEFAULT_CAPABILITIES = [
@@ -45,12 +51,16 @@ const DEFAULT_CAPABILITIES = [
   "org.matrix.msc2762.timeline.*",
   "org.matrix.msc2762.send.event:m.room.message",
   "org.matrix.msc2762.receive.event:m.room.message",
+  "org.matrix.msc2762.send.event:m.sticker",
+  "org.matrix.msc2762.receive.event:m.sticker",
   "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member",
   "org.matrix.msc2762.receive.state_event:org.matrix.msc3401.call.member",
   "org.matrix.msc2762.send.event:org.matrix.msc4075.rtc.notification",
   "org.matrix.msc2762.receive.event:org.matrix.msc4075.rtc.notification",
   "org.matrix.msc2762.send.to_device",
   "org.matrix.msc2762.receive.to_device",
+  "org.matrix.msc4039.upload_file",
+  "org.matrix.msc4039.download_file",
 ];
 
 function isWidgetRequest(data: unknown): data is WidgetApiMessage {
@@ -170,6 +180,53 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
     if (action === "send_to_device") {
       // Element Call may request to-device; acknowledge without inventing crypto APIs.
       reply(request, {});
+      return;
+    }
+
+    if (action === "org.matrix.msc4039.upload_file") {
+      if (!options.uploadContent) {
+        reply(request, { error: { message: "upload_file is not available", url: "", http_status: 400 } });
+        return;
+      }
+      try {
+        const filename = typeof request.data?.filename === "string" ? request.data.filename : "upload.bin";
+        const mimeType = typeof request.data?.contentType === "string" ? request.data.contentType : "application/octet-stream";
+        const raw = typeof request.data?.data === "string" ? request.data.data : "";
+        const bytes = Uint8Array.from(atob(raw), (char) => char.charCodeAt(0));
+        const result = await options.uploadContent(new Blob([bytes], { type: mimeType }), filename, mimeType);
+        reply(request, { content_uri: result.content_uri });
+      } catch (error) {
+        reply(request, {
+          error: {
+            message: error instanceof Error ? error.message : "upload failed",
+            url: "",
+            http_status: 500,
+          },
+        });
+      }
+      return;
+    }
+
+    if (action === "org.matrix.msc4039.download_file") {
+      if (!options.downloadContent) {
+        reply(request, { error: { message: "download_file is not available", url: "", http_status: 400 } });
+        return;
+      }
+      try {
+        const mxc = typeof request.data?.content_uri === "string"
+          ? request.data.content_uri
+          : typeof request.data?.url === "string" ? request.data.url : "";
+        const result = await options.downloadContent(mxc);
+        reply(request, result);
+      } catch (error) {
+        reply(request, {
+          error: {
+            message: error instanceof Error ? error.message : "download failed",
+            url: "",
+            http_status: 500,
+          },
+        });
+      }
       return;
     }
 

@@ -72,7 +72,7 @@ export function App() {
             <button
               type="button"
               className="button danger"
-              onClick={() => dismissIncomingRtcCall(incomingRtc.roomId)}
+              onClick={() => void dismissIncomingRtcCall(incomingRtc.roomId)}
             >
               {t("call.decline")}
             </button>

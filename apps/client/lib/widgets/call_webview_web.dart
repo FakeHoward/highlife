@@ -2,7 +2,8 @@ import 'package:flutter/widgets.dart';
 
 import 'element_call_widget_host.dart';
 
-export 'element_call_widget_host.dart' show WidgetSendEventFn;
+export 'element_call_widget_host.dart'
+    show WidgetSendEventFn, WidgetUploadFn, WidgetDownloadFn;
 
 /// Flutter web: no reliable Element Call embed via webview_flutter.
 /// [CallSurface] falls back to external launch.
@@ -15,6 +16,8 @@ class CallWebView extends StatefulWidget {
     required this.onWidgetMessage,
     required this.onUnsupported,
     this.sendEvent,
+    this.uploadContent,
+    this.downloadContent,
     this.onReady,
   });
 
@@ -24,6 +27,8 @@ class CallWebView extends StatefulWidget {
   final ValueChanged<String> onWidgetMessage;
   final VoidCallback onUnsupported;
   final WidgetSendEventFn? sendEvent;
+  final WidgetUploadFn? uploadContent;
+  final WidgetDownloadFn? downloadContent;
   final VoidCallback? onReady;
 
   static const supported = false;

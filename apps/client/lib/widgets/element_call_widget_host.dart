@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -11,6 +12,14 @@ typedef WidgetSendEventFn = Future<Map<String, dynamic>> Function({
   String? roomId,
 });
 
+typedef WidgetUploadFn = Future<String> Function({
+  required Uint8List bytes,
+  required String filename,
+  String? mimeType,
+});
+
+typedef WidgetDownloadFn = Future<Map<String, dynamic>> Function(String mxcUrl);
+
 const _supportedApiVersions = [
   '0.0.1',
   '0.0.2',
@@ -18,6 +27,7 @@ const _supportedApiVersions = [
   'org.matrix.msc2876',
   'org.matrix.msc2931',
   'org.matrix.msc2974',
+  'org.matrix.msc4039',
 ];
 
 const _defaultCapabilities = [
@@ -25,12 +35,16 @@ const _defaultCapabilities = [
   'org.matrix.msc2762.timeline.*',
   'org.matrix.msc2762.send.event:m.room.message',
   'org.matrix.msc2762.receive.event:m.room.message',
+  'org.matrix.msc2762.send.event:m.sticker',
+  'org.matrix.msc2762.receive.event:m.sticker',
   'org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member',
   'org.matrix.msc2762.receive.state_event:org.matrix.msc3401.call.member',
   'org.matrix.msc2762.send.event:org.matrix.msc4075.rtc.notification',
   'org.matrix.msc2762.receive.event:org.matrix.msc4075.rtc.notification',
   'org.matrix.msc2762.send.to_device',
   'org.matrix.msc2762.receive.to_device',
+  'org.matrix.msc4039.upload_file',
+  'org.matrix.msc4039.download_file',
 ];
 
 const _sendEventPrefix = 'org.matrix.msc2762.send.event:';
@@ -41,6 +55,7 @@ const _receiveStateEventPrefix = 'org.matrix.msc2762.receive.state_event:';
 /// Event types Element Call may need beyond the static defaults.
 bool _isAllowedCallEventType(String type) {
   if (type == 'm.room.message') return true;
+  if (type == 'm.sticker') return true;
   if (type == 'org.matrix.msc4075.rtc.notification') return true;
   if (type == 'org.matrix.rageshake.request') return true;
   if (type == 'org.matrix.msc3401.call' ||
@@ -57,6 +72,10 @@ bool _isAllowedCallEventType(String type) {
 bool isGrantableWidgetCapability(String capability) {
   if (_defaultCapabilities.contains(capability)) return true;
   if (capability == 'm.always_on_screen') return true;
+  if (capability == 'org.matrix.msc4039.upload_file' ||
+      capability == 'org.matrix.msc4039.download_file') {
+    return true;
+  }
   if (capability.startsWith('org.matrix.msc2762.timeline')) return true;
   if (capability == 'org.matrix.msc2762.send.to_device' ||
       capability == 'org.matrix.msc2762.receive.to_device') {
@@ -104,6 +123,8 @@ class ElementCallWidgetHost {
     required this.controller,
     required this.targetOrigin,
     this.sendEvent,
+    this.uploadContent,
+    this.downloadContent,
     this.onCapabilityChange,
   });
 
@@ -113,6 +134,8 @@ class ElementCallWidgetHost {
   /// Origin of the embedded call widget URI; used for postMessage target.
   final String targetOrigin;
   final WidgetSendEventFn? sendEvent;
+  final WidgetUploadFn? uploadContent;
+  final WidgetDownloadFn? downloadContent;
   final VoidCallback? onCapabilityChange;
 
   final _approved = {..._defaultCapabilities};
@@ -237,6 +260,78 @@ class ElementCallWidgetHost {
     if (action == 'send_to_device' ||
         action == 'update_immediate_device_list') {
       await _reply(request, {});
+      return;
+    }
+
+    if (action == 'org.matrix.msc4039.upload_file') {
+      final upload = uploadContent;
+      if (upload == null) {
+        await _reply(request, {
+          'error': {
+            'message': 'upload_file is not available',
+            'url': '',
+            'http_status': 400,
+          },
+        });
+        return;
+      }
+      final data = request['data'] is Map
+          ? Map<String, dynamic>.from(request['data'] as Map)
+          : <String, dynamic>{};
+      try {
+        final filename = data['filename']?.toString() ?? 'upload.bin';
+        final mimeType = data['contentType']?.toString() ??
+            'application/octet-stream';
+        final raw = data['data']?.toString() ?? '';
+        final bytes = Uint8List.fromList(base64Decode(raw));
+        final contentUri = await upload(
+          bytes: bytes,
+          filename: filename,
+          mimeType: mimeType,
+        );
+        await _reply(request, {'content_uri': contentUri});
+      } catch (error) {
+        await _reply(request, {
+          'error': {
+            'message': error.toString(),
+            'url': '',
+            'http_status': 500,
+          },
+        });
+      }
+      return;
+    }
+
+    if (action == 'org.matrix.msc4039.download_file') {
+      final download = downloadContent;
+      if (download == null) {
+        await _reply(request, {
+          'error': {
+            'message': 'download_file is not available',
+            'url': '',
+            'http_status': 400,
+          },
+        });
+        return;
+      }
+      final data = request['data'] is Map
+          ? Map<String, dynamic>.from(request['data'] as Map)
+          : <String, dynamic>{};
+      try {
+        final mxc = data['content_uri']?.toString() ??
+            data['url']?.toString() ??
+            '';
+        final result = await download(mxc);
+        await _reply(request, result);
+      } catch (error) {
+        await _reply(request, {
+          'error': {
+            'message': error.toString(),
+            'url': '',
+            'http_status': 500,
+          },
+        });
+      }
       return;
     }
 

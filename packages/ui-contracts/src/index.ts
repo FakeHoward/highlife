@@ -6,7 +6,9 @@ export type MessageKind =
   | "audio"
   | "file"
   | "poll"
-  | "system";
+  | "system"
+  | "sticker"
+  | "location";
 
 export type DeliveryStatus =
   | "encrypting"
@@ -117,6 +119,11 @@ export interface TimelineItem {
     senderName: string;
     body: string;
   };
+  threadRootId?: string;
+  threadReplyCount?: number;
+  geoUri?: string;
+  latitude?: number;
+  longitude?: number;
   media?: MediaDescriptor;
   poll?: PollDescriptor;
   deliveryStatus?: DeliveryStatus;

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
+import '../domain/spec_features.dart';
 import '../services/auth_errors.dart';
 import '../services/protocol_registrar.dart';
 import '../services/session.dart';
@@ -13,6 +14,7 @@ import '../theme.dart';
 import '../widgets/auth_web_flow.dart';
 import '../widgets/crypto_status_banner.dart';
 import '../widgets/hl_button.dart';
+import '../widgets/qr_code_dialog.dart';
 
 enum _AuthMode { login, register }
 
@@ -337,6 +339,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             : (registering ? s.createAccount : s.signIn)),
                   ),
                 ),
+                if (!registering) ...[
+                  const SizedBox(height: 10),
+                  HlButton.text(
+                    onPressed: session.busy
+                        ? null
+                        : () => _showSignInQr(session, s),
+                    isFullWidth: true,
+                    label: Text(s.signInQr),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Text(
                   s.loginSessionNote,
@@ -365,6 +377,31 @@ class _LoginScreenState extends State<LoginScreen> {
     final host = match?.group(1)?.trim();
     if (host == null || host.isEmpty) return null;
     return host;
+  }
+
+  Future<void> _showSignInQr(HighLifeSession session, AppStrings s) async {
+    var homeserver = _hs.text.trim();
+    if (homeserver.isEmpty) {
+      final host = _serverFromMxid(_user.text);
+      if (host != null) homeserver = 'https://$host';
+    }
+    if (homeserver.isEmpty) {
+      setState(
+        () => _localError = s.authError(AuthErrorKeys.homeserverRequired),
+      );
+      return;
+    }
+    await showQrCodeDialog(
+      context,
+      strings: s,
+      title: s.signInQr,
+      payload: matrixLoginQrPayload(
+        homeserver: session.normalizeHomeserver(homeserver),
+        deviceId: session.deviceId,
+        userId: _user.text.trim().isEmpty ? null : _user.text.trim(),
+      ),
+      hint: s.qrLoginHint,
+    );
   }
 
   Future<void> _probeHomeserver(HighLifeSession session) async {

@@ -6,6 +6,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'element_call_widget_host.dart';
 
+export 'element_call_widget_host.dart'
+    show WidgetSendEventFn, WidgetUploadFn, WidgetDownloadFn;
+
 /// Native (IO) WebView embed for Element Call + Widget API bridge.
 class CallWebView extends StatefulWidget {
   const CallWebView({
@@ -16,6 +19,8 @@ class CallWebView extends StatefulWidget {
     required this.onWidgetMessage,
     required this.onUnsupported,
     this.sendEvent,
+    this.uploadContent,
+    this.downloadContent,
     this.onReady,
   });
 
@@ -25,6 +30,8 @@ class CallWebView extends StatefulWidget {
   final ValueChanged<String> onWidgetMessage;
   final VoidCallback onUnsupported;
   final WidgetSendEventFn? sendEvent;
+  final WidgetUploadFn? uploadContent;
+  final WidgetDownloadFn? downloadContent;
   final VoidCallback? onReady;
 
   static bool get supported => embeddedWebViewAvailable;
@@ -87,6 +94,8 @@ class _CallWebViewIoState extends State<CallWebView> {
         controller: controller,
         targetOrigin: _allowedOrigin,
         sendEvent: widget.sendEvent,
+        uploadContent: widget.uploadContent,
+        downloadContent: widget.downloadContent,
         onCapabilityChange: widget.onReady,
       );
       setState(() => _controller = controller);

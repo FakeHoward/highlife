@@ -34,6 +34,9 @@ void main() {
       expect(s.muteNotifications, 'Mute notifications');
       expect(s.ssoWaitingRedirect, contains('browser'));
       expect(s.pushDistributor, 'Notification delivery');
+      expect(s.thread, 'Thread');
+      expect(s.linkNewDevice, 'Link new device');
+      expect(s.signInQr, 'Show sign-in QR');
     });
 
     test('every key exists in both EN and RU', () {

@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../i18n";
 import { beginOidcOrSsoLogin, discoverMasIssuer } from "../matrix/oidc";
-import { login, loginWithSsoToken, probeSsoAvailable, register } from "../matrix/service";
+import { beginLoginQr, login, loginWithSsoToken, probeSsoAvailable, register } from "../matrix/service";
 import { probeBrowserCrypto } from "../matrix/browserCrypto";
 import { IconEye, IconEyeOff } from "./Icons";
+import { QrLoginPanel } from "./QrLoginPanel";
 
 type Mode = "login" | "register";
 
@@ -30,7 +31,13 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
   const [ssoAvailable, setSsoAvailable] = useState(false);
   const [masIssuer, setMasIssuer] = useState<string | null>(null);
   const [ssoToken, setSsoToken] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
   const cryptoProbe = probeBrowserCrypto();
+  const startLoginQr = useCallback(
+    (onFailure: (reason: string) => void, signal: AbortSignal) =>
+      beginLoginQr(homeserver, onFailure, signal),
+    [homeserver],
+  );
 
   useEffect(() => {
     const hs = homeserver.trim();
@@ -277,6 +284,26 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
           >
             {t("login.signInWithSso")}
           </button>
+        )}
+        {mode === "login" && (
+          <div className="qr-login-block">
+            <p className="muted small">{t("login.qrHint")}</p>
+            {qrOpen ? (
+              <QrLoginPanel
+                start={startLoginQr}
+                onClose={() => setQrOpen(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                className="button"
+                disabled={busy || !homeserver.trim()}
+                onClick={() => setQrOpen(true)}
+              >
+                {t("login.signInQr")}
+              </button>
+            )}
+          </div>
         )}
         {mode === "login" && (
           <label>

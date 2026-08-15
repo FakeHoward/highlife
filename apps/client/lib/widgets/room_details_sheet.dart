@@ -58,6 +58,7 @@ class RoomDetailsSheet extends StatefulWidget {
 class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
   final _invite = TextEditingController();
   List<User> _members = const [];
+  List<User> _knocks = const [];
   var _loading = true;
   String? _status;
   String? _spaceId;
@@ -82,6 +83,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
     if (!mounted) return;
     setState(() {
       _members = widget.room.getParticipants([Membership.join]);
+      _knocks = widget.room.getParticipants([Membership.knock]);
       _loading = false;
     });
   }
@@ -395,6 +397,54 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                         trailing: Text(
                           s.powerLevel(user.powerLevel.level),
                           style: TextStyle(color: tokens.muted),
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 20),
+                  Text(
+                    s.pendingKnocks,
+                    style: Theme.of(context).textTheme.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_knocks.isEmpty)
+                    Text(
+                      s.noKnocks,
+                      style: TextStyle(color: tokens.muted),
+                    )
+                  else
+                    ..._knocks.map((user) {
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: MatrixAvatar(
+                          name: user.calcDisplayname(),
+                          mxc: user.avatarUrl,
+                          client: room.client,
+                          radius: 18,
+                        ),
+                        title: Text(user.calcDisplayname()),
+                        subtitle: Text(user.id),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            HlButton.text(
+                              onPressed: () async {
+                                await widget.session.roomRepository
+                                    ?.approveKnock(room, user.id);
+                                await _refresh();
+                              },
+                              label: Text(s.approveKnock),
+                            ),
+                            HlButton.text(
+                              onPressed: () async {
+                                await widget.session.roomRepository
+                                    ?.denyKnock(room, user.id);
+                                await _refresh();
+                              },
+                              label: Text(s.denyKnock),
+                            ),
+                          ],
                         ),
                       );
                     }),

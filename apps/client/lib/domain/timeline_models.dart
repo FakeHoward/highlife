@@ -1,5 +1,6 @@
 import '../aiomatrix/polls.dart';
 import '../aiomatrix/protocol.dart';
+import 'spec_features.dart';
 
 enum TimelineItemKind {
   text,
@@ -10,6 +11,7 @@ enum TimelineItemKind {
   audio,
   file,
   location,
+  sticker,
   poll,
   system,
 }
@@ -57,6 +59,12 @@ class TimelineItem {
     this.replyToEventId,
     this.edited = false,
     this.reactions = const [],
+    this.threadRootId,
+    this.threadReplyCount,
+    this.geoUri,
+    this.latitude,
+    this.longitude,
+    this.rawContent,
   });
 
   final String eventId;
@@ -67,6 +75,12 @@ class TimelineItem {
   final String? replyToEventId;
   final bool edited;
   final List<ReactionSummary> reactions;
+  final String? threadRootId;
+  final int? threadReplyCount;
+  final String? geoUri;
+  final double? latitude;
+  final double? longitude;
+  final Map<String, dynamic>? rawContent;
 
   factory TimelineItem.fromContent({
     required String eventId,
@@ -75,9 +89,12 @@ class TimelineItem {
     required Map<String, dynamic> content,
     bool edited = false,
     List<ReactionSummary> reactions = const [],
+    String? eventType,
+    String? threadRootId,
+    int? threadReplyCount,
   }) {
     final msgtype = content['msgtype'] as String? ?? 'm.text';
-    final kind = switch (msgtype) {
+    var kind = switch (msgtype) {
       'm.notice' => TimelineItemKind.notice,
       'm.emote' => TimelineItemKind.emote,
       'm.image' => TimelineItemKind.image,
@@ -85,8 +102,10 @@ class TimelineItem {
       'm.audio' => TimelineItemKind.audio,
       'm.file' => TimelineItemKind.file,
       'm.location' => TimelineItemKind.location,
+      'm.sticker' => TimelineItemKind.sticker,
       _ => TimelineItemKind.text,
     };
+    if (eventType == stickerEventType) kind = TimelineItemKind.sticker;
     final relatesTo = content['m.relates_to'];
     final relation = relatesTo is Map
         ? Map<String, dynamic>.from(relatesTo)
@@ -94,19 +113,30 @@ class TimelineItem {
     final reply = relation['m.in_reply_to'];
     final replyMap =
         reply is Map ? Map<String, dynamic>.from(reply) : const <String, dynamic>{};
+    final location = parseLocationContent(content);
     final item = TimelineItem(
       eventId: eventId,
       senderId: senderId,
       timestamp: timestamp,
       body: resolveDisplayBody(content),
       kind: kind,
-      replyToEventId: replyMap['event_id'] as String?,
+      replyToEventId: replyMap['event_id'] as String? ??
+          (relation['rel_type'] == 'm.thread'
+              ? relation['event_id'] as String?
+              : null),
       edited: edited,
       reactions: reactions,
+      threadRootId: threadRootId,
+      threadReplyCount: threadReplyCount,
+      geoUri: location?.geoUri,
+      latitude: location?.lat,
+      longitude: location?.lon,
+      rawContent: content,
     );
     if (kind == TimelineItemKind.text ||
         kind == TimelineItemKind.notice ||
-        kind == TimelineItemKind.emote) {
+        kind == TimelineItemKind.emote ||
+        kind == TimelineItemKind.location) {
       return item;
     }
     // Matrix media URLs are mxc:// — ignore https MiniApp / link fallbacks.
@@ -145,6 +175,12 @@ class MediaTimelineItem extends TimelineItem {
     super.replyToEventId,
     super.edited,
     super.reactions,
+    super.threadRootId,
+    super.threadReplyCount,
+    super.geoUri,
+    super.latitude,
+    super.longitude,
+    super.rawContent,
   });
 
   final String? mxcUrl;
@@ -169,6 +205,12 @@ class MediaTimelineItem extends TimelineItem {
       replyToEventId: item.replyToEventId,
       edited: item.edited,
       reactions: item.reactions,
+      threadRootId: item.threadRootId,
+      threadReplyCount: item.threadReplyCount,
+      geoUri: item.geoUri,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      rawContent: item.rawContent,
     );
   }
 }
@@ -187,6 +229,9 @@ class PollTimelineItem extends TimelineItem {
     required this.totalVoters,
     this.disclosed = true,
     super.reactions,
+    super.threadRootId,
+    super.threadReplyCount,
+    super.rawContent,
   }) : super(body: question, kind: TimelineItemKind.poll);
 
   final String question;
@@ -214,18 +259,27 @@ class _ReactionBucket {
 }
 
 /// Normalize message / reaction / edit events into display items (oldest → newest).
+///
+/// Pass [forThreadRootId] to build a thread panel (root + in-thread replies).
+/// The main timeline hides in-thread replies unless `is_falling_back`.
 List<TimelineItem> buildTimelineItems(
   Iterable<RawRoomEvent> events, {
   String? ownUserId,
+  String? forThreadRootId,
 }) {
   final edits = <String, Map<String, dynamic>>{};
   final reactions = <String, Map<String, _ReactionBucket>>{};
+  final threadCounts = <String, int>{};
 
   for (final event in events) {
     if (event.redacted) continue;
     final relation = _asMap(event.content['m.relates_to']);
     final relatedId = relation['event_id'] as String?;
     final relType = relation['rel_type'] as String?;
+    final root = threadRootId(event.content);
+    if (root != null) {
+      threadCounts[root] = (threadCounts[root] ?? 0) + 1;
+    }
 
     if (event.type == 'm.reaction' &&
         relType == 'm.annotation' &&
@@ -275,6 +329,34 @@ List<TimelineItem> buildTimelineItems(
     }
   }
 
+  bool includeEvent(RawRoomEvent event) {
+    if (forThreadRootId != null) {
+      final root = threadRootId(event.content);
+      return event.eventId == forThreadRootId || root == forThreadRootId;
+    }
+    return belongsOnMainTimeline(event.content);
+  }
+
+  List<ReactionSummary> reactionListFor(String eventId) {
+    final reactionMap = reactions[eventId] ?? const {};
+    return reactionMap.entries
+        .map(
+          (entry) => ReactionSummary(
+            key: entry.key,
+            count: entry.value.count,
+            reactedByMe: entry.value.reactedByMe,
+            ownEventId: entry.value.ownEventId,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+  }
+
+  String? rootIdFor(RawRoomEvent event) {
+    return threadRootId(event.content) ??
+        (threadCounts.containsKey(event.eventId) ? event.eventId : null);
+  }
+
   final items = <TimelineItem>[];
   for (final event in events) {
     if (event.redacted) continue;
@@ -284,12 +366,16 @@ List<TimelineItem> buildTimelineItems(
       'm.room.topic',
       'm.room.canonical_alias',
       'm.room.avatar',
+      msc4310Decline,
+      msc4310DeclineUnstable,
     }.contains(event.type)) {
+      if (forThreadRootId != null) continue;
       final body = switch (event.type) {
         'm.room.name' => event.content['name'] as String? ?? '',
         'm.room.topic' => event.content['topic'] as String? ?? '',
         'm.room.canonical_alias' =>
           event.content['alias'] as String? ?? '',
+        msc4310Decline || msc4310DeclineUnstable => 'decline',
         _ => '',
       };
       items.add(
@@ -299,12 +385,14 @@ List<TimelineItem> buildTimelineItems(
           timestamp: event.timestamp,
           body: body,
           kind: TimelineItemKind.system,
+          rawContent: event.content,
         ),
       );
       continue;
     }
 
     if (isPollStartType(event.type)) {
+      if (!includeEvent(event)) continue;
       final start = parsePollStartContent(event.content);
       if (start == null) continue;
       final validIds = start.answers.map((a) => a.id).toSet();
@@ -314,18 +402,6 @@ List<TimelineItem> buildTimelineItems(
         maxSelections: start.maxSelections,
         ownUserId: ownUserId,
       );
-      final reactionMap = reactions[event.eventId] ?? const {};
-      final reactionList = reactionMap.entries
-          .map(
-            (entry) => ReactionSummary(
-              key: entry.key,
-              count: entry.value.count,
-              reactedByMe: entry.value.reactedByMe,
-              ownEventId: entry.value.ownEventId,
-            ),
-          )
-          .toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
       items.add(
         PollTimelineItem(
           eventId: event.eventId,
@@ -339,7 +415,10 @@ List<TimelineItem> buildTimelineItems(
           counts: tally.counts,
           mySelections: tally.mySelections,
           totalVoters: tally.totalVoters,
-          reactions: reactionList,
+          reactions: reactionListFor(event.eventId),
+          threadRootId: rootIdFor(event),
+          threadReplyCount: threadCounts[event.eventId],
+          rawContent: event.content,
         ),
       );
       continue;
@@ -350,18 +429,7 @@ List<TimelineItem> buildTimelineItems(
     }
 
     if (event.type == 'm.room.encrypted') {
-      final reactionMap = reactions[event.eventId] ?? const {};
-      final reactionList = reactionMap.entries
-          .map(
-            (entry) => ReactionSummary(
-              key: entry.key,
-              count: entry.value.count,
-              reactedByMe: entry.value.reactedByMe,
-              ownEventId: entry.value.ownEventId,
-            ),
-          )
-          .toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
+      if (!includeEvent(event)) continue;
       items.add(
         TimelineItem(
           eventId: event.eventId,
@@ -369,32 +437,27 @@ List<TimelineItem> buildTimelineItems(
           timestamp: event.timestamp,
           body: '',
           kind: TimelineItemKind.notice,
-          reactions: reactionList,
+          reactions: reactionListFor(event.eventId),
+          threadRootId: rootIdFor(event),
+          threadReplyCount: threadCounts[event.eventId],
+          rawContent: event.content,
         ),
       );
       continue;
     }
 
-    if (event.type != 'm.room.message') continue;
+    final isMessage = event.type == 'm.room.message' ||
+        event.type == stickerEventType ||
+        event.type == msc4139ReplyType;
+    if (!isMessage) continue;
     final relation = _asMap(event.content['m.relates_to']);
     if (relation['rel_type'] == 'm.replace') continue;
+    if (!includeEvent(event)) continue;
 
     final editedContent = edits[event.eventId];
     final content = editedContent == null
         ? event.content
         : <String, dynamic>{...event.content, ...editedContent};
-    final reactionMap = reactions[event.eventId] ?? const {};
-    final reactionList = reactionMap.entries
-        .map(
-          (entry) => ReactionSummary(
-            key: entry.key,
-            count: entry.value.count,
-            reactedByMe: entry.value.reactedByMe,
-            ownEventId: entry.value.ownEventId,
-          ),
-        )
-        .toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
 
     items.add(
       TimelineItem.fromContent(
@@ -403,7 +466,10 @@ List<TimelineItem> buildTimelineItems(
         timestamp: event.timestamp,
         content: content,
         edited: editedContent != null,
-        reactions: reactionList,
+        reactions: reactionListFor(event.eventId),
+        eventType: event.type,
+        threadRootId: rootIdFor(event),
+        threadReplyCount: threadCounts[event.eventId],
       ),
     );
   }

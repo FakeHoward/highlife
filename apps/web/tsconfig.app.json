@@ -12,5 +12,6 @@
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src", "../../packages/ui-contracts/src"]
+  "include": ["src", "../../packages/ui-contracts/src"],
+  "exclude": ["src/vendor/uqr.js"]
 }

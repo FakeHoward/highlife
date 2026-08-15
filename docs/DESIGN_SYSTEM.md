@@ -58,9 +58,9 @@ implementations differ.
   minutes and no system/date boundary intervenes.
 - Show sender identity once per group. Keep timestamps and delivery state
   available without adding a full metadata row to every bubble.
-- Replies, edits, reactions, encryption state, media progress, and send
-  failures are first-class message states. HighLife does not create thread UI;
-  thread relations received from other clients appear as ordinary replies.
+- Replies, edits, reactions, encryption state, media progress, send
+  failures, and threads are first-class message states. Thread replies stay
+  in a thread panel; the main timeline keeps roots and fallback previews.
 - Inline keyboards align with their parent bubble and use rectangular controls
   with restrained radii. Primary and destructive styles are semantic, not
   decorative.

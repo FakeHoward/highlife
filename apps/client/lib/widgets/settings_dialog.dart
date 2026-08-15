@@ -7,10 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
+import '../domain/spec_features.dart';
 import '../services/session.dart';
 import '../services/update_checker.dart';
 import 'hl_button.dart';
 import 'matrix_avatar.dart';
+import 'qr_code_dialog.dart';
 import 'verification_dialog.dart';
 
 Future<void> showSettingsDialog(BuildContext context) {
@@ -256,6 +258,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.qr_code_2_outlined),
+                    title: Text(s.linkNewDevice),
+                    subtitle: Text(s.linkNewDeviceHint),
+                    onTap: () => _showLinkDeviceQr(session, s),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.backup_outlined),
                     title: Text(s.keyBackup),
                     onTap: () => _openBackup(context, session, s),
@@ -349,6 +358,21 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
     if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+  }
+
+  Future<void> _showLinkDeviceQr(HighLifeSession session, AppStrings s) {
+    final homeserver = session.homeserverUrl ?? '';
+    return showQrCodeDialog(
+      context,
+      strings: s,
+      title: s.linkNewDevice,
+      payload: matrixLoginQrPayload(
+        homeserver: homeserver,
+        deviceId: session.deviceId,
+        userId: session.userId,
+      ),
+      hint: s.linkNewDeviceHint,
+    );
   }
 
   Future<void> _editDisplayName(HighLifeSession session, AppStrings s) async {

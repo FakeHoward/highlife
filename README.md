@@ -2,11 +2,14 @@
 
 Matrix clients and a small self-host stack built around [aiomatrix](https://www.npmjs.com/package/aiomatrix).
 
-React and Flutter apps speak ordinary Matrix (E2EE, Spaces, DMs, first-party
-1:1 voice calls, first-party MatrixRTC/LiveKit group calls, and Element Call
-as last-resort fallback) and also render
+React and Flutter apps speak Matrix with Element-adjacent MSCs (simplified
+sliding sync when the homeserver advertises it, `m.mentions`, threads,
+private read receipts, static location, stickers/image packs, knock,
+room summary, MSC4108 QR login, MatrixRTC decline) and also render
 `dev.aiomatrix.*` room UI: inline keyboards, signed callbacks, host
-toasts/progress, Mini Apps, and FormSpace. The `bot` package is the FormSpace
+toasts/progress, Mini Apps, and FormSpace. Bot prompts dual-read
+`org.matrix.msc4139.prompts`; commands dual-read `org.matrix.msc4332.commands`.
+The `bot` package is the FormSpace
 reference bot. `server/` is Synapse + Caddy + LiveKit + coturn for a deployable
 homeserver.
 

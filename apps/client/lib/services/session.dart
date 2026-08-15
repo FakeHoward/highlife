@@ -12,6 +12,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../aiomatrix/polls.dart';
 import '../aiomatrix/protocol.dart';
+import '../domain/spec_features.dart';
 import '../repositories/matrix_room_repository.dart';
 import 'auth_errors.dart';
 import 'call_uri.dart';
@@ -170,10 +171,7 @@ class HighLifeSession extends ChangeNotifier {
     );
     await _client!.init();
     if (_client!.isLogged()) {
-      _rooms = MatrixRoomRepository(_client!);
-      _startNativeCalling(_client!);
-      _startPushPipeline();
-      unawaited(_refreshOwnDevices(_client!));
+      _attachLoggedIn(_client!);
     }
     _ready = true;
     notifyListeners();
@@ -198,6 +196,14 @@ class HighLifeSession extends ChangeNotifier {
     // Always try UnifiedPush on Android; HTTP pusher registers only when a
     // real endpoint arrives and HIGHLIFE_PUSH_GATEWAY_URL is set.
     unawaited(_unifiedPush!.start());
+  }
+
+  void _attachLoggedIn(Client client) {
+    _rooms = MatrixRoomRepository(client);
+    _startNativeCalling(client);
+    _startPushPipeline();
+    unawaited(_refreshOwnDevices(client));
+    unawaited(_rooms?.probeSlidingSync() ?? Future<void>.value());
   }
 
   void _startNativeCalling(Client active) {
@@ -326,6 +332,8 @@ class HighLifeSession extends ChangeNotifier {
     final important = <String>{
       commandsStateEventType,
       hostCapabilitiesStateEventType,
+      msc4332CommandsState,
+      msc2545PackState,
     };
     final crypto = await initializeCryptoImplementations();
     _cryptoAvailable = crypto.available;
@@ -343,6 +351,7 @@ class HighLifeSession extends ChangeNotifier {
         importantStateEvents: important,
         nativeImplementations: crypto.implementations,
         verificationMethods: verificationMethods,
+        receiptsPublicByDefault: false,
       );
     }
 
@@ -365,6 +374,7 @@ class HighLifeSession extends ChangeNotifier {
       importantStateEvents: important,
       nativeImplementations: crypto.implementations,
       verificationMethods: verificationMethods,
+      receiptsPublicByDefault: false,
     );
   }
 
@@ -509,10 +519,7 @@ class HighLifeSession extends ChangeNotifier {
       if (!client.isLogged()) {
         throw AuthErrorKeys.loginFailed;
       }
-      _rooms = MatrixRoomRepository(client);
-      _startNativeCalling(client);
-      _startPushPipeline();
-      unawaited(_refreshOwnDevices(client));
+      _attachLoggedIn(client);
     } catch (e) {
       _error = mapAuthError(e);
     } finally {
@@ -545,10 +552,7 @@ class HighLifeSession extends ChangeNotifier {
       if (!client.isLogged()) {
         throw AuthErrorKeys.loginFailed;
       }
-      _rooms = MatrixRoomRepository(client);
-      _startNativeCalling(client);
-      _startPushPipeline();
-      unawaited(_refreshOwnDevices(client));
+      _attachLoggedIn(client);
     } catch (e) {
       _error = mapAuthError(e);
     } finally {
@@ -599,10 +603,7 @@ class HighLifeSession extends ChangeNotifier {
       if (!client.isLogged()) {
         throw AuthErrorKeys.registerIncomplete;
       }
-      _rooms = MatrixRoomRepository(client);
-      _startNativeCalling(client);
-      _startPushPipeline();
-      unawaited(_refreshOwnDevices(client));
+      _attachLoggedIn(client);
     } catch (e) {
       _error = mapAuthError(e, registering: true);
     } finally {
@@ -716,14 +717,20 @@ class HighLifeSession extends ChangeNotifier {
   List<Room> get rooms {
     final client = _client;
     if (client == null) return const [];
-    _rooms ??= MatrixRoomRepository(client);
+    if (_rooms == null) {
+      _rooms = MatrixRoomRepository(client);
+      unawaited(_rooms!.probeSlidingSync());
+    }
     return _rooms!.rooms;
   }
 
   List<Room> get spaces {
     final client = _client;
     if (client == null) return const [];
-    _rooms ??= MatrixRoomRepository(client);
+    if (_rooms == null) {
+      _rooms = MatrixRoomRepository(client);
+      unawaited(_rooms!.probeSlidingSync());
+    }
     return _rooms!.spaces;
   }
 
@@ -792,6 +799,19 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> knockRoom(String roomIdOrAlias) async {
+    final repository = _rooms;
+    if (repository == null || roomIdOrAlias.trim().isEmpty) return;
+    await repository.knockRoom(roomIdOrAlias);
+    notifyListeners();
+  }
+
+  Future<RoomSummary?> fetchRoomSummary(String roomIdOrAlias) async {
+    final repository = _rooms;
+    if (repository == null || roomIdOrAlias.trim().isEmpty) return null;
+    return repository.fetchRoomSummary(roomIdOrAlias);
+  }
+
   Future<void> acceptInvite(Room room) async {
     await room.join();
     notifyListeners();
@@ -818,22 +838,89 @@ class HighLifeSession extends ChangeNotifier {
   }
 
   List<AdvertisedCommand> commandsFor(Room room) {
-    final states = room.states[commandsStateEventType];
-    if (states == null) return const [];
     final out = <AdvertisedCommand>[];
-    for (final event in states.values) {
-      final parsed = CommandsState.tryParse(
-        Map<String, dynamic>.from(event.content),
-        event.stateKey ?? '',
-      );
-      if (parsed != null) out.addAll(parsed.commands);
+    final vendor = room.states[commandsStateEventType];
+    if (vendor != null) {
+      for (final event in vendor.values) {
+        final parsed = CommandsState.tryParse(
+          Map<String, dynamic>.from(event.content),
+          event.stateKey ?? '',
+        );
+        if (parsed != null) out.addAll(parsed.commands);
+      }
+    }
+    final msc = room.states[msc4332CommandsState];
+    if (msc != null) {
+      for (final event in msc.values) {
+        for (final command in parseCommandsState(
+          Map<String, dynamic>.from(event.content),
+        )) {
+          out.add(
+            AdvertisedCommand(
+              name: command.name,
+              aliases: command.aliases,
+              description: command.description,
+              args: command.args.isEmpty ? null : command.args.join(' '),
+            ),
+          );
+        }
+      }
     }
     return out;
   }
 
-  Future<void> sendText(Room room, String text) async {
-    await room.sendTextEvent(text);
+  Future<void> sendText(
+    Room room,
+    String text, {
+    String? threadRootId,
+  }) async {
+    await _rooms?.sendText(room, text, threadRootId: threadRootId);
     notifyListeners();
+  }
+
+  Future<void> sendLocation(
+    Room room,
+    double lat,
+    double lon, {
+    String? description,
+    String? threadRootId,
+  }) async {
+    await _rooms?.sendLocation(
+      room,
+      lat,
+      lon,
+      description: description,
+      threadRootId: threadRootId,
+    );
+    notifyListeners();
+  }
+
+  Future<void> sendSticker(
+    Room room,
+    ImagePackItem item, {
+    String? threadRootId,
+  }) async {
+    await _rooms?.sendSticker(room, item, threadRootId: threadRootId);
+    notifyListeners();
+  }
+
+  Future<void> sendConversationReply(
+    Room room, {
+    required String rootEventId,
+    required String promptId,
+    required String label,
+  }) async {
+    await _rooms?.sendConversationReply(
+      room,
+      rootEventId: rootEventId,
+      promptId: promptId,
+      label: label,
+    );
+    notifyListeners();
+  }
+
+  List<ImagePackItem> listImagePacks({Room? room}) {
+    return _rooms?.listImagePacks(room: room) ?? const [];
   }
 
   Future<void> sendCallback(
@@ -1001,6 +1088,10 @@ class HighLifeSession extends ChangeNotifier {
   void dismissIncomingRtc(String roomId) {
     _dismissedRtcInvites.add(roomId);
     notifyListeners();
+    final room = _client?.getRoomById(roomId);
+    if (room != null) {
+      unawaited(_rooms?.sendRtcDecline(room) ?? Future<void>.value());
+    }
   }
 
   Uri? buildCallUri(Room room) {

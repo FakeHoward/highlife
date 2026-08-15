@@ -17,6 +17,19 @@ vi.mock("../matrix/service", () => ({
   redact: vi.fn(),
   sendCallback: vi.fn(),
   sendMessage: vi.fn(),
+  sendConversationReply: vi.fn(),
+  sendLocation: vi.fn(),
+  sendSticker: vi.fn(),
+  listImagePacks: () => [],
+  suggestCommands: () => [],
+  fetchRoomSummary: vi.fn(),
+  knockOnRoom: vi.fn(),
+  listRoomKnocks: () => [],
+  approveKnock: vi.fn(),
+  denyKnock: vi.fn(),
+  beginLoginQr: vi.fn(),
+  beginLinkDeviceQr: vi.fn(),
+  isQrLoginAvailable: vi.fn(async () => false),
   votePoll: vi.fn(),
   endPoll: vi.fn(),
   resolveMediaObjectUrl: vi.fn(async () => ""),
@@ -366,7 +379,8 @@ describe("message actions", () => {
     expect(retryFailedEvent).toHaveBeenCalledWith(room.roomId, message.eventId);
   });
 
-  it("renders foreign thread relations as replies without thread controls", () => {
+  it("opens a thread from the message actions", () => {
+    const openThread = vi.fn();
     wrap(
       <MessageTimeline
         items={[{
@@ -375,6 +389,8 @@ describe("message actions", () => {
           senderId: "@alice:example.org",
           senderName: "Alice",
           replyToEventId: "$root",
+          threadRootId: "$root",
+          threadReplyCount: 2,
           replyPreview: {
             senderId: "@bob:example.org",
             senderName: "Bob",
@@ -386,11 +402,13 @@ describe("message actions", () => {
         onMiniApp={vi.fn()}
         history={{ loading: false, exhausted: true, error: null }}
         onLoadOlder={vi.fn()}
+        onOpenThread={openThread}
       />,
     );
 
     expect(screen.getByText("Root message")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Thread" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thread · 2" }));
+    expect(openThread).toHaveBeenCalled();
   });
 
   it("does not render unsafe MiniApp content", () => {

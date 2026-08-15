@@ -22,6 +22,29 @@ void main() {
       );
     });
 
+    test('allows MSC4039 media and sticker capabilities', () {
+      expect(
+        isGrantableWidgetCapability('org.matrix.msc4039.upload_file'),
+        isTrue,
+      );
+      expect(
+        isGrantableWidgetCapability('org.matrix.msc4039.download_file'),
+        isTrue,
+      );
+      expect(
+        isGrantableWidgetCapability(
+          'org.matrix.msc2762.send.event:m.sticker',
+        ),
+        isTrue,
+      );
+      expect(
+        isGrantableWidgetCapability(
+          'org.matrix.msc2762.receive.event:m.sticker',
+        ),
+        isTrue,
+      );
+    });
+
     test('allows additional call-related event capabilities', () {
       expect(
         isGrantableWidgetCapability(

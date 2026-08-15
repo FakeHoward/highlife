@@ -11,6 +11,7 @@ import {
   retryDecryptEvent,
   retryFailedEvent,
   sendCallback,
+  sendConversationReply,
   sendMessage,
   toggleReaction,
   votePoll,
@@ -24,6 +25,7 @@ import {
   type AiomatrixPayload,
   type MiniAppCard,
 } from "../protocol/aiomatrix";
+import { openStreetMapUrl, parseMsc4139Prompts } from "../matrix/specFeatures";
 import { IconDownload, IconExternal, IconLock } from "./Icons";
 import { Avatar } from "./Avatar";
 
@@ -104,6 +106,7 @@ interface Props {
   onForward?: (item: TimelineItem) => void;
   onOpenProfile?: (item: TimelineItem) => void;
   onJumpToEvent?: (eventId: string) => void;
+  onOpenThread?: (item: TimelineItem) => void;
 }
 
 export function MessageTimeline({
@@ -120,6 +123,7 @@ export function MessageTimeline({
   onForward,
   onOpenProfile,
   onJumpToEvent,
+  onOpenThread,
 }: Props) {
   const { t } = useI18n();
   const end = useRef<HTMLDivElement>(null);
@@ -316,6 +320,49 @@ export function MessageTimeline({
                   <p>{item.body}</p>
                 ) : null}
                 {item.media && <Media item={item} />}
+                {(item.kind === "location" || item.geoUri || item.latitude != null) && (
+                  <a
+                    className="location-card"
+                    href={
+                      item.latitude != null && item.longitude != null
+                        ? openStreetMapUrl(item.latitude, item.longitude)
+                        : item.geoUri ?? "#"
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("timeline.openMap")}
+                    {item.body && item.body !== item.geoUri ? <small>{item.body}</small> : null}
+                  </a>
+                )}
+                {(() => {
+                  const prompts = parseMsc4139Prompts(item.rawContent ?? {});
+                  if (!prompts) return null;
+                  return (
+                    <div className="inline-keyboard spec-prompts">
+                      {prompts.intro && <p className="muted small">{prompts.intro}</p>}
+                      <div>
+                        {prompts.prompts.map((prompt) => (
+                          <button
+                            key={prompt.id}
+                            type="button"
+                            onClick={() => {
+                              if (prompt.type === "input") {
+                                const value = window.prompt(prompt.label);
+                                if (!value) return;
+                                void sendConversationReply(roomId, item.eventId, prompt.id, value);
+                                return;
+                              }
+                              void sendConversationReply(roomId, item.eventId, prompt.id, prompt.label);
+                            }}
+                          >
+                            {prompt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {bot.miniApp && (
                   <button className="mini-card" onClick={() => onMiniApp(bot.miniApp!, item)}>
                     <span className="mini-mark">{t("timeline.miniAppBadge")}</span>
@@ -373,7 +420,14 @@ export function MessageTimeline({
               </div>
               {!item.redacted && item.kind !== "poll" && (
                 <div className="message-actions">
-                  <button type="button" onClick={() => onComposeMode({ type: "reply", item })}>{t("timeline.reply")}</button>
+                    <button type="button" onClick={() => onComposeMode({ type: "reply", item })}>{t("timeline.reply")}</button>
+                    {onOpenThread && item.kind !== "system" && (
+                      <button type="button" onClick={() => onOpenThread(item)}>
+                        {item.threadReplyCount
+                          ? t("timeline.threadCount", { count: item.threadReplyCount })
+                          : t("timeline.thread")}
+                      </button>
+                    )}
                   <div className="reaction-picker-wrap">
                     <button
                       type="button"
@@ -507,8 +561,8 @@ function Media({ item }: { item: TimelineItem }) {
 
   if (error) return <p className="muted small">{error}</p>;
   if (!source) return <p className="muted small">{t("timeline.decryptingMedia")}</p>;
-  if (item.kind === "image") {
-    return <img className="message-media" src={source} alt={item.media?.name ?? t("timeline.image")} loading="lazy" />;
+  if (item.kind === "image" || item.kind === "sticker") {
+    return <img className="message-media" src={source} alt={item.media?.name ?? t("timeline.sticker")} loading="lazy" />;
   }
   if (item.kind === "video") return <video className="message-media" src={source} controls preload="metadata" />;
   if (item.kind === "audio") {

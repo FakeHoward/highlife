@@ -21,6 +21,7 @@ import {
   MsgType,
   NotificationCountType,
   Preset,
+  ReceiptType,
   RelationType,
   RoomEvent,
   RoomMemberEvent,
@@ -29,6 +30,7 @@ import {
   type MatrixEvent,
   type Room,
 } from "matrix-js-sdk";
+import { SlidingSync } from "matrix-js-sdk/lib/sliding-sync";
 import {
   CryptoEvent,
   decodeRecoveryKey,
@@ -78,6 +80,35 @@ import {
   normalizeRoomIdOrAlias,
   serverFromRoomAddress,
 } from "./roomAddress";
+import { normalizeTimeline, type RawTimelineEvent } from "./timeline";
+import {
+  attachMentions,
+  conversationReplyContent,
+  defaultSlidingLists,
+  filterCommandSuggestions,
+  locationContent,
+  MSC2545_PACK_STATE,
+  MSC2545_USER_EMOTES,
+  MSC3266_SUMMARY,
+  MSC3266_SUMMARY_UNSTABLE,
+  MSC4139_REPLY,
+  MSC4310_DECLINE,
+  MSC4310_DECLINE_UNSTABLE,
+  MSC4332_COMMANDS,
+  parseCommandsState,
+  parseImagePack,
+  parseRoomSummary,
+  rtcDeclineContent,
+  slidingSyncSupported,
+  STICKER_EVENT,
+  stickerContent,
+  threadRelation,
+  threadRootId,
+  threadSubscriptionPath,
+  type AdvertisedCommand,
+  type ImagePackItem,
+  type RoomSummary,
+} from "./specFeatures";
 import {
   clearCryptoDatabases,
   clearSession,
@@ -91,6 +122,11 @@ import {
   togglePinnedIds,
 } from "./messengerExtras";
 import { DIRECT_CALL_CRYPTO_UNAVAILABLE } from "./directCallErrors";
+import {
+  qrLoginAvailable,
+  startLinkNewDeviceQr,
+  startNewDeviceQr,
+} from "./qrLogin";
 import { assertCryptoForEncryptedRoom } from "./cryptoGuard";
 import { matrixRtcCameraOptions, outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
@@ -100,7 +136,6 @@ import {
   pickIncomingRtcCall,
   type CallMemberEventLike,
 } from "./rtcMembership";
-import { normalizeTimeline, type RawTimelineEvent } from "./timeline";
 
 export { normalizeRoomIdOrAlias } from "./roomAddress";
 export { registerPushAfterLogin } from "./push";
@@ -486,6 +521,10 @@ async function start(session: StoredSession): Promise<void> {
       return;
     }
     maybeShowHostToast(event);
+    const type = event.getType();
+    if (type === MSC4310_DECLINE || type === MSC4310_DECLINE_UNSTABLE) {
+      dismissedRtcInvites.add(room.roomId);
+    }
     publish();
   });
   client.on(RoomEvent.TimelineReset, () => publish());
@@ -524,13 +563,34 @@ async function start(session: StoredSession): Promise<void> {
   } catch (error) {
     publish({ error: `Encryption unavailable: ${messageOf(error)}` });
   }
-  await client.startClient({ initialSyncLimit: 50 });
+  await startSync(client);
   try {
     matrixRtcManager(client)?.start?.();
   } catch {
     /* older SDK without a session manager */
   }
   void registerPushAfterLogin(client).catch(() => undefined);
+}
+
+async function startSync(active: MatrixClient): Promise<void> {
+  const opts = { initialSyncLimit: 50, threadSupport: true, lazyLoadMembers: true };
+  try {
+    const versions = await active.getVersions();
+    if (slidingSyncSupported(versions.unstable_features as Record<string, unknown> | undefined)) {
+      const slidingSync = new SlidingSync(
+        active.baseUrl,
+        defaultSlidingLists() as never,
+        { timeline_limit: 50, required_state: [["*", "*"]] },
+        active,
+        30_000,
+      );
+      await active.startClient({ ...opts, slidingSync });
+      return;
+    }
+  } catch {
+    /* homeserver without SSS or SDK mismatch — classic /sync */
+  }
+  await active.startClient(opts);
 }
 
 export async function restoreSession(): Promise<boolean> {
@@ -916,7 +976,7 @@ export async function paginateRoomHistory(roomId: string): Promise<void> {
 export async function sendMessage(
   roomId: string,
   body: string,
-  options: { editEventId?: string; replyEventId?: string } = {},
+  options: { editEventId?: string; replyEventId?: string; threadRootId?: string } = {},
 ): Promise<void> {
   const active = requiredClient();
   const room = active.getRoom(roomId);
@@ -924,21 +984,41 @@ export async function sendMessage(
     encrypted: Boolean(room?.hasEncryptionStateEvent()),
     cryptoReady: Boolean(active.getCrypto()),
   });
-  const content: Record<string, unknown> = { msgtype: "m.text", body };
+  const memberIds = room?.getJoinedMembers().map((member) => member.userId) ?? [];
+  const content: Record<string, unknown> = attachMentions(
+    { msgtype: "m.text", body },
+    body,
+    memberIds,
+  );
   if (options.editEventId) {
     content.body = `* ${body}`;
-    content["m.new_content"] = { msgtype: "m.text", body };
+    content["m.new_content"] = attachMentions({ msgtype: "m.text", body }, body, memberIds);
     content["m.relates_to"] = { rel_type: "m.replace", event_id: options.editEventId };
+  } else if (options.threadRootId) {
+    content["m.relates_to"] = threadRelation(
+      options.threadRootId,
+      options.replyEventId ?? options.threadRootId,
+      false,
+    );
   } else if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
   }
   await active.sendEvent(roomId, EventType.RoomMessage, content as never);
+  if (options.threadRootId) {
+    void subscribeToThread(roomId, options.threadRootId).catch(() => undefined);
+  }
 }
 
 export async function uploadFile(
   roomId: string,
   file: File,
-  options: { replyEventId?: string; onProgress?: (ratio: number) => void; voice?: boolean; durationMs?: number } = {},
+  options: {
+    replyEventId?: string;
+    threadRootId?: string;
+    onProgress?: (ratio: number) => void;
+    voice?: boolean;
+    durationMs?: number;
+  } = {},
 ): Promise<void> {
   const active = requiredClient();
   const room = active.getRoom(roomId);
@@ -991,7 +1071,13 @@ export async function uploadFile(
     };
   }
 
-  if (options.replyEventId) {
+  if (options.threadRootId) {
+    content["m.relates_to"] = threadRelation(
+      options.threadRootId,
+      options.replyEventId ?? options.threadRootId,
+      false,
+    );
+  } else if (options.replyEventId) {
     content["m.relates_to"] = { "m.in_reply_to": { event_id: options.replyEventId } };
   }
   if (options.voice) {
@@ -1069,7 +1155,7 @@ export async function markRead(roomId: string): Promise<void> {
     if (!eventId || eventId.startsWith("~")) continue;
     if (event.status != null) continue;
     if (event.isRedacted()) continue;
-    await active.sendReadReceipt(event);
+    await active.sendReadReceipt(event, ReceiptType.ReadPrivate, true);
     return;
   }
 }
@@ -1402,6 +1488,38 @@ export async function sendWidgetRoomEvent(
   }
   const response = await active.sendEvent(roomId, type as typeof EventType.RoomMessage, content as never);
   return { event_id: response.event_id };
+}
+
+export async function widgetUploadContent(
+  file: Blob,
+  filename: string,
+  mimeType?: string,
+): Promise<{ content_uri: string }> {
+  const upload = await requiredClient().uploadContent(file, {
+    name: filename,
+    type: mimeType,
+  });
+  return { content_uri: upload.content_uri };
+}
+
+export async function widgetDownloadContent(mxcUrl: string): Promise<{
+  filename?: string;
+  contentType?: string;
+  data: string;
+}> {
+  const http = requiredClient().mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, true);
+  if (!http) throw new Error("Media URL unavailable");
+  const response = await fetch(http);
+  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  bytes.forEach((value) => {
+    binary += String.fromCharCode(value);
+  });
+  return {
+    data: btoa(binary),
+    contentType: response.headers.get("content-type") ?? undefined,
+  };
 }
 
 export async function leaveRoom(roomId: string): Promise<void> {
@@ -2126,9 +2244,18 @@ export function getIncomingRtcCall(): { roomId: string; name: string } | null {
   return { roomId: incoming.roomId, name: incoming.name };
 }
 
-export function dismissIncomingRtcCall(roomId: string): void {
+export async function dismissIncomingRtcCall(roomId: string): Promise<void> {
   dismissedRtcInvites.add(roomId);
   publish();
+  try {
+    await requiredClient().sendEvent(roomId, MSC4310_DECLINE, rtcDeclineContent() as never);
+  } catch {
+    try {
+      await requiredClient().sendEvent(roomId, MSC4310_DECLINE_UNSTABLE, rtcDeclineContent() as never);
+    } catch {
+      /* older homeserver */
+    }
+  }
 }
 
 export function acceptDirectCall(options?: { video?: boolean }): Promise<void> {
@@ -2173,5 +2300,187 @@ export function mediaUrl(mxcUrl: string): string {
   return requiredClient().mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, true) ?? "";
 }
 
+export function threadTimeline(roomId: string, rootId: string): TimelineItem[] {
+  const all = roomTimeline(roomId);
+  const live = client?.getRoom(roomId)?.getLiveTimeline().getEvents() ?? [];
+  const extra = normalizeTimeline(
+    live
+      .filter((event) => threadRootId(event.getContent() as Record<string, unknown>) === rootId || event.getId() === rootId)
+      .map((event) => rawEvent(event, client!.getRoom(roomId)!, client!.getUserId() ?? "")),
+    {
+      roomId,
+      ownUserId: client?.getUserId() ?? "",
+      memberNames: Object.fromEntries(
+        (client?.getRoom(roomId)?.getJoinedMembers() ?? []).map((member) => [member.userId, member.name || member.userId]),
+      ),
+    },
+  );
+  const byId = new Map<string, TimelineItem>();
+  for (const item of [...all.filter((item) => item.eventId === rootId || item.threadRootId === rootId), ...extra]) {
+    byId.set(item.eventId, item);
+  }
+  return [...byId.values()].sort((a, b) => a.timestamp - b.timestamp);
+}
+
+export async function subscribeToThread(roomId: string, rootId: string): Promise<void> {
+  const active = requiredClient();
+  await active.http.authedRequest(
+    "PUT" as never,
+    threadSubscriptionPath(roomId, rootId),
+    undefined,
+    { automatic: false },
+  );
+}
+
+export async function unsubscribeFromThread(roomId: string, rootId: string): Promise<void> {
+  const active = requiredClient();
+  await active.http.authedRequest("DELETE" as never, threadSubscriptionPath(roomId, rootId));
+}
+
+export async function sendLocation(
+  roomId: string,
+  lat: number,
+  lon: number,
+  description?: string,
+  threadRootId?: string,
+): Promise<void> {
+  const active = requiredClient();
+  const room = active.getRoom(roomId);
+  const memberIds = room?.getJoinedMembers().map((member) => member.userId) ?? [];
+  const content = attachMentions(locationContent(lat, lon, description), description ?? "", memberIds);
+  if (threadRootId) content["m.relates_to"] = threadRelation(threadRootId, threadRootId, false);
+  await active.sendEvent(roomId, EventType.RoomMessage, content as never);
+  if (threadRootId) void subscribeToThread(roomId, threadRootId).catch(() => undefined);
+}
+
+export async function beginLinkDeviceQr(
+  onFailure: (reason: string) => void,
+  signal: AbortSignal,
+) {
+  return startLinkNewDeviceQr(requiredClient(), onFailure, signal);
+}
+
+export async function beginLoginQr(
+  homeserver: string,
+  onFailure: (reason: string) => void,
+  signal: AbortSignal,
+) {
+  return startNewDeviceQr(homeserver, onFailure, signal);
+}
+
+export async function isQrLoginAvailable(): Promise<boolean> {
+  try {
+    return await qrLoginAvailable(requiredClient());
+  } catch {
+    return false;
+  }
+}
+
+export function listImagePacks(): ImagePackItem[] {
+  const active = client;
+  if (!active) return [];
+  const fromAccount = parseImagePack(
+    (active.getAccountData(MSC2545_USER_EMOTES)?.getContent() ?? {}) as Record<string, unknown>,
+  );
+  const fromRooms = active.getRooms().flatMap((room) => {
+    const event = room.currentState.getStateEvents(MSC2545_PACK_STATE, "");
+    return event ? parseImagePack(event.getContent() as Record<string, unknown>) : [];
+  });
+  const seen = new Set<string>();
+  const out: ImagePackItem[] = [];
+  for (const item of [...fromAccount, ...fromRooms]) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    out.push(item);
+  }
+  return out;
+}
+
+export async function sendSticker(roomId: string, item: ImagePackItem, threadRootId?: string): Promise<void> {
+  const content: Record<string, unknown> = stickerContent(item);
+  if (threadRootId) content["m.relates_to"] = threadRelation(threadRootId, threadRootId, false);
+  await requiredClient().sendEvent(roomId, STICKER_EVENT, content as never);
+}
+
+export function commandsForRoom(roomId: string): AdvertisedCommand[] {
+  const room = client?.getRoom(roomId);
+  if (!room) return [];
+  const out: AdvertisedCommand[] = [];
+  for (const type of ["dev.aiomatrix.commands", MSC4332_COMMANDS]) {
+    for (const event of room.currentState.getStateEvents(type)) {
+      out.push(...parseCommandsState(event.getContent() as Record<string, unknown>));
+    }
+  }
+  return out;
+}
+
+export function suggestCommands(roomId: string, typed: string): AdvertisedCommand[] {
+  return filterCommandSuggestions(commandsForRoom(roomId), typed);
+}
+
+export async function sendConversationReply(
+  roomId: string,
+  rootEventId: string,
+  promptId: string,
+  label: string,
+): Promise<void> {
+  await requiredClient().sendEvent(
+    roomId,
+    MSC4139_REPLY,
+    conversationReplyContent(promptId, label, rootEventId) as never,
+  );
+  void subscribeToThread(roomId, rootEventId).catch(() => undefined);
+}
+
+export async function fetchRoomSummary(roomIdOrAlias: string): Promise<RoomSummary> {
+  const active = requiredClient();
+  const encoded = encodeURIComponent(roomIdOrAlias);
+  try {
+    const payload = await active.http.authedRequest("GET" as never, `${MSC3266_SUMMARY}/${encoded}`);
+    return parseRoomSummary(payload as Record<string, unknown>, roomIdOrAlias);
+  } catch {
+    const payload = await active.http.authedRequest("GET" as never, `${MSC3266_SUMMARY_UNSTABLE}/${encoded}`);
+    return parseRoomSummary(payload as Record<string, unknown>, roomIdOrAlias);
+  }
+}
+
+export async function knockOnRoom(roomIdOrAlias: string): Promise<void> {
+  const active = requiredClient();
+  if (typeof active.knockRoom === "function") {
+    await active.knockRoom(roomIdOrAlias);
+    return;
+  }
+  await active.http.authedRequest(
+    "POST" as never,
+    `/_matrix/client/v3/knock/${encodeURIComponent(roomIdOrAlias)}`,
+    undefined,
+    {},
+  );
+}
+
+export function listRoomKnocks(roomId: string): Array<{ userId: string; name: string }> {
+  const room = client?.getRoom(roomId);
+  if (!room) return [];
+  return room.getMembers()
+    .filter((member) => member.membership === "knock")
+    .map((member) => ({ userId: member.userId, name: member.name || member.userId }));
+}
+
+export async function approveKnock(roomId: string, userId: string): Promise<void> {
+  await requiredClient().invite(roomId, userId);
+}
+
+export async function denyKnock(roomId: string, userId: string): Promise<void> {
+  await requiredClient().kick(roomId, userId);
+}
+
+export async function markThreadRead(roomId: string, eventId: string): Promise<void> {
+  const room = requiredClient().getRoom(roomId);
+  const event = room?.findEventById(eventId);
+  if (!event) return;
+  await requiredClient().sendReadReceipt(event, ReceiptType.ReadPrivate, false);
+}
+
 window.addEventListener("online", () => publish({ connection: client ? "syncing" : "offline" }));
 window.addEventListener("offline", () => publish({ connection: "offline" }));
+

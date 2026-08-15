@@ -318,6 +318,34 @@ class AppStrings {
   String get recordingVoice => _('recordingVoice');
   String get retrySend => _('retrySend');
   String get encryptedMessage => _('encryptedMessage');
+
+  String get thread => _('thread');
+  String threadCount(int count) =>
+      _('threadCount').replaceAll('{count}', '$count');
+  String get shareLocation => _('shareLocation');
+  String get stickers => _('stickers');
+  String get noStickers => _('noStickers');
+  String get knock => _('knock');
+  String get knockSent => _('knockSent');
+  String get approveKnock => _('approveKnock');
+  String get denyKnock => _('denyKnock');
+  String get pendingKnocks => _('pendingKnocks');
+  String get noKnocks => _('noKnocks');
+  String get roomPreview => _('roomPreview');
+  String get linkNewDevice => _('linkNewDevice');
+  String get signInQr => _('signInQr');
+  String get qrLoginHint => _('qrLoginHint');
+  String get linkNewDeviceHint => _('linkNewDeviceHint');
+  String get openMap => _('openMap');
+  String get prompts => _('prompts');
+  String get latitude => _('latitude');
+  String get longitude => _('longitude');
+  String get sendLocation => _('sendLocation');
+  String get locationHint => _('locationHint');
+  String get geoUri => _('geoUri');
+  String memberCount(int count) =>
+      _('memberCount').replaceAll('{count}', '$count');
+  String get declinedCall => _('declinedCall');
   String get miniApp => _('miniApp');
   String get edited => _('edited');
   String get attachment => _('attachment');
@@ -1190,5 +1218,79 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'encryptedMessage': {
     AppLocale.en: 'Encrypted',
     AppLocale.ru: 'Зашифровано',
+  },
+  'thread': {AppLocale.en: 'Thread', AppLocale.ru: 'Ветка'},
+  'threadCount': {
+    AppLocale.en: '{count} replies',
+    AppLocale.ru: 'Ответов: {count}',
+  },
+  'shareLocation': {
+    AppLocale.en: 'Share location',
+    AppLocale.ru: 'Поделиться местом',
+  },
+  'stickers': {AppLocale.en: 'Stickers', AppLocale.ru: 'Стикеры'},
+  'noStickers': {
+    AppLocale.en: 'No sticker packs in this account yet.',
+    AppLocale.ru: 'В этом аккаунте пока нет наборов стикеров.',
+  },
+  'knock': {AppLocale.en: 'Knock', AppLocale.ru: 'Постучаться'},
+  'knockSent': {
+    AppLocale.en: 'Knock sent. Wait for an invite.',
+    AppLocale.ru: 'Запрос отправлен. Дождитесь приглашения.',
+  },
+  'approveKnock': {AppLocale.en: 'Approve', AppLocale.ru: 'Принять'},
+  'denyKnock': {AppLocale.en: 'Deny', AppLocale.ru: 'Отклонить'},
+  'pendingKnocks': {
+    AppLocale.en: 'Pending knocks',
+    AppLocale.ru: 'Запросы на вход',
+  },
+  'noKnocks': {
+    AppLocale.en: 'No pending knocks.',
+    AppLocale.ru: 'Нет запросов на вход.',
+  },
+  'roomPreview': {
+    AppLocale.en: 'Room preview',
+    AppLocale.ru: 'Предпросмотр комнаты',
+  },
+  'linkNewDevice': {
+    AppLocale.en: 'Link new device',
+    AppLocale.ru: 'Привязать устройство',
+  },
+  'signInQr': {
+    AppLocale.en: 'Show sign-in QR',
+    AppLocale.ru: 'QR для входа',
+  },
+  'qrLoginHint': {
+    AppLocale.en:
+        'Scan this with an existing Element X or HighLife session. The dart Matrix SDK has no MSC4108 rendezvous yet, so this QR carries a local matrix: login payload.',
+    AppLocale.ru:
+        'Отсканируйте это существующей сессией Element X или HighLife. В dart SDK пока нет MSC4108 rendezvous, поэтому QR содержит локальный matrix: payload для входа.',
+  },
+  'linkNewDeviceHint': {
+    AppLocale.en:
+        'Show this QR on a signed-in HighLife so another device can link. Without MSC4108 in the dart SDK this is a local matrix: payload, not a live rendezvous.',
+    AppLocale.ru:
+        'Покажите этот QR на вошедшем HighLife, чтобы привязать другое устройство. Без MSC4108 в dart SDK это локальный matrix: payload, а не живой rendezvous.',
+  },
+  'openMap': {AppLocale.en: 'Open map', AppLocale.ru: 'Открыть карту'},
+  'prompts': {AppLocale.en: 'Prompts', AppLocale.ru: 'Подсказки'},
+  'latitude': {AppLocale.en: 'Latitude', AppLocale.ru: 'Широта'},
+  'longitude': {AppLocale.en: 'Longitude', AppLocale.ru: 'Долгота'},
+  'sendLocation': {
+    AppLocale.en: 'Send location',
+    AppLocale.ru: 'Отправить место',
+  },
+  'locationHint': {
+    AppLocale.en: 'Latitude and longitude, or a geo: URI.',
+    AppLocale.ru: 'Широта и долгота или geo: URI.',
+  },
+  'geoUri': {AppLocale.en: 'geo: URI', AppLocale.ru: 'geo: URI'},
+  'memberCount': {
+    AppLocale.en: '{count} members',
+    AppLocale.ru: 'Участников: {count}',
+  },
+  'declinedCall': {
+    AppLocale.en: 'Declined a call',
+    AppLocale.ru: 'Отклонил(а) звонок',
   },
 };

@@ -11,6 +11,12 @@ import { resolveDisplayBody } from "../protocol/aiomatrix";
 import { isVoiceMessageContent } from "./messengerExtras";
 import { encryptedFileFromContent } from "./encryptedMedia";
 import {
+  belongsOnMainTimeline,
+  parseLocationContent,
+  STICKER_EVENT,
+  threadRootId,
+} from "./specFeatures";
+import {
   isPollEndType,
   isPollResponseType,
   isPollStartType,
@@ -59,6 +65,8 @@ const SYSTEM_TYPES = new Set([
   "m.call.answer",
   "m.call.hangup",
   "m.call.reject",
+  "m.rtc.decline",
+  "org.matrix.msc4310.rtc.decline",
 ]);
 
 function record(value: unknown): Record<string, unknown> {
@@ -82,7 +90,9 @@ function relation(content: Record<string, unknown>): Relation {
   return record(content["m.relates_to"]) as Relation;
 }
 
-function kindFor(msgtype?: string): MessageKind {
+function kindFor(msgtype?: string, eventType?: string): MessageKind {
+  if (eventType === STICKER_EVENT || msgtype === "m.sticker") return "sticker";
+  if (msgtype === "m.location") return "location";
   if (msgtype === "m.image") return "image";
   if (msgtype === "m.video") return "video";
   if (msgtype === "m.audio") return "audio";
@@ -210,14 +220,21 @@ export function normalizeTimeline(
     }
   }
   const eventIndex = new Map(events.map((event) => [event.eventId, event]));
+  const threadCounts = new Map<string, number>();
+  for (const event of events) {
+    const root = threadRootId(event.content);
+    if (root) threadCounts.set(root, (threadCounts.get(root) ?? 0) + 1);
+  }
 
   return events
     .filter((event) => {
       if (event.type === "m.room.encrypted") return true;
       if (isPollStartType(event.type)) return true;
       if (SYSTEM_TYPES.has(event.type)) return true;
+      if (event.type === STICKER_EVENT) return belongsOnMainTimeline(event.content);
       if (event.type !== "m.room.message") return false;
-      return relation(event.content).rel_type !== "m.replace";
+      if (relation(event.content).rel_type === "m.replace") return false;
+      return belongsOnMainTimeline(event.content);
     })
     .map((event): TimelineItem => {
       if (event.type === "m.room.encrypted") {
@@ -331,7 +348,7 @@ export function normalizeTimeline(
           : {}),
         timestamp: event.timestamp,
         body: redacted ? t("timeline.messageRemoved") : resolveDisplayBody(editedContent),
-        kind: kindFor(msgtype),
+        kind: kindFor(msgtype, event.type),
         isOwn: event.sender === context.ownUserId,
         edited: Boolean(edit),
         redacted,
@@ -361,6 +378,16 @@ export function normalizeTimeline(
               : resolveDisplayBody(targetContent) || t("timeline.attachment"),
           };
         }
+      }
+      const root = threadRootId(event.content) ?? (threadCounts.has(event.eventId) ? event.eventId : undefined);
+      if (root) item.threadRootId = root;
+      const replies = threadCounts.get(event.eventId);
+      if (replies) item.threadReplyCount = replies;
+      const location = parseLocationContent(editedContent);
+      if (location) {
+        item.geoUri = location.geoUri;
+        item.latitude = location.lat;
+        item.longitude = location.lon;
       }
       const media = redacted ? undefined : mediaFor(editedContent);
       if (media) item.media = media;

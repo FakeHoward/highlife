@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../aiomatrix/protocol.dart';
 import '../domain/room_filters.dart';
+import '../domain/spec_features.dart';
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
 import '../services/session.dart';
@@ -20,10 +21,11 @@ import '../widgets/verification_dialog.dart';
 import 'chat_screen.dart';
 
 class _RoomDialogValue {
-  const _RoomDialogValue(this.value, this.alias);
+  const _RoomDialogValue(this.value, this.alias, {this.knock = false});
 
   final String value;
   final String alias;
+  final bool knock;
 }
 
 class RoomListScreen extends StatefulWidget {
@@ -170,6 +172,12 @@ class _RoomListScreenState extends State<RoomListScreen> {
                               invitationLabel: s.invitation,
                               acceptLabel: s.accept,
                               declineLabel: s.decline,
+                              memberCountLabel: room.summary.mJoinedMemberCount ==
+                                      null
+                                  ? null
+                                  : s.memberCount(
+                                      room.summary.mJoinedMemberCount!,
+                                    ),
                               onAccept: () => session.acceptInvite(room),
                               onDecline: () => session.declineInvite(room),
                             ),
@@ -278,11 +286,36 @@ class _RoomListScreenState extends State<RoomListScreen> {
     final isDm = action == 'dm';
     final isCreate = action == 'create';
     final isSpace = action == 'space';
+    final isJoin = action == 'join';
+    RoomSummary? preview;
+    var previewBusy = false;
+    var knockMode = false;
     final colors = Theme.of(context).colorScheme;
     final result = await showDialog<_RoomDialogValue>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
+        builder: (context, setLocal) {
+          Future<void> loadPreview() async {
+            if (!isJoin) return;
+            final id = controller.text.trim();
+            if (id.isEmpty) return;
+            setLocal(() => previewBusy = true);
+            try {
+              final next = await session.fetchRoomSummary(id);
+              setLocal(() {
+                preview = next;
+                previewBusy = false;
+                knockMode = isKnockJoinRule(next?.joinRule);
+              });
+            } catch (_) {
+              setLocal(() {
+                preview = null;
+                previewBusy = false;
+              });
+            }
+          }
+
+          return AlertDialog(
           backgroundColor: colors.surface,
           title: Text(
             isSpace
@@ -315,11 +348,55 @@ class _RoomListScreenState extends State<RoomListScreen> {
                       ? s.userIdHint
                       : (isCreate || isSpace ? null : s.roomAliasHint),
                 ),
+                onEditingComplete: loadPreview,
                 onSubmitted: (value) => Navigator.pop(
                   context,
-                  _RoomDialogValue(value, aliasController.text),
+                  _RoomDialogValue(
+                    value,
+                    aliasController.text,
+                    knock: knockMode,
+                  ),
                 ),
               ),
+              if (isJoin) ...[
+                const SizedBox(height: 10),
+                if (previewBusy) const LinearProgressIndicator(minHeight: 2),
+                if (preview != null) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      s.roomPreview,
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      preview!.name ?? preview!.roomId,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (preview!.topic != null && preview!.topic!.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        preview!.topic!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                  if (preview!.numJoinedMembers != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        s.memberCount(preview!.numJoinedMembers!),
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                ],
+              ],
               if (isCreate) ...[
                 const SizedBox(height: 10),
                 TextField(
@@ -345,21 +422,40 @@ class _RoomListScreenState extends State<RoomListScreen> {
               onPressed: () => Navigator.pop(context),
               label: Text(s.cancel),
             ),
+            if (isJoin && knockMode)
+              HlButton.secondary(
+                onPressed: () => Navigator.pop(
+                  context,
+                  _RoomDialogValue(
+                    controller.text,
+                    aliasController.text,
+                    knock: true,
+                  ),
+                ),
+                label: Text(s.knock),
+              ),
             HlButton.primary(
               onPressed: () => Navigator.pop(
                 context,
-                _RoomDialogValue(controller.text, aliasController.text),
+                _RoomDialogValue(
+                  controller.text,
+                  aliasController.text,
+                  knock: knockMode,
+                ),
               ),
               label: Text(
                 isSpace
                     ? s.createSpace
                     : (isDm
                         ? s.startDmAction
-                        : (isCreate ? s.create : s.join)),
+                        : (isCreate
+                            ? s.create
+                            : (knockMode ? s.knock : s.join))),
               ),
             ),
           ],
-        ),
+        );
+        },
       ),
     );
     controller.dispose();
@@ -387,6 +483,12 @@ class _RoomListScreenState extends State<RoomListScreen> {
           enableEncryption: session.cryptoAvailable ? encrypt : false,
           alias: result?.alias,
         );
+      } else if (result?.knock == true) {
+        await session.knockRoom(value);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s.knockSent)),
+        );
       } else {
         await session.joinRoom(value);
       }
@@ -397,6 +499,56 @@ class _RoomListScreenState extends State<RoomListScreen> {
         r'banned from (this )?room',
         caseSensitive: false,
       ).hasMatch(text);
+      final forbidden = (error is MatrixException &&
+              (error.error == MatrixError.M_FORBIDDEN ||
+                  error.response?.statusCode == 403)) ||
+          text.contains('M_FORBIDDEN');
+      if (!isCreate && !isDm && !isSpace && forbidden && !banned) {
+        final knock = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(s.joinFailed),
+            content: Text(text),
+            actions: [
+              HlButton.text(
+                onPressed: () => Navigator.pop(context, false),
+                label: Text(s.cancel),
+              ),
+              HlButton.primary(
+                onPressed: () => Navigator.pop(context, true),
+                label: Text(s.knock),
+              ),
+            ],
+          ),
+        );
+        if (knock == true) {
+          try {
+            await session.knockRoom(value);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(s.knockSent)),
+            );
+            return;
+          } catch (knockError) {
+            if (!mounted) return;
+            await showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(s.roomActionFailed),
+                content: Text(knockError.toString()),
+                actions: [
+                  HlButton.text(
+                    onPressed: () => Navigator.pop(context),
+                    label: Text(s.done),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
+        }
+        return;
+      }
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -602,6 +754,7 @@ class _InviteTile extends StatelessWidget {
     required this.invitationLabel,
     required this.acceptLabel,
     required this.declineLabel,
+    this.memberCountLabel,
     required this.onAccept,
     required this.onDecline,
   });
@@ -610,13 +763,18 @@ class _InviteTile extends StatelessWidget {
   final String invitationLabel;
   final String acceptLabel;
   final String declineLabel;
+  final String? memberCountLabel;
   final VoidCallback onAccept;
   final VoidCallback onDecline;
 
   @override
   Widget build(BuildContext context) {
     final topic = room.topic.trim();
-    final subtitle = topic.isNotEmpty ? topic : invitationLabel;
+    final parts = <String>[
+      if (topic.isNotEmpty) topic else invitationLabel,
+      if (memberCountLabel != null) memberCountLabel!,
+    ];
+    final subtitle = parts.join(' · ');
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
