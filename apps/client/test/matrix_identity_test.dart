@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:highlife_client/domain/dicebear.dart';
 import 'package:highlife_client/domain/matrix_identity.dart';
-import 'package:highlife_client/widgets/matrix_avatar.dart';
 
 void main() {
   group('normalizeRoomReference', () {
@@ -25,12 +25,12 @@ void main() {
 
   test('avatar fallback color is stable and identity-specific', () {
     expect(
-      deterministicAvatarColor('@alice:example.org'),
-      deterministicAvatarColor('@alice:example.org'),
+      dicebearBackground('@alice:example.org'),
+      dicebearBackground('@alice:example.org'),
     );
     expect(
-      deterministicAvatarColor('@alice:example.org'),
-      isNot(deterministicAvatarColor('@bob:example.org')),
+      dicebearBackground('@alice:example.org'),
+      isNot(dicebearBackground('@bob:example.org')),
     );
   });
 }
