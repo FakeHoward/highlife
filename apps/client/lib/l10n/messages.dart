@@ -131,6 +131,9 @@ class AppStrings {
     };
   }
   String get editDisplayName => _('editDisplayName');
+  String get about => _('about');
+  String get editAbout => _('editAbout');
+  String get muteThread => _('muteThread');
   String get save => _('save');
   String get confirmLeaveRoom => _('confirmLeaveRoom');
   String get miniAppEmbedUnsupported => _('miniAppEmbedUnsupported');
@@ -634,6 +637,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.en: 'Edit display name',
     AppLocale.ru: 'Изменить имя',
   },
+  'about': {AppLocale.en: 'About', AppLocale.ru: 'О себе'},
+  'editAbout': {AppLocale.en: 'Edit about', AppLocale.ru: 'Изменить «о себе»'},
+  'muteThread': {AppLocale.en: 'Mute thread', AppLocale.ru: 'Выключить тред'},
   'save': {AppLocale.en: 'Save', AppLocale.ru: 'Сохранить'},
   'confirmLeaveRoom': {
     AppLocale.en: 'Leave this room? You can rejoin later if invited again.',

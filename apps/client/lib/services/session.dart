@@ -666,6 +666,40 @@ class HighLifeSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String> fetchProfileAbout(String userId) async {
+    final client = _client;
+    if (client == null) return '';
+    try {
+      final payload = await client.request(
+        RequestType.GET,
+        '/client/v3/profile/${Uri.encodeComponent(userId)}',
+      );
+      return parseProfileAbout(Map<String, dynamic>.from(payload)) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Future<void> setProfileAbout(String about) async {
+    final client = _client;
+    final userId = client?.userID;
+    if (client == null || userId == null) return;
+    await client.request(
+      RequestType.PUT,
+      '/client/v3/profile/${Uri.encodeComponent(userId)}/${Uri.encodeComponent(profileAboutKey)}',
+      data: {profileAboutKey: about.trim()},
+    );
+    notifyListeners();
+  }
+
+  Future<void> unsubscribeFromThread(Room room, String rootId) async {
+    await _rooms?.unsubscribeFromThread(room, rootId);
+  }
+
+  Future<UrlPreview?> fetchUrlPreview(String bodyOrUrl) {
+    return _rooms?.fetchUrlPreview(bodyOrUrl) ?? Future<UrlPreview?>.value(null);
+  }
+
   Future<void> sendMiniAppData(
     Room room,
     String data, {

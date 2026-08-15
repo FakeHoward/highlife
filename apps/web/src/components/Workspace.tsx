@@ -33,6 +33,7 @@ import {
   threadTimeline,
   markThreadRead,
   fetchRoomSummary,
+  unsubscribeFromThread,
   type SasChallenge,
 } from "../matrix/service";
 import type { RoomSummary } from "../matrix/specFeatures";
@@ -586,14 +587,23 @@ export function Workspace() {
                   <aside className="thread-panel" aria-label={t("timeline.thread")}>
                     <header className="thread-panel-head">
                       <strong>{t("timeline.thread")}</strong>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        onClick={() => setThreadRootId(null)}
-                        aria-label={t("chat.threadClose")}
-                      >
-                        ×
-                      </button>
+                      <div className="thread-panel-actions">
+                        <button
+                          type="button"
+                          className="button"
+                          onClick={() => void unsubscribeFromThread(activeRoom.roomId, threadRootId)}
+                        >
+                          {t("timeline.muteThread")}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => setThreadRootId(null)}
+                          aria-label={t("chat.threadClose")}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </header>
                     <MessageTimeline
                       items={threadTimeline(activeRoom.roomId, threadRootId)}

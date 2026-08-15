@@ -19,6 +19,11 @@ import {
   threadRelation,
   threadRootId,
   threadSubscriptionPath,
+  firstHttpUrl,
+  parseProfileAbout,
+  parseUrlPreview,
+  PROFILE_ABOUT_KEY,
+  urlPreviewCapabilityEnabled,
 } from "./specFeatures";
 
 describe("intentional mentions (MSC3952)", () => {
@@ -143,6 +148,17 @@ describe("homeserver helpers", () => {
       roomId: "!x:ex",
       name: "Lobby",
       numJoinedMembers: 4,
+    });
+  });
+
+  it("reads MSC4133 about, URL preview capability, and the first http link", () => {
+    expect(parseProfileAbout({ [PROFILE_ABOUT_KEY]: "hello from HighLife" })).toBe("hello from HighLife");
+    expect(urlPreviewCapabilityEnabled({ "org.matrix.msc4452": { enabled: true } })).toBe(true);
+    expect(urlPreviewCapabilityEnabled({ "m.url_preview": { enabled: false } })).toBe(false);
+    expect(firstHttpUrl("see https://example.org/a, then text")).toBe("https://example.org/a");
+    expect(parseUrlPreview({ "og:title": "Example" }, "https://example.org")).toEqual({
+      url: "https://example.org",
+      title: "Example",
     });
   });
 });

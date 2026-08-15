@@ -34,6 +34,7 @@ import '../widgets/mini_app_surface.dart';
 import '../widgets/poll_card.dart';
 import '../widgets/room_details_sheet.dart';
 import '../widgets/sync_status_banner.dart';
+import '../widgets/url_preview_tile.dart';
 import '../widgets/user_profile_sheet.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -346,6 +347,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             MatrixAvatar(
               name: widget.room.getLocalizedDisplayname(),
+              identity: widget.room.id,
               mxc: widget.room.avatar,
               client: widget.room.client,
               radius: 16,
@@ -1780,7 +1782,7 @@ class _MessageTile extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxW = math.min(520.0, constraints.maxWidth * 0.86);
+        final maxW = math.min(520.0, constraints.maxWidth * 0.618);
         return Align(
       alignment: align,
       child: ConstrainedBox(
@@ -1831,6 +1833,7 @@ class _MessageTile extends StatelessWidget {
                         MatrixAvatar(
                           name:
                               event.senderFromMemoryOrFallback.calcDisplayname(),
+                          identity: event.senderId,
                           mxc: event.senderFromMemoryOrFallback.avatarUrl,
                           client: event.room.client,
                           radius: 10,
@@ -2224,12 +2227,18 @@ class _RichMessageBody extends StatelessWidget {
           ],
         );
       }
-      return MarkdownMessage(
-        source: item.body,
-        style: TextStyle(
-          fontStyle: FontStyle.italic,
-          color: tokens.muted,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MarkdownMessage(
+            source: item.body,
+            style: TextStyle(
+              fontStyle: FontStyle.italic,
+              color: tokens.muted,
+            ),
+          ),
+          UrlPreviewTile(body: item.body),
+        ],
       );
     }
     if (item is! MediaTimelineItem) {
@@ -2263,7 +2272,13 @@ class _RichMessageBody extends StatelessWidget {
           ),
         );
       }
-      return MarkdownMessage(source: item.body);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MarkdownMessage(source: item.body),
+          UrlPreviewTile(body: item.body),
+        ],
+      );
     }
     final media = item;
 
@@ -2482,6 +2497,14 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                       s.thread,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
+                  ),
+                  IconButton(
+                    tooltip: s.muteThread,
+                    onPressed: () => widget.session.unsubscribeFromThread(
+                      widget.room,
+                      widget.rootId,
+                    ),
+                    icon: const Icon(Icons.notifications_off_outlined),
                   ),
                   IconButton(
                     tooltip: s.done,

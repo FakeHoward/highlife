@@ -17,6 +17,7 @@ import {
   getKeyBackupDetails,
   getOwnDisplayName,
   getOwnAvatarUrl,
+  fetchProfileAbout,
   getOwnPresence,
   getRoomAliases,
   getSessionIdentity,
@@ -415,6 +416,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       : "system",
   );
   const [displayName, setDisplayName] = useState(() => getOwnDisplayName());
+  const [about, setAbout] = useState("");
   const [avatar, setAvatar] = useState<File | undefined>();
   const [avatarUrl, setAvatarUrl] = useState(() => getOwnAvatarUrl());
   const [backup, setBackup] = useState<KeyBackupDetails | null>(null);
@@ -447,6 +449,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     setDisplayName(getOwnDisplayName());
+    const userId = getSessionIdentity()?.userId;
+    if (userId) void fetchProfileAbout(userId).then(setAbout).catch(() => setAbout(""));
     refreshCrypto();
   }, [refreshCrypto]);
 
@@ -516,13 +520,20 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <p className="eyebrow">{t("settings.profile")}</p>
         <form className="profile-form" onSubmit={(event) => {
           event.preventDefault();
-          void updateProfile(displayName, avatar).then(() => {
+          void updateProfile(displayName, avatar, about).then(() => {
             setAvatar(undefined);
             setAvatarUrl(getOwnAvatarUrl());
           });
         }}>
           <div>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("settings.displayNamePlaceholder")} aria-label={t("settings.displayName")} />
+            <textarea
+              value={about}
+              onChange={(event) => setAbout(event.target.value)}
+              placeholder={t("settings.aboutPlaceholder")}
+              aria-label={t("settings.about")}
+              rows={3}
+            />
             <label className="button file-button">
               {t("settings.chooseAvatar")}
               <input type="file" accept="image/*" onChange={(event) => setAvatar(event.target.files?.[0])} />
@@ -1366,6 +1377,18 @@ export function UserProfile({
   const ignored = isUserIgnored(userId);
   const [status, setStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [about, setAbout] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProfileAbout(userId).then((value) => {
+      if (!cancelled) setAbout(value);
+    }).catch(() => {
+      if (!cancelled) setAbout("");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
   const presenceLabel = formatPresenceLabel(
     presence.presence,
     presence.lastActiveAgo,
@@ -1397,6 +1420,7 @@ export function UserProfile({
             {copied ? t("profile.copied") : userId}
           </button>
           <span className="muted small">{presenceLabel}</span>
+          {about ? <p className="profile-about">{about}</p> : null}
         </div>
       </div>
       {status && <p className="muted small" role="status">{status}</p>}

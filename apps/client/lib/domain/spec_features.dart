@@ -271,6 +271,54 @@ Map<String, Object?> rtcDeclineContent({String? notificationEventId}) => {
 String threadSubscriptionPath(String roomId, String rootId) =>
     '/_matrix/client/unstable/org.matrix.msc4306/rooms/${Uri.encodeComponent(roomId)}/thread/${Uri.encodeComponent(rootId)}/subscription';
 
+const profileAboutKey = 'com.highlife.about';
+
+String? parseProfileAbout(Map<String, dynamic> profile) {
+  final value = profile[profileAboutKey];
+  if (value is String && value.trim().isNotEmpty) return value;
+  return null;
+}
+
+final _httpUrl = RegExp(r'https?://[^\s<>"]+', caseSensitive: false);
+
+String? firstHttpUrl(String body) {
+  final match = _httpUrl.firstMatch(body);
+  if (match == null) return null;
+  return match.group(0)!.replaceFirst(RegExp(r'[),.;]+$'), '');
+}
+
+class UrlPreview {
+  const UrlPreview({
+    required this.url,
+    this.title,
+    this.description,
+    this.image,
+  });
+
+  final String url;
+  final String? title;
+  final String? description;
+  final String? image;
+}
+
+UrlPreview? parseUrlPreview(Map<String, dynamic> payload, String fallbackUrl) {
+  final title = payload['og:title'] as String?;
+  final description = payload['og:description'] as String?;
+  final image = payload['og:image'] as String?;
+  final url = payload['og:url'] as String? ?? fallbackUrl;
+  if ((title == null || title.isEmpty) &&
+      (description == null || description.isEmpty) &&
+      (image == null || image.isEmpty)) {
+    return null;
+  }
+  return UrlPreview(
+    url: url,
+    title: title,
+    description: description,
+    image: image,
+  );
+}
+
 bool slidingSyncSupported(Map<String, dynamic>? unstable) {
   if (unstable == null) return false;
   return unstable['org.matrix.simplified_msc3575'] == true ||

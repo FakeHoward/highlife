@@ -98,6 +98,12 @@ void main() {
       }),
       ['!a:ex', '!b:ex'],
     );
+    expect(parseProfileAbout({profileAboutKey: 'hello from HighLife'}), 'hello from HighLife');
+    expect(firstHttpUrl('see https://example.org/a, then text'), 'https://example.org/a');
+    expect(
+      parseUrlPreview({'og:title': 'Example'}, 'https://example.org')?.title,
+      'Example',
+    );
   });
 
   test('MSC4332 commands parse nested and top-level command lists', () {

@@ -151,12 +151,13 @@ class _MembersPanelState extends State<MembersPanel> {
                       itemBuilder: (context, index) {
                         final user = _members[index];
                         return ListTile(
-                          leading: MatrixAvatar(
-                            name: user.calcDisplayname(),
-                            mxc: user.avatarUrl,
-                            client: widget.room.client,
-                            radius: 18,
-                          ),
+                        leading: MatrixAvatar(
+                          name: user.calcDisplayname(),
+                          identity: user.id,
+                          mxc: user.avatarUrl,
+                          client: widget.room.client,
+                          radius: 18,
+                        ),
                           title: Text(user.calcDisplayname()),
                           subtitle: Text(user.id),
                           onTap: () => showUserProfileSheet(

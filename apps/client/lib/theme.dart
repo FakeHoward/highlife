@@ -29,29 +29,29 @@ class HighLifeTokens {
   final Color accent;
 
   static const light = HighLifeTokens(
-    chatCanvas: Color(0xFFF4F6F8),
-    ownMessage: Color(0xFFDDF2FD),
+    chatCanvas: Color(0xFFE8EEF3),
+    ownMessage: Color(0xFFDCECC8),
     incomingMessage: Color(0xFFFFFFFF),
-    hairline: Color(0xFFD9E0E5),
-    muted: Color(0xFF667786),
+    hairline: Color(0xFFD0D8E0),
+    muted: Color(0xFF5A6B78),
     danger: Color(0xFFC83E4D),
     dangerSoft: Color(0xFFF8E8E5),
     surface: Color(0xFFFFFFFF),
-    surfaceMuted: Color(0xFFE9EEF2),
+    surfaceMuted: Color(0xFFDCE6EE),
     text: Color(0xFF17212B),
     accent: Color(0xFF168ACD),
   );
 
   static const dark = HighLifeTokens(
-    chatCanvas: Color(0xFF101418),
-    ownMessage: Color(0xFF164A66),
-    incomingMessage: Color(0xFF202A32),
-    hairline: Color(0xFF2B3740),
-    muted: Color(0xFF91A2AF),
+    chatCanvas: Color(0xFF0E1621),
+    ownMessage: Color(0xFF2B5278),
+    incomingMessage: Color(0xFF17212B),
+    hairline: Color(0xFF242F3A),
+    muted: Color(0xFF8AA0B0),
     danger: Color(0xFFF06A76),
     dangerSoft: Color(0xFF3A2227),
-    surface: Color(0xFF182027),
-    surfaceMuted: Color(0xFF202A32),
+    surface: Color(0xFF17212B),
+    surfaceMuted: Color(0xFF1C2733),
     text: Color(0xFFEDF3F7),
     accent: Color(0xFF45AEEA),
   );

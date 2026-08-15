@@ -15,6 +15,7 @@ import {
   sendMessage,
   toggleReaction,
   votePoll,
+  fetchUrlPreview,
 } from "../matrix/service";
 import {
   parseAiomatrixPayload,
@@ -319,6 +320,7 @@ export function MessageTimeline({
                 ) : !bot.miniApp ? (
                   <p>{item.body}</p>
                 ) : null}
+                <LinkPreview body={item.body} />
                 {item.media && <Media item={item} />}
                 {(item.kind === "location" || item.geoUri || item.latitude != null) && (
                   <a
@@ -577,6 +579,36 @@ function Media({ item }: { item: TimelineItem }) {
   return (
     <a className="file-card" href={source} target="_blank" rel="noreferrer">
       <IconDownload /> <span><strong>{item.media?.name}</strong><small>{formatBytes(item.media?.size, t("timeline.attachment"))}</small></span>
+    </a>
+  );
+}
+
+function LinkPreview({ body }: { body: string }) {
+  const [preview, setPreview] = useState<{
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUrlPreview(body).then((next) => {
+      if (!cancelled) setPreview(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [body]);
+
+  if (!preview) return null;
+  return (
+    <a className="url-preview" href={preview.url} target="_blank" rel="noreferrer">
+      {preview.image ? <img src={preview.image} alt="" /> : null}
+      <span>
+        {preview.title ? <strong>{preview.title}</strong> : null}
+        {preview.description ? <small>{preview.description}</small> : null}
+      </span>
     </a>
   );
 }

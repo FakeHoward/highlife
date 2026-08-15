@@ -1,30 +1,14 @@
 import '../hl_kit.dart';
 import 'package:matrix/matrix.dart';
 
-const _avatarPalette = <Color>[
-  Color(0xFF2A9D8F),
-  Color(0xFFE76F51),
-  Color(0xFF457B9D),
-  Color(0xFF8A5A44),
-  Color(0xFF6D597A),
-  Color(0xFF3A7D44),
-  Color(0xFFC44536),
-  Color(0xFF577590),
-];
+import '../domain/dicebear.dart';
 
-Color deterministicAvatarColor(String identity) {
-  var hash = 0;
-  for (final unit in identity.trim().toLowerCase().codeUnits) {
-    hash = ((hash * 31) + unit) & 0x7fffffff;
-  }
-  return _avatarPalette[hash % _avatarPalette.length];
-}
-
-/// Compact Matrix room / user avatar with letter fallback.
+/// Compact Matrix room / user avatar with DiceBear fallback.
 class MatrixAvatar extends StatefulWidget {
   const MatrixAvatar({
     super.key,
     required this.name,
+    this.identity,
     this.mxc,
     this.client,
     this.radius = 22,
@@ -34,12 +18,15 @@ class MatrixAvatar extends StatefulWidget {
   });
 
   final String name;
+  final String? identity;
   final Uri? mxc;
   final Client? client;
   final double radius;
   final Color? backgroundColor;
   final Color? foregroundColor;
   final IconData? fallbackIcon;
+
+  String get seed => (identity ?? name).trim();
 
   @override
   State<MatrixAvatar> createState() => _MatrixAvatarState();
@@ -50,6 +37,8 @@ class _MatrixAvatarState extends State<MatrixAvatar> {
   Uri? _cachedMxc;
   Client? _cachedClient;
   double? _cachedRadius;
+  var _mxcFailed = false;
+  var _dicebearFailed = false;
 
   @override
   void initState() {
@@ -60,6 +49,14 @@ class _MatrixAvatarState extends State<MatrixAvatar> {
   @override
   void didUpdateWidget(covariant MatrixAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.mxc != widget.mxc ||
+        !identical(oldWidget.client, widget.client) ||
+        oldWidget.radius != widget.radius) {
+      _mxcFailed = false;
+    }
+    if (oldWidget.identity != widget.identity || oldWidget.name != widget.name) {
+      _dicebearFailed = false;
+    }
     _syncCachedFuture();
   }
 
@@ -101,43 +98,74 @@ class _MatrixAvatarState extends State<MatrixAvatar> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final bg = widget.backgroundColor ?? deterministicAvatarColor(widget.name);
     final fg = widget.foregroundColor ?? colors.surface;
     final future = _httpUriFuture;
-    if (future == null) {
-      return _fallback(bg, fg);
+    if (future == null || _mxcFailed) {
+      return _fallback(fg);
     }
     return FutureBuilder<Uri?>(
       future: future,
       builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return CircleAvatar(
+            radius: widget.radius,
+            backgroundColor: widget.backgroundColor ?? _portraitColor(),
+          );
+        }
         final http = snapshot.data;
-        if (http == null) return _fallback(bg, fg);
+        if (http == null) return _fallback(fg);
         return CircleAvatar(
           radius: widget.radius,
-          backgroundColor: bg,
+          backgroundColor: widget.backgroundColor,
           foregroundColor: fg,
           backgroundImage: NetworkImage(http.toString()),
-          onBackgroundImageError: (_, __) {},
+          onBackgroundImageError: (_, __) {
+            if (mounted) setState(() => _mxcFailed = true);
+          },
         );
       },
     );
   }
 
-  Widget _fallback(Color bg, Color fg) {
+  Widget _fallback(Color fg) {
+    if (widget.fallbackIcon != null) {
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: widget.backgroundColor,
+        foregroundColor: fg,
+        child: Icon(widget.fallbackIcon, size: widget.radius),
+      );
+    }
+    final portrait = widget.backgroundColor ?? _portraitColor();
+    if (_dicebearFailed || widget.seed.isEmpty) {
+      return CircleAvatar(
+        radius: widget.radius,
+        backgroundColor: portrait,
+        foregroundColor: fg,
+        child: Text(
+          _initial(widget.name),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: widget.radius * 0.75,
+          ),
+        ),
+      );
+    }
+    final size = (widget.radius * 3).round().clamp(48, 192);
     return CircleAvatar(
       radius: widget.radius,
-      backgroundColor: bg,
+      backgroundColor: portrait,
       foregroundColor: fg,
-      child: widget.fallbackIcon != null
-          ? Icon(widget.fallbackIcon, size: widget.radius)
-          : Text(
-              _initial(widget.name),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: widget.radius * 0.75,
-              ),
-            ),
+      backgroundImage: NetworkImage(dicebearAvatarUrl(widget.seed, size: size)),
+      onBackgroundImageError: (_, __) {
+        if (mounted) setState(() => _dicebearFailed = true);
+      },
     );
+  }
+
+  Color _portraitColor() {
+    final hex = dicebearBackground(widget.seed);
+    return Color(0xFF000000 | int.parse(hex, radix: 16));
   }
 
   static String _initial(String name) {
@@ -152,6 +180,7 @@ extension RoomAvatarX on Room {
   MatrixAvatar highLifeAvatar({double radius = 22}) {
     return MatrixAvatar(
       name: getLocalizedDisplayname(),
+      identity: id,
       mxc: avatar,
       client: client,
       radius: radius,

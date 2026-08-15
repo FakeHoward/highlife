@@ -205,6 +205,13 @@ def validate_static_config() -> None:
         "render-synapse-config.py must delegate authentication to MAS",
     )
     require("msc4108_enabled" in render_py, "render-synapse-config.py must enable QR login")
+    require("msc3773_enabled" in render_py, "render-synapse-config.py must enable thread notifications")
+    require("msc4306_enabled" in render_py, "render-synapse-config.py must enable thread subscriptions")
+    require("msc4133_enabled" in render_py, "render-synapse-config.py must enable custom profile fields")
+    require("msc4452_enabled" in render_py, "render-synapse-config.py must enable URL preview capability")
+    require('msc4388_mode": "open"' in render_py, "render-synapse-config.py must open MSC4388 QR channel")
+    require("msc3381_polls_enabled" in render_py, "render-synapse-config.py must enable poll push rules")
+    require("msc4143_enabled" in render_py, "render-synapse-config.py must enable Matrix RTC LiveKit transport")
     require((SERVER / "render-mas-config.py").is_file(), "server/render-mas-config.py is required")
 
     deploy = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")

@@ -180,6 +180,37 @@ class MatrixRoomRepository {
     } catch (_) {}
   }
 
+  Future<void> unsubscribeFromThread(Room room, String rootId) async {
+    try {
+      await client.request(
+        RequestType.DELETE,
+        matrixApiAction(threadSubscriptionPath(room.id, rootId)),
+      );
+    } catch (_) {}
+  }
+
+  Future<UrlPreview?> fetchUrlPreview(String bodyOrUrl) async {
+    final url = bodyOrUrl.startsWith('http') ? bodyOrUrl : firstHttpUrl(bodyOrUrl);
+    if (url == null) return null;
+    try {
+      final payload = await client.request(
+        RequestType.GET,
+        '/client/v1/media/preview_url?url=${Uri.encodeQueryComponent(url)}',
+      );
+      return parseUrlPreview(Map<String, dynamic>.from(payload), url);
+    } catch (_) {
+      try {
+        final payload = await client.request(
+          RequestType.GET,
+          '/media/v3/preview_url?url=${Uri.encodeQueryComponent(url)}',
+        );
+        return parseUrlPreview(Map<String, dynamic>.from(payload), url);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   Future<String?> sendText(
     Room room,
     String text, {

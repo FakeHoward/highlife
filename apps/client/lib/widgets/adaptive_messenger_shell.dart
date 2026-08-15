@@ -14,8 +14,8 @@ class AdaptiveMessengerShell extends StatelessWidget {
 
   static const breakpoint = 840.0;
   static const railBreakpoint = 1100.0;
-  static const masterWidth = 292.0;
-  static const railWidth = 52.0;
+  static const masterWidth = 377.0;
+  static const railWidth = 55.0;
 
   final Widget master;
   final Widget detail;

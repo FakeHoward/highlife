@@ -33,6 +33,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   PackageInfo? _packageInfo;
   String? _displayName;
+  String? _about;
   Uri? _avatarUrl;
   var _checkingUpdates = false;
   List<String> _pushDistributors = const [];
@@ -47,12 +48,16 @@ class _ProfilePageState extends State<ProfilePage> {
     final session = context.read<HighLifeSession>();
     final info = await PackageInfo.fromPlatform();
     final name = await session.fetchDisplayName();
+    final about = session.userId == null
+        ? ''
+        : await session.fetchProfileAbout(session.userId!);
     final avatar = await session.fetchAvatarUrl();
     final distributors = await session.pushDistributors();
     if (!mounted) return;
     setState(() {
       _packageInfo = info;
       _displayName = name;
+      _about = about;
       _avatarUrl = avatar;
       _pushDistributors = distributors;
     });
@@ -86,6 +91,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       borderRadius: BorderRadius.circular(40),
                       child: MatrixAvatar(
                         name: _displayName ?? session.userId ?? '',
+                        identity: session.userId,
                         mxc: _avatarUrl,
                         client: session.client,
                         radius: 40,
@@ -135,6 +141,22 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (_about != null && _about!.isNotEmpty)
+                      Text(
+                        _about!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: HighLifeTokens.of(context).muted,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    HlButton.secondary(
+                      height: 36,
+                      isFullWidth: true,
+                      onPressed: () => _editAbout(session, s),
+                      label: Text(s.editAbout),
                     ),
                   ],
                 ),
@@ -411,6 +433,55 @@ class _ProfilePageState extends State<ProfilePage> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text(s.editDisplayName),
+          content: Text(e.toString()),
+          actions: [
+            HlButton.primary(
+              onPressed: () => Navigator.pop(context),
+              label: Text(s.done),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _editAbout(HighLifeSession session, AppStrings s) async {
+    final controller = TextEditingController(text: _about ?? '');
+    final next = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.editAbout),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          decoration: InputDecoration(labelText: s.about),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          HlButton.text(
+            onPressed: () => Navigator.pop(context),
+            label: Text(s.cancel),
+          ),
+          HlButton.primary(
+            onPressed: () => Navigator.pop(context, controller.text),
+            label: Text(s.save),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (next == null) return;
+    try {
+      await session.setProfileAbout(next);
+      if (!mounted) return;
+      setState(() => _about = next.trim());
+    } catch (e) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(s.editAbout),
           content: Text(e.toString()),
           actions: [
             HlButton.primary(

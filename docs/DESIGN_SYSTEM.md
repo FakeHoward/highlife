@@ -6,10 +6,15 @@ assets, or exact layouts.
 
 ## Product signature
 
-The signature is the conversation itself: compact grouped messages, clear
-delivery state, and bot controls that feel native to the timeline. Aiomatrix
-keyboards and Mini Apps must use the same rhythm as ordinary messages rather
-than looking like embedded demos.
+The signature is the conversation itself: compact grouped messages, DiceBear
+avatars when a Matrix avatar is missing, clear delivery state, and bot
+controls that feel native to the timeline. Aiomatrix keyboards and Mini Apps
+must use the same rhythm as ordinary messages rather than looking like
+embedded demos.
+
+Layout proportions follow the golden ratio (φ ≈ 1.618): the chat column
+dominates, the room list is the smaller part (377px / 55px rail), and
+outgoing bubbles cap at 61.8% of the pane.
 
 ## Foundation tokens
 
@@ -18,23 +23,23 @@ implementations differ.
 
 | Role | Light | Dark |
 | --- | --- | --- |
-| canvas | `#F4F6F8` | `#101418` |
-| surface | `#FFFFFF` | `#182027` |
-| surface-muted | `#E9EEF2` | `#202A32` |
+| canvas | `#E8EEF3` | `#0E1621` |
+| surface | `#FFFFFF` | `#17212B` |
+| surface-muted | `#DCE6EE` | `#1C2733` |
 | text | `#17212B` | `#EDF3F7` |
-| text-muted | `#667786` | `#91A2AF` |
+| text-muted | `#5A6B78` | `#8AA0B0` |
 | accent | `#168ACD` | `#45AEEA` |
 | accent-pressed | `#0878B7` | `#2C98D5` |
-| own-message | `#DDF2FD` | `#164A66` |
-| peer-message | `#FFFFFF` | `#202A32` |
+| own-message | `#DCECC8` | `#2B5278` |
+| peer-message | `#FFFFFF` | `#17212B` |
 | danger | `#C83E4D` | `#F06A76` |
-| divider | `#D9E0E5` | `#2B3740` |
+| divider | `#D0D8E0` | `#242F3A` |
 
 - Typography uses the platform system sans stack everywhere, including login,
   headings, empty states, and utility surfaces. Do not load remote or display
   fonts.
 - Utility and event IDs: a platform monospace face with tabular figures.
-- Space scale: 4, 8, 12, 16, 24, 32.
+- Space scale: 5, 8, 13, 21, 34 (Fibonacci, φ). 8px remains the micro-grid.
 - Corner scale: 6 for controls, 10 for panels, 14 for message bubbles. Message
   grouping may tighten adjoining corners to 5.
 - Motion: 120 ms feedback, 180 ms state changes, 240 ms panel transitions,
@@ -45,9 +50,10 @@ implementations differ.
 - Compact: room list and conversation are separate routes with an explicit
   back action.
 - Medium: room list and conversation appear side by side.
-- Expanded: a 52-pixel space rail, room sidebar, and conversation form the
-  desktop shell. Selecting a space may reveal a compact, dismissible context
-  panel above the room list; spaces never become a vertical sidebar section.
+- Expanded: a 55-pixel space rail, 377-pixel room sidebar, and conversation
+  form the desktop shell. Selecting a space may reveal a compact, dismissible
+  context panel above the room list; spaces never become a vertical sidebar
+  section.
 - Breakpoints are based on available width, never device labels.
 - Conversation text is constrained for readability; background space belongs
   outside the timeline, not inside oversized cards.
@@ -81,8 +87,9 @@ implementations differ.
 ## Identity, addresses, and composition
 
 - Use one reusable circular avatar component for people, rooms, and spaces.
-  Missing images use initials plus a deterministic color derived from the
-  Matrix ID, so the same identity keeps the same fallback across surfaces.
+  Missing images load a DiceBear `notionists-neutral` portrait seeded from a
+  hash of the Matrix ID, so the same identity keeps the same face across
+  surfaces. Initials remain the last-resort fallback if the portrait fails.
 - Room details show the canonical `#alias:server` address before the opaque
   room ID, with explicit copy and management actions. Alias state changes use
   dedicated timeline language.

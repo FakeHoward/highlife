@@ -296,6 +296,49 @@ export function threadSubscriptionPath(roomId: string, threadRootId: string): st
   return `${MSC4306_SUBSCRIPTION_PREFIX}/${encodeURIComponent(roomId)}/thread/${encodeURIComponent(threadRootId)}/subscription`;
 }
 
+export const PROFILE_ABOUT_KEY = "com.highlife.about";
+
+export function parseProfileAbout(profile: Record<string, unknown>): string | undefined {
+  const value = profile[PROFILE_ABOUT_KEY];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+const HTTP_URL = /\bhttps?:\/\/[^\s<>"']+/i;
+
+export function firstHttpUrl(body: string): string | undefined {
+  const match = body.match(HTTP_URL);
+  if (!match) return undefined;
+  return match[0].replace(/[),.;]+$/, "");
+}
+
+export type UrlPreview = {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+};
+
+export function parseUrlPreview(payload: Record<string, unknown>, fallbackUrl: string): UrlPreview | null {
+  const title = typeof payload["og:title"] === "string" ? payload["og:title"] : undefined;
+  const description = typeof payload["og:description"] === "string" ? payload["og:description"] : undefined;
+  const image = typeof payload["og:image"] === "string" ? payload["og:image"] : undefined;
+  const url = typeof payload["og:url"] === "string" ? payload["og:url"] : fallbackUrl;
+  if (!title && !description && !image) return null;
+  return { url, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(image ? { image } : {}) };
+}
+
+export function urlPreviewCapabilityEnabled(capabilities: Record<string, unknown> | undefined): boolean {
+  if (!capabilities) return false;
+  const keys = ["org.matrix.msc4452", "m.url_preview"] as const;
+  for (const key of keys) {
+    const value = capabilities[key];
+    if (value && typeof value === "object" && !Array.isArray(value) && (value as { enabled?: unknown }).enabled === true) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function slidingSyncSupported(unstable: Record<string, unknown> | undefined): boolean {
   if (!unstable) return false;
   return unstable["org.matrix.simplified_msc3575"] === true

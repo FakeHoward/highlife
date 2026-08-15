@@ -176,6 +176,7 @@ const en = {
   "timeline.yesterday": "Yesterday",
   "timeline.thread": "Thread",
   "timeline.threadCount": "Thread · {count}",
+  "timeline.muteThread": "Mute thread",
   "timeline.openMap": "Open map",
   "timeline.sticker": "Sticker",
 
@@ -236,6 +237,8 @@ const en = {
   "settings.profile": "Profile",
   "settings.displayName": "Display name",
   "settings.displayNamePlaceholder": "New display name",
+  "settings.about": "About",
+  "settings.aboutPlaceholder": "A short line on your profile",
   "settings.save": "Save",
   "settings.chooseAvatar": "Choose avatar",
   "settings.encryption": "Encryption",
@@ -616,6 +619,7 @@ const ru: Record<MessageKey, string> = {
   "timeline.yesterday": "Вчера",
   "timeline.thread": "Тред",
   "timeline.threadCount": "Тред · {count}",
+  "timeline.muteThread": "Выключить тред",
   "timeline.openMap": "Карта",
   "timeline.sticker": "Стикер",
 
@@ -673,6 +677,8 @@ const ru: Record<MessageKey, string> = {
   "settings.profile": "Профиль",
   "settings.displayName": "Отображаемое имя",
   "settings.displayNamePlaceholder": "Новое отображаемое имя",
+  "settings.about": "О себе",
+  "settings.aboutPlaceholder": "Короткая строка в профиле",
   "settings.save": "Сохранить",
   "settings.chooseAvatar": "Выбрать аватар",
   "settings.encryption": "Шифрование",

@@ -105,9 +105,14 @@ import {
   threadRelation,
   threadRootId,
   threadSubscriptionPath,
+  firstHttpUrl,
+  parseProfileAbout,
+  parseUrlPreview,
+  PROFILE_ABOUT_KEY,
   type AdvertisedCommand,
   type ImagePackItem,
   type RoomSummary,
+  type UrlPreview,
 } from "./specFeatures";
 import {
   clearCryptoDatabases,
@@ -833,8 +838,8 @@ export function listRooms(query = ""): RoomListItem[] {
             ?.getContent().alias as string | undefined
         ) ?? undefined,
         lastMessage: last ? formatMessagePreview(lastContent) || undefined : undefined,
-        unread: room.getUnreadNotificationCount(NotificationCountType.Total),
-        highlight: room.getUnreadNotificationCount(NotificationCountType.Highlight),
+        unread: roomUnreadCount(room, NotificationCountType.Total),
+        highlight: roomUnreadCount(room, NotificationCountType.Highlight),
         isDirect: Boolean(room.getDMInviter() || room.guessDMUserId()),
         isEncrypted: room.hasEncryptionStateEvent(),
         isSpace: room.isSpaceRoom(),
@@ -868,6 +873,15 @@ export function listSpaces(): SpaceSummary[] {
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function roomUnreadCount(room: Room, type: NotificationCountType): number {
+  const main = room.getUnreadNotificationCount(type) ?? 0;
+  const extra = room as Room & {
+    getThreadUnreadNotificationCount?: (kind: NotificationCountType) => number;
+  };
+  const threads = extra.getThreadUnreadNotificationCount?.(type) ?? 0;
+  return main + threads;
 }
 
 function mapEventStatus(status: EventStatus | null | undefined): DeliveryStatus | undefined {
@@ -1215,6 +1229,7 @@ export function getUserProfileInfo(userId: string): {
   userId: string;
   displayName: string;
   avatarUrl?: string;
+  about?: string;
 } {
   const active = client;
   if (!active) return { userId, displayName: userId };
@@ -1567,14 +1582,62 @@ export async function requestDesktopNotifications(): Promise<NotificationPermiss
   return perm;
 }
 
-export async function updateProfile(displayName: string, avatar?: File): Promise<void> {
+export async function updateProfile(displayName: string, avatar?: File, about?: string): Promise<void> {
   const active = requiredClient();
   await active.setDisplayName(displayName);
   if (avatar) {
     const result = await active.uploadContent(avatar, { name: avatar.name, type: avatar.type });
     await active.setAvatarUrl(result.content_uri);
   }
+  if (about !== undefined) {
+    await setProfileAbout(about);
+  }
   publish();
+}
+
+export async function fetchProfileAbout(userId: string): Promise<string> {
+  const active = requiredClient();
+  const profile = await active.getProfileInfo(userId) as Record<string, unknown>;
+  return parseProfileAbout(profile) ?? "";
+}
+
+export async function setProfileAbout(about: string): Promise<void> {
+  const active = requiredClient();
+  const userId = active.getUserId();
+  if (!userId) throw new Error("Not signed in");
+  await active.http.authedRequest(
+    "PUT" as never,
+    `/_matrix/client/v3/profile/${encodeURIComponent(userId)}/${encodeURIComponent(PROFILE_ABOUT_KEY)}`,
+    undefined,
+    { [PROFILE_ABOUT_KEY]: about.trim() },
+  );
+  publish();
+}
+
+const urlPreviewCache = new Map<string, UrlPreview | null>();
+
+export async function fetchUrlPreview(bodyOrUrl: string): Promise<UrlPreview | null> {
+  const url = bodyOrUrl.startsWith("http") ? bodyOrUrl : firstHttpUrl(bodyOrUrl);
+  if (!url) return null;
+  if (urlPreviewCache.has(url)) return urlPreviewCache.get(url) ?? null;
+  const active = client;
+  if (!active) return null;
+  const preview = (active as MatrixClient & {
+    getUrlPreview?: (href: string, ts?: number) => Promise<Record<string, unknown>>;
+  }).getUrlPreview;
+  if (!preview) return null;
+  try {
+    const payload = await preview.call(active, url);
+    const parsed = parseUrlPreview(payload, url);
+    if (parsed && parsed.image?.startsWith("mxc://")) {
+      parsed.image = active.mxcUrlToHttp(parsed.image, 240, 240, "scale", true) ?? parsed.image;
+    }
+    urlPreviewCache.set(url, parsed);
+    return parsed;
+  } catch {
+    urlPreviewCache.set(url, null);
+    return null;
+  }
 }
 
 export async function setRoomAvatar(roomId: string, avatar: File): Promise<void> {

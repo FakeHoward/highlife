@@ -77,6 +77,7 @@ class UserProfileSheet extends StatelessWidget {
           children: [
             MatrixAvatar(
               name: member?.calcDisplayname() ?? userId,
+              identity: userId,
               mxc: member?.avatarUrl,
               client: client,
               radius: 32,
@@ -92,6 +93,17 @@ class UserProfileSheet extends StatelessWidget {
             Text(userId, style: TextStyle(color: tokens.muted, fontSize: 13)),
             const SizedBox(height: 4),
             Text(presenceLabel, style: TextStyle(color: tokens.muted, fontSize: 13)),
+            FutureBuilder<String>(
+              future: session.fetchProfileAbout(userId),
+              builder: (context, snapshot) {
+                final about = snapshot.data;
+                if (about == null || about.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(about, textAlign: TextAlign.center),
+                );
+              },
+            ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,

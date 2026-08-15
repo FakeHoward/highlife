@@ -45,6 +45,9 @@ vi.mock("../matrix/service", () => ({
   retryFailedEvent: vi.fn(),
   retryDecryptEvent: vi.fn(),
   enableRoomEncryption: vi.fn(),
+  fetchUrlPreview: vi.fn(async () => null),
+  unsubscribeFromThread: vi.fn(),
+  fetchProfileAbout: vi.fn(async () => ""),
   requestUserVerification: vi.fn(),
   getJoinedMembers: () => ([
     { userId: "@alice:example.org", displayName: "Alice", membership: "join", powerLevel: 50 },
@@ -242,14 +245,13 @@ describe("avatars", () => {
     );
   });
 
-  it("uses a deterministic accessible fallback based on the id", () => {
-    const { rerender } = wrap(<Avatar id="@alice:example.org" name="Alice" />);
-    const first = screen.getByRole("img", { name: "Alice" });
-    const color = first.getAttribute("style");
-    expect(first).toHaveTextContent("A");
-
-    rerender(<LocaleProvider><Avatar id="@alice:example.org" name="Changed name" /></LocaleProvider>);
-    expect(screen.getByRole("img", { name: "Changed name" }).getAttribute("style")).toBe(color);
+  it("uses a DiceBear image when no avatar URL is available", () => {
+    wrap(<Avatar id="@alice:example.org" name="Alice" />);
+    const image = screen.getByRole("img", { name: "Alice" });
+    expect(image).toHaveAttribute("src", expect.stringContaining("api.dicebear.com"));
+    expect(image).toHaveAttribute("src", expect.stringContaining("notionists-neutral"));
+    expect(image).toHaveAttribute("src", expect.stringContaining("f7d6ffc5"));
+    expect(image.getAttribute("src")).not.toContain("alice");
   });
 });
 

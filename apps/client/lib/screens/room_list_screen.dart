@@ -201,6 +201,8 @@ class _RoomListScreenState extends State<RoomListScreen> {
               child: ListTile(
                 leading: MatrixAvatar(
                   name: session.userId ?? 'H',
+                  identity: session.userId,
+                  mxc: _ownAvatarMxc(session.client),
                   client: session.client,
                   radius: 18,
                 ),
@@ -614,6 +616,7 @@ class _SpaceRail extends StatelessWidget {
               onTap: () => onSelectSpace(space),
               child: MatrixAvatar(
                 name: space.getLocalizedDisplayname(),
+                identity: space.id,
                 mxc: space.avatar,
                 client: space.client,
                 radius: 16,
@@ -784,6 +787,7 @@ class _InviteTile extends StatelessWidget {
             children: [
               MatrixAvatar(
                 name: room.getLocalizedDisplayname(),
+                identity: room.id,
                 mxc: room.avatar,
                 client: room.client,
                 radius: 22,
@@ -875,8 +879,8 @@ class _RoomTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
-              room.highLifeAvatar(radius: 26),
-              const SizedBox(width: 12),
+              room.highLifeAvatar(radius: 21),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1036,4 +1040,14 @@ class _EmptyRooms extends StatelessWidget {
       ),
     );
   }
+}
+
+Uri? _ownAvatarMxc(Client? client) {
+  final userId = client?.userID;
+  if (client == null || userId == null) return null;
+  for (final room in client.rooms) {
+    final url = room.unsafeGetUserFromMemoryOrFallback(userId).avatarUrl;
+    if (url != null) return url;
+  }
+  return null;
 }

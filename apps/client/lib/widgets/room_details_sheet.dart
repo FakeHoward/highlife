@@ -284,6 +284,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                     borderRadius: BorderRadius.circular(14),
                     child: MatrixAvatar(
                       name: name,
+                      identity: room.id,
                       mxc: room.avatar,
                       client: room.client,
                       radius: 24,
@@ -382,6 +383,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                         contentPadding: EdgeInsets.zero,
                         leading: MatrixAvatar(
                           name: user.calcDisplayname(),
+                          identity: user.id,
                           mxc: user.avatarUrl,
                           client: room.client,
                           radius: 18,
@@ -419,6 +421,7 @@ class _RoomDetailsSheetState extends State<RoomDetailsSheet> {
                         contentPadding: EdgeInsets.zero,
                         leading: MatrixAvatar(
                           name: user.calcDisplayname(),
+                          identity: user.id,
                           mxc: user.avatarUrl,
                           client: room.client,
                           radius: 18,
