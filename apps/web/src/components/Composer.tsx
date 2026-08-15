@@ -49,6 +49,7 @@ export function Composer({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [stickersOpen, setStickersOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
   const typingTimer = useRef<number | undefined>(undefined);
   const file = useRef<HTMLInputElement>(null);
   const previousRoom = useRef(roomId);
@@ -88,6 +89,7 @@ export function Composer({
       setText("");
       setError(null);
       setStickersOpen(false);
+      setAttachOpen(false);
       discardRecording();
       void Promise.resolve(setTyping(roomId, false)).catch(() => undefined);
     }
@@ -349,16 +351,37 @@ export function Composer({
           <span>{t("composer.uploadProgress", { percent: Math.round(uploadRatio * 100) })}</span>
         </div>
       )}
-      {!recording && mode?.type !== "edit" && (
-        <div className="composer-tools">
-          <button type="button" className="text-button" onClick={() => void shareLocation()} disabled={busy}>
+      {attachOpen && !recording && mode?.type !== "edit" && (
+        <div className="attach-menu" role="menu" aria-label={t("composer.attach")}>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAttachOpen(false);
+              file.current?.click();
+            }}
+            disabled={busy}
+          >
+            {t("composer.file")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAttachOpen(false);
+              void shareLocation();
+            }}
+            disabled={busy}
+          >
             {t("composer.location")}
           </button>
           <button
             type="button"
-            className="text-button"
-            onClick={() => setStickersOpen((open) => !open)}
-            aria-expanded={stickersOpen}
+            role="menuitem"
+            onClick={() => {
+              setAttachOpen(false);
+              setStickersOpen((open) => !open);
+            }}
             disabled={busy}
           >
             {t("composer.stickers")}
@@ -372,7 +395,14 @@ export function Composer({
             ×
           </button>
         ) : (
-          <button type="button" className="icon-button attach" onClick={() => file.current?.click()} aria-label={t("composer.attach")} disabled={busy}>
+          <button
+            type="button"
+            className="icon-button attach"
+            onClick={() => setAttachOpen((open) => !open)}
+            aria-label={t("composer.attach")}
+            aria-expanded={attachOpen}
+            disabled={busy}
+          >
             <IconAttach />
           </button>
         )}

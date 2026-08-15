@@ -15,7 +15,6 @@ interface Props {
   onNewSpace: () => void;
   onSettings: () => void;
   onProfile?: () => void;
-  onSearchMessages?: () => void;
   profileId?: string;
   profileName?: string;
   profileAvatar?: string;
@@ -34,7 +33,6 @@ export function RoomSidebar({
   onNewSpace,
   onSettings,
   onProfile,
-  onSearchMessages,
   profileId,
   profileName,
   profileAvatar,
@@ -86,11 +84,6 @@ export function RoomSidebar({
         <header className="sidebar-head">
           <strong className="sidebar-title">HighLife</strong>
           <div className="head-actions">
-            {onSearchMessages && (
-              <button className="icon-button" type="button" onClick={onSearchMessages} aria-label={t("chat.search")} title={t("chat.search")}>
-                <IconSearch />
-              </button>
-            )}
             <button className="icon-button" type="button" onClick={onNew} aria-label={t("sidebar.createOrJoin")} title={t("sidebar.createOrJoin")}>
               <IconPlus />
             </button>
@@ -197,7 +190,7 @@ export function RoomSidebar({
             <button
               key={room.roomId}
               type="button"
-              className={`room-row ${activeId === room.roomId ? "active" : ""} ${room.isSpace ? "is-space" : ""}`}
+              className={`room-row ${activeId === room.roomId ? "active" : ""} ${room.isSpace ? "is-space" : ""} ${room.unread > 0 ? "has-unread" : ""}`}
               onClick={() => onSelect(room.roomId)}
               aria-current={activeId === room.roomId ? "page" : undefined}
             >

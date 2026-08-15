@@ -125,8 +125,9 @@ class _CallStageState extends State<CallStage> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tokens = HighLifeTokens.of(context);
     return Material(
-      color: colors.surface,
+      color: tokens.surface,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
@@ -185,7 +186,7 @@ class _CallStageState extends State<CallStage> {
                       _RoundCallButton(
                         color: widget.muted
                             ? colors.error
-                            : colors.surfaceContainerHighest,
+                            : tokens.surfaceMuted,
                         foreground: widget.muted
                             ? colors.onError
                             : colors.onSurface,
@@ -199,7 +200,7 @@ class _CallStageState extends State<CallStage> {
                       const SizedBox(width: 12),
                       _RoundCallButton(
                         color: widget.cameraMuted
-                            ? colors.surfaceContainerHighest
+                            ? tokens.surfaceMuted
                             : colors.primary,
                         foreground: widget.cameraMuted
                             ? colors.onSurface

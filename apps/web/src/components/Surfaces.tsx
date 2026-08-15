@@ -284,7 +284,7 @@ export function RoomActions({ onClose, onOpen }: { onClose: () => void; onOpen: 
         </label>
         {tab === "join" && <p className="muted small">{t("rooms.joinHint")}</p>}
         {tab === "join" && preview && (
-          <div className="room-preview">
+          <div className="join-preview">
             <strong>{preview.name ?? preview.roomId}</strong>
             {preview.topic && <p className="muted small">{preview.topic}</p>}
             {preview.numJoinedMembers != null && (
@@ -540,7 +540,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             </label>
             {avatar && <small className="muted">{avatar.name}</small>}
           </div>
-          <button className="button" type="submit">{t("settings.save")}</button>
+          <button className="button primary" type="submit">{t("settings.save")}</button>
         </form>
       </div>
       <div className="settings-section">
@@ -1438,7 +1438,7 @@ export function UserProfile({
             {t("user.startDm")}
           </button>
           <button
-            className="button"
+            className="button ghost"
             type="button"
             onClick={() => {
               void setUserIgnored(userId, !ignored)
@@ -1450,7 +1450,7 @@ export function UserProfile({
           </button>
           {onVerify && (
             <button
-              className="button"
+              className="button ghost"
               type="button"
               onClick={() => {
                 setStatus(t("user.verifying"));

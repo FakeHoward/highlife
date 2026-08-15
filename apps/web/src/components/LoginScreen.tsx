@@ -157,7 +157,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
                   : t("login.blurb")}
               </p>
             </div>
-          <div className="segmented login-locale" role="group" aria-label={t("login.language")}>
+          <div className="login-locale" role="group" aria-label={t("login.language")}>
             <button
               type="button"
               className={locale === "en" ? "active" : ""}
@@ -278,7 +278,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
         {mode === "login" && ssoAvailable && (
           <button
             type="button"
-            className="button"
+            className="button ghost"
             disabled={busy}
             onClick={() => void startSso()}
           >
@@ -286,44 +286,46 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
           </button>
         )}
         {mode === "login" && (
-          <div className="qr-login-block">
-            <p className="muted small">{t("login.qrHint")}</p>
-            {qrOpen ? (
-              <QrLoginPanel
-                start={startLoginQr}
-                onClose={() => setQrOpen(false)}
-              />
-            ) : (
-              <button
-                type="button"
-                className="button"
-                disabled={busy || !homeserver.trim()}
-                onClick={() => setQrOpen(true)}
-              >
-                {t("login.signInQr")}
-              </button>
-            )}
-          </div>
-        )}
-        {mode === "login" && (
-          <label>
-            <span>{t("login.ssoToken")}</span>
-            <input
-              value={ssoToken}
-              onChange={(event) => setSsoToken(event.target.value)}
-              placeholder={t("login.ssoTokenPlaceholder")}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <button
-              type="button"
-              className="button"
-              disabled={busy || !ssoToken.trim()}
-              onClick={() => void submitToken()}
-            >
-              {t("login.useToken")}
-            </button>
-          </label>
+          <details className="login-advanced">
+            <summary>{t("login.moreOptions")}</summary>
+            <div className="login-extras">
+              <div className="qr-login-block">
+                {qrOpen ? (
+                  <QrLoginPanel
+                    start={startLoginQr}
+                    onClose={() => setQrOpen(false)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="button ghost"
+                    disabled={busy || !homeserver.trim()}
+                    onClick={() => setQrOpen(true)}
+                  >
+                    {t("login.signInQr")}
+                  </button>
+                )}
+              </div>
+              <label>
+                <span>{t("login.ssoToken")}</span>
+                <input
+                  value={ssoToken}
+                  onChange={(event) => setSsoToken(event.target.value)}
+                  placeholder={t("login.ssoTokenPlaceholder")}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={busy || !ssoToken.trim()}
+                  onClick={() => void submitToken()}
+                >
+                  {t("login.useToken")}
+                </button>
+              </label>
+            </div>
+          </details>
         )}
         <p className="form-note">{t("login.note")}</p>
         </form>

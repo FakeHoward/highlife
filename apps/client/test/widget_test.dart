@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:highlife_client/hl_kit.dart';
 import 'package:highlife_client/widgets/adaptive_messenger_shell.dart';
+import 'package:highlife_client/widgets/hl_chrome.dart';
 
 void main() {
   testWidgets('wide messenger keeps master and detail visible', (tester) async {
@@ -107,7 +108,7 @@ void main() {
     expect(overflows, isEmpty);
   });
 
-  testWidgets('theme segments fit a 320px profile row', (tester) async {
+  testWidgets('profile theme cells fit a 320px row', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -123,16 +124,13 @@ void main() {
 
     await tester.pumpWidget(
       highLifeTestApp(
-        home: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 0, label: Text('System')),
-              ButtonSegment(value: 1, label: Text('Light')),
-              ButtonSegment(value: 2, label: Text('Dark')),
+        home: const Scaffold(
+          body: HlGroup(
+            children: [
+              HlCell(title: 'System'),
+              HlCell(title: 'Light'),
+              HlCell(title: 'Dark'),
             ],
-            selected: const {1},
-            onSelectionChanged: _noopSelection,
           ),
         ),
       ),
@@ -141,5 +139,3 @@ void main() {
     expect(overflows, isEmpty);
   });
 }
-
-void _noopSelection(Set<int> value) {}

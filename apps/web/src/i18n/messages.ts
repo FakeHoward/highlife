@@ -59,6 +59,7 @@ const en = {
   "login.qrHint": "Show a QR code for an already signed-in HighLife or Element X session to scan.",
   "login.qrUnavailable": "QR sign-in is not available on this server.",
   "login.confirmOnOtherDevice": "Confirm on the other device",
+  "login.moreOptions": "More sign-in options",
 
   // Rooms sidebar
   "sidebar.rooms": "Rooms",
@@ -187,6 +188,7 @@ const en = {
   "composer.message": "Message",
   "composer.send": "Send message",
   "composer.attach": "Attach file",
+  "composer.file": "File",
   "composer.sendFailed": "Message was not sent",
   "composer.cryptoUnavailable":
     "This room is encrypted, but encryption is not ready on this device. Open Profile and set up recovery, or use an unencrypted room.",
@@ -506,6 +508,7 @@ const ru: Record<MessageKey, string> = {
   "login.qrHint": "Показать QR для уже открытой сессии HighLife или Element X.",
   "login.qrUnavailable": "Вход по QR на этом сервере недоступен.",
   "login.confirmOnOtherDevice": "Подтвердите на другом устройстве",
+  "login.moreOptions": "Другие способы входа",
 
   "sidebar.rooms": "Комнаты",
   "sidebar.allRooms": "Все чаты",
@@ -629,6 +632,7 @@ const ru: Record<MessageKey, string> = {
   "composer.message": "Сообщение",
   "composer.send": "Отправить сообщение",
   "composer.attach": "Прикрепить файл",
+  "composer.file": "Файл",
   "composer.sendFailed": "Сообщение не отправлено",
   "composer.cryptoUnavailable":
     "Комната зашифрована, но шифрование на этом устройстве не готово. Откройте Профиль и настройте восстановление — или пишите в незашифрованную комнату.",

@@ -11,6 +11,7 @@ import '../domain/spec_features.dart';
 import '../services/session.dart';
 import '../services/update_checker.dart';
 import 'hl_button.dart';
+import 'hl_chrome.dart';
 import 'matrix_avatar.dart';
 import 'qr_code_dialog.dart';
 import 'verification_dialog.dart';
@@ -69,9 +70,10 @@ class _ProfilePageState extends State<ProfilePage> {
     final locales = context.watch<HighLifeLocales>();
     final s = locales.strings;
     final packageInfo = _packageInfo;
+    final tokens = HighLifeTokens.of(context);
 
     return Scaffold(
-      backgroundColor: HighLifeTokens.of(context).surface,
+      backgroundColor: HighLifeTokens.of(context).chatCanvas,
       appBar: AppBar(
         title: Text(s.profile),
         leading: IconButton(
@@ -81,10 +83,12 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 16, 8, 20),
+              ColoredBox(
+                color: HighLifeTokens.of(context).surface,
+                child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                 child: Column(
                   children: [
                     InkWell(
@@ -99,14 +103,17 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      _displayName?.isNotEmpty == true
-                          ? _displayName!
-                          : (session.userId ?? '—'),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                    GestureDetector(
+                      onTap: () => _editDisplayName(session, s),
+                      child: Text(
+                        _displayName?.isNotEmpty == true
+                            ? _displayName!
+                            : (session.userId ?? '—'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -121,205 +128,157 @@ class _ProfilePageState extends State<ProfilePage> {
                           color: HighLifeTokens.of(context).muted,
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: HlButton.secondary(
-                            height: 36,
-                            isFullWidth: true,
-                            onPressed: () => _changeAvatar(session),
-                            label: Text(s.changeAvatar),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: HlButton.secondary(
-                            height: 36,
-                            isFullWidth: true,
-                            onPressed: () => _editDisplayName(session, s),
-                            label: Text(s.editDisplayName),
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 8),
-                    if (_about != null && _about!.isNotEmpty)
-                      Text(
-                        _about!,
+                    GestureDetector(
+                      onTap: () => _editAbout(session, s),
+                      child: Text(
+                        (_about != null && _about!.isNotEmpty)
+                            ? _about!
+                            : s.editAbout,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: HighLifeTokens.of(context).muted,
                         ),
                       ),
-                    const SizedBox(height: 8),
-                    HlButton.secondary(
-                      height: 36,
-                      isFullWidth: true,
-                      onPressed: () => _editAbout(session, s),
-                      label: Text(s.editAbout),
                     ),
                   ],
                 ),
               ),
-              if (session.userId != null)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.badge_outlined),
-                  title: Text(s.matrixUserId),
-                  subtitle: Text(session.userId!),
-                  onTap: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: session.userId!),
-                    );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(s.copied)),
-                    );
-                  },
-                ),
-              if (session.homeserverUrl != null)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.dns_outlined),
-                  title: Text(s.homeserver),
-                  subtitle: Text(session.homeserverUrl!),
-                  onTap: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: session.homeserverUrl!),
-                    );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(s.copied)),
-                    );
-                  },
-                ),
-              const Divider(),
-              Text(s.theme),
-              const SizedBox(height: 6),
-              SegmentedButton<ThemeMode>(
-                segments: [
-                  ButtonSegment(
-                    value: ThemeMode.system,
-                    label: Text(s.themeSystem),
-                  ),
-                  ButtonSegment(
-                    value: ThemeMode.light,
-                    label: Text(s.themeLight),
-                  ),
-                  ButtonSegment(
-                    value: ThemeMode.dark,
-                    label: Text(s.themeDark),
-                  ),
-                ],
-                selected: {locales.themeMode},
-                onSelectionChanged: (value) {
-                  locales.setThemeMode(value.first);
-                },
-              ),
-              const SizedBox(height: 16),
-              Text(s.language),
-              const SizedBox(height: 6),
-              SegmentedButton<AppLocale>(
-                segments: [
-                  ButtonSegment(
-                    value: AppLocale.en,
-                    label: Text(s.languageEnglish),
-                  ),
-                  ButtonSegment(
-                    value: AppLocale.ru,
-                    label: Text(s.languageRussian),
-                  ),
-                ],
-                selected: {locales.locale},
-                onSelectionChanged: (value) {
-                  locales.setLocale(value.first);
-                },
               ),
               const SizedBox(height: 8),
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.lock_outline),
-                title: Text(s.encryptionSection),
-                subtitle: Text(s.encryptionSectionHint),
+              if (session.userId != null || session.homeserverUrl != null)
+                HlGroup(
+                  children: [
+                    if (session.userId != null)
+                      HlCell(
+                        title: s.matrixUserId,
+                        subtitle: session.userId,
+                        onTap: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: session.userId!),
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(s.copied)),
+                          );
+                        },
+                      ),
+                    if (session.homeserverUrl != null)
+                      HlCell(
+                        title: s.homeserver,
+                        subtitle: session.homeserverUrl,
+                        onTap: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: session.homeserverUrl!),
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(s.copied)),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              HlSectionLabel(s.theme),
+              HlGroup(
                 children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.devices),
-                    title: Text(s.deviceId),
-                    subtitle: Text(session.deviceId ?? '—'),
+                  HlCell(
+                    title: s.themeSystem,
+                    trailing: locales.themeMode == ThemeMode.system
+                        ? Icon(Icons.check, size: 20, color: tokens.accent)
+                        : null,
+                    onTap: () => locales.setThemeMode(ThemeMode.system),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      session.cryptoAvailable
-                          ? Icons.lock_outline
-                          : Icons.lock_open_outlined,
-                    ),
-                    title: Text(
-                      session.cryptoAvailable
-                          ? s.encryptionAvailable
-                          : s.webEncryptionUnavailable,
-                    ),
+                  HlCell(
+                    title: s.themeLight,
+                    trailing: locales.themeMode == ThemeMode.light
+                        ? Icon(Icons.check, size: 20, color: tokens.accent)
+                        : null,
+                    onTap: () => locales.setThemeMode(ThemeMode.light),
+                  ),
+                  HlCell(
+                    title: s.themeDark,
+                    trailing: locales.themeMode == ThemeMode.dark
+                        ? Icon(Icons.check, size: 20, color: tokens.accent)
+                        : null,
+                    onTap: () => locales.setThemeMode(ThemeMode.dark),
+                  ),
+                ],
+              ),
+              HlSectionLabel(s.language),
+              HlGroup(
+                children: [
+                  HlCell(
+                    title: s.languageEnglish,
+                    trailing: locales.locale == AppLocale.en
+                        ? Icon(Icons.check, size: 20, color: tokens.accent)
+                        : null,
+                    onTap: () => locales.setLocale(AppLocale.en),
+                  ),
+                  HlCell(
+                    title: s.languageRussian,
+                    trailing: locales.locale == AppLocale.ru
+                        ? Icon(Icons.check, size: 20, color: tokens.accent)
+                        : null,
+                    onTap: () => locales.setLocale(AppLocale.ru),
+                  ),
+                ],
+              ),
+              HlSectionLabel(s.encryptionSection),
+              HlGroup(
+                children: [
+                  HlCell(
+                    title: s.deviceId,
+                    subtitle: session.deviceId ?? '—',
+                  ),
+                  HlCell(
+                    title: session.cryptoAvailable
+                        ? s.encryptionAvailable
+                        : s.webEncryptionUnavailable,
                     subtitle: session.cryptoAvailable
                         ? null
-                        : Text(
-                            session.cryptoInitError == null ||
-                                    session.cryptoInitError!.isEmpty
-                                ? s.webEncryptionHint
-                                : s.cryptoInitErrorDetail(
-                                    session.cryptoInitError!,
-                                  ),
-                          ),
+                        : (session.cryptoInitError == null ||
+                                session.cryptoInitError!.isEmpty
+                            ? s.webEncryptionHint
+                            : s.cryptoInitErrorDetail(
+                                session.cryptoInitError!,
+                              )),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.verified_user_outlined),
-                    title: Text(s.devicesVerification),
+                  HlCell(
+                    title: s.devicesVerification,
                     onTap: () => _openDevices(context, session, s),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.qr_code_2_outlined),
-                    title: Text(s.linkNewDevice),
-                    subtitle: Text(s.linkNewDeviceHint),
+                  HlCell(
+                    title: s.linkNewDevice,
+                    subtitle: s.linkNewDeviceHint,
                     onTap: () => _showLinkDeviceQr(session, s),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.backup_outlined),
-                    title: Text(s.keyBackup),
+                  HlCell(
+                    title: s.keyBackup,
                     onTap: () => _openBackup(context, session, s),
                   ),
                 ],
               ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.call_outlined),
-                title: Text(
-                  session.rtcAvailable
-                      ? s.elementCallConfigured
-                      : s.matrixRtcUnavailable,
-                ),
-                subtitle: Text(
-                  session.rtcAvailable
-                      ? session.elementCallUrl
-                      : s.callsNeedUrl,
-                ),
+              const SizedBox(height: 8),
+              HlGroup(
+                children: [
+                  HlCell(
+                    title: session.rtcAvailable
+                        ? s.elementCallConfigured
+                        : s.matrixRtcUnavailable,
+                    subtitle: session.rtcAvailable
+                        ? session.elementCallUrl
+                        : s.callsNeedUrl,
+                  ),
+                ],
               ),
-              if (_pushDistributors.isNotEmpty)
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.notifications_outlined),
-                  title: Text(s.pushDistributor),
-                  subtitle: Text(s.pushDistributorHint),
+              if (_pushDistributors.isNotEmpty) ...[
+                HlSectionLabel(s.pushDistributor),
+                HlGroup(
                   children: [
                     for (final distributor in _pushDistributors)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(distributor),
+                      HlCell(
+                        title: distributor,
                         onTap: () async {
                           await session.selectPushDistributor(distributor);
                           if (!mounted) return;
@@ -330,45 +289,42 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                   ],
                 ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.info_outline),
-                title: Text(
-                  packageInfo == null
-                      ? '…'
-                      : s.format('appVersion', {
-                          'version': packageInfo.version,
-                          'build': packageInfo.buildNumber,
-                        }),
-                ),
-                subtitle: Text(s.checkForUpdates),
-                trailing: _checkingUpdates
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        tooltip: s.checkForUpdates,
-                        onPressed: () => _checkUpdates(s),
-                        icon: const Icon(Icons.system_update_alt),
-                      ),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.logout),
-                title: Text(s.signOut),
-                onTap: () async {
-                  final failure = await session.logout();
-                  if (!context.mounted) return;
-                  _close();
-                  if (failure != null && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(s.authError(failure))),
-                    );
-                  }
-                },
+              ],
+              const SizedBox(height: 8),
+              HlGroup(
+                children: [
+                  HlCell(
+                    title: packageInfo == null
+                        ? '…'
+                        : s.format('appVersion', {
+                            'version': packageInfo.version,
+                            'build': packageInfo.buildNumber,
+                          }),
+                    subtitle: s.checkForUpdates,
+                    trailing: _checkingUpdates
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: () => _checkUpdates(s),
+                  ),
+                  HlCell(
+                    title: s.signOut,
+                    titleColor: tokens.danger,
+                    onTap: () async {
+                      final failure = await session.logout();
+                      if (!context.mounted) return;
+                      _close();
+                      if (failure != null && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(s.authError(failure))),
+                        );
+                      }
+                    },
+                  ),
+                ],
               ),
             ],
       ),

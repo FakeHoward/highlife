@@ -6,6 +6,7 @@ import '../l10n/messages.dart';
 import '../services/session.dart';
 import '../theme.dart';
 import 'hl_button.dart';
+import 'hl_chrome.dart';
 import 'matrix_avatar.dart';
 import 'verification_dialog.dart';
 
@@ -105,69 +106,65 @@ class UserProfileSheet extends StatelessWidget {
               },
             ),
             const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                HlButton.text(
-                  onPressed: () => Clipboard.setData(ClipboardData(text: userId)),
-                  label: Text(strings.copyMxid),
-                ),
-                if (!self) ...[
-                  HlButton.primary(
-                    onPressed: () async {
-                      final roomId = await session.startDirectChat(userId);
-                      if (!context.mounted) return;
-                      Navigator.pop(context, roomId);
-                    },
-                    label: Text(strings.startDmAction),
-                  ),
-                  if (session.cryptoAvailable)
-                    HlButton.text(
-                      onPressed: () async {
-                        DeviceKeys? device;
-                        final map = client?.userDeviceKeys[userId];
-                        if (map != null) {
-                          for (final candidate in map.deviceKeys.values) {
-                            if (!candidate.verified) {
-                              device = candidate;
-                              break;
-                            }
-                          }
-                        }
-                        if (device == null) {
-                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                            SnackBar(content: Text(strings.allDevicesVerified)),
-                          );
-                          return;
-                        }
-                        final request =
-                            await session.crypto!.startDeviceVerification(device);
-                        if (!context.mounted) return;
-                        Navigator.pop(context);
-                        await VerificationDialog.show(
-                          context,
-                          request: request,
-                          strings: strings,
-                        );
-                      },
-                      label: Text(strings.verifyUser),
-                    ),
-                  HlButton.text(
-                    onPressed: () async {
-                      if (ignored) {
-                        await client?.unignoreUser(userId);
-                      } else {
-                        await client?.ignoreUser(userId, leaveRooms: false);
-                      }
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                    },
-                    label: Text(ignored ? strings.unignoreUser : strings.ignoreUser),
-                  ),
-                ],
-              ],
+            if (!self)
+              HlButton.primary(
+                isFullWidth: true,
+                onPressed: () async {
+                  final roomId = await session.startDirectChat(userId);
+                  if (!context.mounted) return;
+                  Navigator.pop(context, roomId);
+                },
+                label: Text(strings.startDmAction),
+              ),
+            HlCell(
+              title: strings.copyMxid,
+              onTap: () => Clipboard.setData(ClipboardData(text: userId)),
             ),
+            if (!self && session.cryptoAvailable)
+              HlCell(
+                title: strings.verifyUser,
+                onTap: () async {
+                  DeviceKeys? device;
+                  final map = client?.userDeviceKeys[userId];
+                  if (map != null) {
+                    for (final candidate in map.deviceKeys.values) {
+                      if (!candidate.verified) {
+                        device = candidate;
+                        break;
+                      }
+                    }
+                  }
+                  if (device == null) {
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      SnackBar(content: Text(strings.allDevicesVerified)),
+                    );
+                    return;
+                  }
+                  final request =
+                      await session.crypto!.startDeviceVerification(device);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  await VerificationDialog.show(
+                    context,
+                    request: request,
+                    strings: strings,
+                  );
+                },
+              ),
+            if (!self)
+              HlCell(
+                title: ignored ? strings.unignoreUser : strings.ignoreUser,
+                titleColor: tokens.danger,
+                onTap: () async {
+                  if (ignored) {
+                    await client?.unignoreUser(userId);
+                  } else {
+                    await client?.ignoreUser(userId, leaveRooms: false);
+                  }
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                },
+              ),
           ],
         ),
       ),

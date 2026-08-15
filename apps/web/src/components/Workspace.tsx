@@ -271,7 +271,6 @@ export function Workspace() {
         onNewSpace={() => setSurface("createSpace")}
         onSettings={() => setSurface("settings")}
         onProfile={() => setSurface("settings")}
-        onSearchMessages={() => setSurface("search")}
         profileId={getSessionIdentity()?.userId ?? ""}
         profileName={getOwnDisplayName() || getSessionIdentity()?.userId || "HighLife"}
         profileAvatar={getOwnAvatarUrl()}
@@ -590,7 +589,7 @@ export function Workspace() {
                       <div className="thread-panel-actions">
                         <button
                           type="button"
-                          className="button"
+                          className="text-button"
                           onClick={() => void unsubscribeFromThread(activeRoom.roomId, threadRootId)}
                         >
                           {t("timeline.muteThread")}
@@ -631,6 +630,7 @@ export function Workspace() {
           </>
         ) : (
           <div className="welcome">
+            <span className="welcome-glyph" aria-hidden="true">H</span>
             <h1>{t("chat.welcomeTitle")}</h1>
             <p>{t("chat.welcomeBody")}</p>
             <button className="button primary" onClick={() => setSurface("rooms")}>{t("chat.findRoom")}</button>

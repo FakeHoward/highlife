@@ -32,8 +32,6 @@ class PollCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.poll_outlined, size: 18, color: tokens.muted),
-            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 poll.question,
@@ -130,18 +128,17 @@ class _PollOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final tokens = HighLifeTokens.of(context);
     final ratio = count == null || total <= 0 ? 0.0 : count! / total;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: selected
-            ? colors.primary.withValues(alpha: 0.12)
-            : colors.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(8),
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.surfaceMuted,
+            borderRadius: BorderRadius.circular(6),
+          ),
           child: Stack(
             children: [
               if (count != null)
@@ -151,8 +148,8 @@ class _PollOption extends StatelessWidget {
                     widthFactor: ratio.clamp(0.0, 1.0),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: colors.primary.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
+                        color: tokens.accent.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                   ),
@@ -161,21 +158,21 @@ class _PollOption extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                 child: Row(
                   children: [
-                    Icon(
-                      selected
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      size: 18,
-                      color: selected ? colors.primary : colors.outline,
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          color: tokens.text,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(label)),
                     if (count != null)
                       Text(
                         '$count',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: colors.primary,
+                          color: tokens.accent,
                           fontSize: 12,
                         ),
                       ),

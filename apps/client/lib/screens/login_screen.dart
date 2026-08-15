@@ -110,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: BoxDecoration(
                           color: tokens.surface,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: tokens.hairline),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
@@ -156,16 +155,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _SegmentedTabs(
-                  labels: [s.languageEnglish, s.languageRussian],
-                  selected: context.watch<HighLifeLocales>().locale == AppLocale.en
-                      ? 0
-                      : 1,
-                  onSelect: (index) {
-                    context.read<HighLifeLocales>().setLocale(
-                          index == 0 ? AppLocale.en : AppLocale.ru,
-                        );
-                  },
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      _LocaleLink(
+                        label: s.languageEnglish,
+                        selected: context.watch<HighLifeLocales>().locale ==
+                            AppLocale.en,
+                        onTap: () => context
+                            .read<HighLifeLocales>()
+                            .setLocale(AppLocale.en),
+                      ),
+                      const SizedBox(width: 16),
+                      _LocaleLink(
+                        label: s.languageRussian,
+                        selected: context.watch<HighLifeLocales>().locale ==
+                            AppLocale.ru,
+                        onTap: () => context
+                            .read<HighLifeLocales>()
+                            .setLocale(AppLocale.ru),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _SegmentedTabs(
@@ -561,6 +573,34 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+class _LocaleLink extends StatelessWidget {
+  const _LocaleLink({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: selected ? tokens.accent : tokens.muted,
+        ),
+      ),
+    );
+  }
+}
+
 class _SegmentedTabs extends StatelessWidget {
   const _SegmentedTabs({
     required this.labels,
@@ -577,41 +617,40 @@ class _SegmentedTabs extends StatelessWidget {
     final tokens = HighLifeTokens.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: tokens.surfaceMuted,
-        borderRadius: BorderRadius.circular(8),
+        border: Border(bottom: BorderSide(color: tokens.hairline)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: Row(
-          children: [
-            for (var i = 0; i < labels.length; i++)
-              Expanded(
-                child: GestureDetector(
-                  onTap: onSelect == null ? null : () => onSelect!(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    decoration: BoxDecoration(
-                      color: i == selected ? tokens.surface : const Color(0x00000000),
-                      borderRadius: BorderRadius.circular(6),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: onSelect == null ? null : () => onSelect!(i),
+                behavior: HitTestBehavior.opaque,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: i == selected ? tokens.accent : const Color(0x00000000),
+                        width: 2,
+                      ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Text(
-                        labels[i],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: i == selected ? tokens.text : tokens.muted,
-                        ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      labels[i],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: i == selected ? tokens.accent : tokens.muted,
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

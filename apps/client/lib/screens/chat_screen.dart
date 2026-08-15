@@ -740,7 +740,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ? null
                               : () => _composerExtras(session, s),
                           style: IconButton.styleFrom(
-                            foregroundColor: tokens.muted,
+                            foregroundColor: tokens.text,
                           ),
                           icon: const Icon(Icons.attach_file, size: 22),
                         ),
@@ -2567,44 +2567,147 @@ class _ThreadSheetState extends State<_ThreadSheet> {
               child: ColoredBox(
                 color: tokens.chatCanvas,
                 child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
                 itemCount: items.length,
                 itemBuilder: (context, index) {
                   final item = items[index];
                   final event = byId[item.eventId];
                   if (event == null) return const SizedBox.shrink();
+                  if (item.kind == TimelineItemKind.system) {
+                    return HlSystemEvent(
+                      text: item.body.isEmpty ? s.roomUpdate : item.body,
+                    );
+                  }
+                  final own = item.senderId == widget.session.userId;
+                  final prev = index > 0 ? items[index - 1] : null;
+                  final next =
+                      index < items.length - 1 ? items[index + 1] : null;
+                  final grouped = prev != null &&
+                      prev.kind != TimelineItemKind.system &&
+                      prev.senderId == item.senderId &&
+                      item.timestamp
+                              .difference(prev.timestamp)
+                              .inMinutes <
+                          5;
+                  final lastInGroup = next == null ||
+                      next.kind == TimelineItemKind.system ||
+                      next.senderId != item.senderId ||
+                      next.timestamp
+                              .difference(item.timestamp)
+                              .inMinutes >=
+                          5;
+                  final senderName =
+                      event.senderFromMemoryOrFallback.calcDisplayname();
+                  final bg = own ? tokens.ownMessage : tokens.incomingMessage;
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          event.senderFromMemoryOrFallback.calcDisplayname(),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                    padding: EdgeInsets.only(
+                      top: grouped ? 1 : 8,
+                      bottom: lastInGroup ? 6 : 1,
+                    ),
+                    child: Align(
+                      alignment:
+                          own ? Alignment.centerRight : Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width * 0.618,
                         ),
-                        const SizedBox(height: 4),
-                        _RichMessageBody(
-                          event: event,
-                          item: item,
-                          attachmentLabel: s.attachment,
-                          systemLabel: s.roomUpdate,
-                          declinedLabel: s.declinedCall,
-                          openMapLabel: s.openMap,
-                          onOpenMedia: item.kind == TimelineItemKind.location
-                              ? () {
-                                  final lat = item.latitude;
-                                  final lon = item.longitude;
-                                  if (lat == null || lon == null) return;
-                                  launchUrl(
-                                    Uri.parse(openStreetMapUrl(lat, lon)),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
-                              : item is MediaTimelineItem
-                                  ? () => showMatrixImageViewer(context, event)
-                                  : null,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!own) ...[
+                              if (!grouped)
+                                MatrixAvatar(
+                                  name: senderName,
+                                  identity: event.senderId,
+                                  mxc: event
+                                      .senderFromMemoryOrFallback.avatarUrl,
+                                  client: event.room.client,
+                                  radius: 13,
+                                )
+                              else
+                                const SizedBox(width: 26),
+                              const SizedBox(width: 8),
+                            ],
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: own
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (!own && !grouped)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        left: 3,
+                                        bottom: 3,
+                                      ),
+                                      child: Text(
+                                        senderName,
+                                        style: TextStyle(
+                                          color: tokens.accent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: bg,
+                                      borderRadius: messageBubbleRadius(
+                                        own: own,
+                                        grouped: grouped,
+                                        lastInGroup: lastInGroup,
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        10,
+                                        7,
+                                        10,
+                                        6,
+                                      ),
+                                      child: _RichMessageBody(
+                                        event: event,
+                                        item: item,
+                                        attachmentLabel: s.attachment,
+                                        systemLabel: s.roomUpdate,
+                                        declinedLabel: s.declinedCall,
+                                        openMapLabel: s.openMap,
+                                        onOpenMedia:
+                                            item.kind == TimelineItemKind.location
+                                                ? () {
+                                                    final lat = item.latitude;
+                                                    final lon = item.longitude;
+                                                    if (lat == null ||
+                                                        lon == null) {
+                                                      return;
+                                                    }
+                                                    launchUrl(
+                                                      Uri.parse(
+                                                        openStreetMapUrl(
+                                                          lat,
+                                                          lon,
+                                                        ),
+                                                      ),
+                                                      mode: LaunchMode
+                                                          .externalApplication,
+                                                    );
+                                                  }
+                                                : item is MediaTimelineItem
+                                                    ? () => showMatrixImageViewer(
+                                                          context,
+                                                          event,
+                                                        )
+                                                    : null,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -2618,14 +2721,42 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: s.shareLocation,
-                      onPressed: () => unawaited(widget.onLocation()),
-                      icon: const Icon(Icons.location_on_outlined, size: 22),
-                    ),
-                    IconButton(
-                      tooltip: s.stickers,
-                      onPressed: () => unawaited(widget.onSticker()),
-                      icon: const Icon(Icons.emoji_emotions_outlined, size: 22),
+                      tooltip: s.attachFile,
+                      onPressed: () async {
+                        final action = await showModalBottomSheet<String>(
+                          context: context,
+                          builder: (context) {
+                            final sheetTokens = HighLifeTokens.of(context);
+                            return SafeArea(
+                              child: ColoredBox(
+                                color: sheetTokens.surface,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    HlCell(
+                                      title: s.shareLocation,
+                                      onTap: () =>
+                                          Navigator.pop(context, 'location'),
+                                    ),
+                                    HlCell(
+                                      title: s.stickers,
+                                      onTap: () =>
+                                          Navigator.pop(context, 'stickers'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                        if (action == 'location') {
+                          unawaited(widget.onLocation());
+                        }
+                        if (action == 'stickers') {
+                          unawaited(widget.onSticker());
+                        }
+                      },
+                      icon: const Icon(Icons.attach_file, size: 22),
                     ),
                     Expanded(
                       child: TextField(
@@ -2639,10 +2770,22 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                         onSubmitted: (_) => _send(),
                       ),
                     ),
-                    IconButton(
-                      tooltip: s.sendMessage,
-                      onPressed: _send,
-                      icon: Icon(Icons.send, color: tokens.accent),
+                    GestureDetector(
+                      onTap: _send,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: tokens.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.send,
+                          size: 18,
+                          color: Color(0xFFFFFFFF),
+                        ),
+                      ),
                     ),
                   ],
                 ),

@@ -4,6 +4,7 @@ import 'package:matrix/matrix.dart';
 import '../l10n/messages.dart';
 import '../services/session.dart';
 import 'hl_button.dart';
+import 'hl_chrome.dart';
 import 'matrix_avatar.dart';
 import 'user_profile_sheet.dart';
 
@@ -142,7 +143,10 @@ class _MembersPanelState extends State<MembersPanel> {
                 icon: const Icon(Icons.person_add_outlined),
               ),
             ),
-            const Divider(height: 1),
+            ColoredBox(
+              color: HighLifeTokens.of(context).hairline,
+              child: const SizedBox(height: 1, width: double.infinity),
+            ),
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -150,28 +154,28 @@ class _MembersPanelState extends State<MembersPanel> {
                       itemCount: _members.length,
                       itemBuilder: (context, index) {
                         final user = _members[index];
-                        return ListTile(
-                        leading: MatrixAvatar(
-                          name: user.calcDisplayname(),
-                          identity: user.id,
-                          mxc: user.avatarUrl,
-                          client: widget.room.client,
-                          radius: 18,
-                        ),
-                          title: Text(user.calcDisplayname()),
-                          subtitle: Text(user.id),
-                          onTap: () => showUserProfileSheet(
-                            context,
-                            userId: user.id,
-                            session: widget.session,
-                            strings: widget.strings,
+                        return HlCell(
+                          leading: MatrixAvatar(
+                            name: user.calcDisplayname(),
+                            identity: user.id,
+                            mxc: user.avatarUrl,
+                            client: widget.room.client,
+                            radius: 16,
                           ),
+                          title: user.calcDisplayname(),
+                          subtitle: user.id,
                           trailing: user.canKick
                               ? HlButton.text(
                                   onPressed: () => _kick(user),
                                   label: Text(s.kick),
                                 )
                               : null,
+                          onTap: () => showUserProfileSheet(
+                            context,
+                            userId: user.id,
+                            session: widget.session,
+                            strings: widget.strings,
+                          ),
                         );
                       },
                     ),

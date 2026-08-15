@@ -1,4 +1,4 @@
-export const WEB_APP_VERSION = "0.4.3";
+export const WEB_APP_VERSION = "0.4.5";
 
 export const DEFAULT_LATEST_JSON_URL =
   "https://testhighlife.strangled.net/client/latest.json";

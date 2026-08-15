@@ -116,3 +116,120 @@ class HlStrip extends StatelessWidget {
     return GestureDetector(onTap: onTap, child: body);
   }
 }
+
+class HlSectionLabel extends StatelessWidget {
+  const HlSectionLabel(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: tokens.accent,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class HlGroup extends StatelessWidget {
+  const HlGroup({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return ColoredBox(
+      color: tokens.surface,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: ColoredBox(
+                  color: tokens.hairline,
+                  child: const SizedBox(height: 1, width: double.infinity),
+                ),
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class HlCell extends StatelessWidget {
+  const HlCell({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.onTap,
+    this.titleColor,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? leading;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color? titleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+      child: Row(
+        children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: titleColor ?? tokens.text,
+                  ),
+                ),
+                if (subtitle != null && subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(fontSize: 13, color: tokens.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) return body;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: body,
+    );
+  }
+}

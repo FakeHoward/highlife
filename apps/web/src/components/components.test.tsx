@@ -259,6 +259,10 @@ describe("composer", () => {
   it("keeps poll creation out of the message row and sends /poll as text", () => {
     wrap(<Composer roomId={room.roomId} mode={null} onMode={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "Poll" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Location" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Attach file" }));
+    expect(screen.getByRole("menuitem", { name: "Location" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Stickers" })).toBeInTheDocument();
 
     const input = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(input, { target: { value: "/poll" } });

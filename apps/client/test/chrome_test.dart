@@ -97,4 +97,21 @@ void main() {
     expect(find.text('Ada joined the room'), findsOneWidget);
     expect(find.byType(HlSystemEvent), findsOneWidget);
   });
+
+  testWidgets('settings cells keep a hairline between rows', (tester) async {
+    await tester.pumpWidget(
+      highLifeTestApp(
+        home: const Scaffold(
+          body: HlGroup(
+            children: [
+              HlCell(title: 'English'),
+              HlCell(title: 'Русский'),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Русский'), findsOneWidget);
+  });
 }

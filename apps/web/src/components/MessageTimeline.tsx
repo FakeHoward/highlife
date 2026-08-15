@@ -509,6 +509,9 @@ function PollCard({ roomId, item }: { roomId: string; item: TimelineItem }) {
                 disabled={poll.ended}
                 onClick={() => void votePoll(roomId, item.eventId, [answer.id])}
               >
+                {(poll.disclosed || poll.ended) && (
+                  <span className="poll-fill" style={{ width: `${pct}%` }} />
+                )}
                 <span>{answer.text}</span>
                 <span>{poll.disclosed || poll.ended ? `${count} · ${pct}%` : ""}</span>
               </button>
