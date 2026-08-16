@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/highlife_locales.dart';
 import '../l10n/messages.dart';
-import '../domain/spec_features.dart';
 import '../services/auth_errors.dart';
 import '../services/protocol_registrar.dart';
 import '../services/session.dart';
