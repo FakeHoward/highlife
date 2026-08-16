@@ -16,7 +16,7 @@
     "aiomatrix": "^0.8.0",
     "dotenv": "^16.6.1",
     "redis": "^5.8.2",
-    "tsx": "^4.19.2"
+    "tsx": "^4.23.12"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
