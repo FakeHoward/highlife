@@ -993,7 +993,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (RegExp(r'crypto|encryption', caseSensitive: false).hasMatch(text)) {
       return s.callCryptoUnavailable;
     }
-    return s.callFailed(text);
+    return s.callFailedDetail(text);
   }
 
   Future<void> _joinMatrixRtc(

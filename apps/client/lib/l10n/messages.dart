@@ -342,7 +342,8 @@ class AppStrings {
   String get linkNewDeviceHint => _('linkNewDeviceHint');
   String get callMicBlocked => _('callMicBlocked');
   String get callCryptoUnavailable => _('callCryptoUnavailable');
-  String callFailed(String detail) => _('callFailed').replaceAll('{detail}', detail);
+  String callFailedDetail(String detail) =>
+      _('callFailedDetail').replaceAll('{detail}', detail);
   String get openMap => _('openMap');
   String get prompts => _('prompts');
   String get latitude => _('latitude');
@@ -1290,7 +1291,7 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.en: 'Encryption is not ready for this call.',
     AppLocale.ru: 'Шифрование для звонка ещё не готово.',
   },
-  'callFailed': {
+  'callFailedDetail': {
     AppLocale.en: 'Call failed: {detail}',
     AppLocale.ru: 'Звонок не удался: {detail}',
   },
