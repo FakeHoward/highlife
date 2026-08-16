@@ -97,28 +97,6 @@ class HlBrandMark extends StatelessWidget {
   }
 }
 
-InputDecoration highLifePillField({
-  required String hintText,
-  required HighLifeTokens tokens,
-  Widget? prefixIcon,
-}) {
-  final none = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(18),
-    borderSide: BorderSide.none,
-  );
-  return InputDecoration(
-    hintText: hintText,
-    prefixIcon: prefixIcon,
-    filled: true,
-    fillColor: tokens.surfaceMuted,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    border: none,
-    enabledBorder: none,
-    focusedBorder: none,
-  );
-}
-
 class HighLifeTextStyles {
   const HighLifeTextStyles();
 

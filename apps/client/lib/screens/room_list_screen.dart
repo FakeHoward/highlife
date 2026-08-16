@@ -117,14 +117,15 @@ class _RoomListScreenState extends State<RoomListScreen> {
               child: TextField(
                 key: const ValueKey('room-search'),
                 onChanged: (value) => setState(() => _query = value),
-                decoration: highLifePillField(
+                decoration: InputDecoration(
                   hintText: s.searchConversations,
-                  tokens: tokens,
                   prefixIcon: Icon(
                     Icons.search,
                     size: 18,
                     color: tokens.muted,
                   ),
+                  filled: true,
+                  fillColor: tokens.surfaceMuted,
                 ),
               ),
             ),
