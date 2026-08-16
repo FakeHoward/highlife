@@ -301,7 +301,12 @@ jobs:
           set -euo pipefail
           # Maven Central / plugins.gradle.org occasionally return 429 on GH runners.
           for attempt in 1 2 3 4 5; do
-            if flutter build apk --release --no-tree-shake-icons; then
+            if flutter build apk --release --no-tree-shake-icons \
+              --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
+              --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
+              --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \
+              --dart-define=HIGHLIFE_LATEST_JSON_URL=https://testhighlife.strangled.net/client/latest.json \
+              --dart-define=HIGHLIFE_RTC_AVAILABLE=true; then
               exit 0
             fi
             echo "Android APK build failed (attempt ${attempt}/5); sleeping before retry"
@@ -322,7 +327,12 @@ jobs:
             echo "No key.properties — skip AAB"
             exit 0
           fi
-          flutter build appbundle --release --no-tree-shake-icons
+          flutter build appbundle --release --no-tree-shake-icons \
+            --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
+            --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LATEST_JSON_URL=https://testhighlife.strangled.net/client/latest.json \
+            --dart-define=HIGHLIFE_RTC_AVAILABLE=true
 
       - name: Build Web WASM (vodozemac) when toolchain allows
         if: matrix.target == 'web'
@@ -343,12 +353,26 @@ jobs:
       - name: Build Web
         if: matrix.target == 'web'
         working-directory: apps/client
-        run: flutter build web --release --base-href /
+        shell: bash
+        run: |
+          flutter build web --release --base-href / \
+            --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
+            --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LATEST_JSON_URL=https://testhighlife.strangled.net/client/latest.json \
+            --dart-define=HIGHLIFE_RTC_AVAILABLE=true
 
       - name: Build Linux
         if: matrix.target == 'linux'
         working-directory: apps/client
-        run: flutter build linux --release
+        shell: bash
+        run: |
+          flutter build linux --release \
+            --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
+            --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LATEST_JSON_URL=https://testhighlife.strangled.net/client/latest.json \
+            --dart-define=HIGHLIFE_RTC_AVAILABLE=true
 
       - name: Silence MSVC experimental coroutines
         if: matrix.target == 'windows'
@@ -383,7 +407,14 @@ jobs:
       - name: Build Windows
         if: matrix.target == 'windows'
         working-directory: apps/client
-        run: flutter build windows --release
+        shell: bash
+        run: |
+          flutter build windows --release \
+            --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
+            --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \
+            --dart-define=HIGHLIFE_LATEST_JSON_URL=https://testhighlife.strangled.net/client/latest.json \
+            --dart-define=HIGHLIFE_RTC_AVAILABLE=true
 
       - name: Upload Android APK
         if: matrix.target == 'android'

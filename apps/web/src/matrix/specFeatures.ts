@@ -322,9 +322,21 @@ export function parseUrlPreview(payload: Record<string, unknown>, fallbackUrl: s
   const title = typeof payload["og:title"] === "string" ? payload["og:title"] : undefined;
   const description = typeof payload["og:description"] === "string" ? payload["og:description"] : undefined;
   const image = typeof payload["og:image"] === "string" ? payload["og:image"] : undefined;
-  const url = typeof payload["og:url"] === "string" ? payload["og:url"] : fallbackUrl;
+  const rawUrl = typeof payload["og:url"] === "string" ? payload["og:url"] : fallbackUrl;
+  const url = safeHttpUrl(rawUrl) ?? safeHttpUrl(fallbackUrl);
+  if (!url) return null;
   if (!title && !description && !image) return null;
   return { url, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(image ? { image } : {}) };
+}
+
+function safeHttpUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed.toString();
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 export function urlPreviewCapabilityEnabled(capabilities: Record<string, unknown> | undefined): boolean {

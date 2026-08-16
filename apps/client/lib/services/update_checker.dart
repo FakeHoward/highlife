@@ -120,8 +120,10 @@ class UpdateCheckResult {
 }
 
 /// Default updater metadata URL (mirrored on the homeserver from GitHub Releases).
-const String kDefaultLatestJsonUrl =
-    'https://testhighlife.strangled.net/client/latest.json';
+const String kDefaultLatestJsonUrl = String.fromEnvironment(
+  'HIGHLIFE_LATEST_JSON_URL',
+  defaultValue: '',
+);
 
 class UpdateChecker {
   UpdateChecker({

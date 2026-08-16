@@ -14,8 +14,7 @@ export function outgoingCallMode(input: {
   cryptoReady: boolean;
   matrixRtcAvailable?: boolean;
 }): OutgoingCallMode {
-  const matrixRtcAvailable = input.matrixRtcAvailable !== false;
-  if (matrixRtcAvailable) return "matrixrtc";
+  if (input.matrixRtcAvailable) return "matrixrtc";
   if (input.isDirect) {
     if (input.encrypted && !input.cryptoReady) return "blocked";
     return "direct";

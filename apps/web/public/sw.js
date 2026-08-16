@@ -62,7 +62,16 @@ self.addEventListener("notificationclick", (event) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
-          client.navigate(target);
+          try {
+            const url = new URL(target, self.location.origin);
+            const roomId = url.searchParams.get("room");
+            if (roomId && roomId.startsWith("!")) {
+              client.postMessage({ type: "open-room", roomId });
+            }
+          } catch {
+            /* ignore */
+          }
+          if (typeof client.navigate === "function") client.navigate(target);
           return client.focus();
         }
       }

@@ -5,21 +5,19 @@ environment named `main`.
 
 ## Domain
 
-Deploy renders `server/Caddyfile.template` → `Caddyfile` by replacing
-`__MATRIX_DOMAIN__` with `MATRIX_DOMAIN` or `DOMAIN` (default
-`testhighlife.strangled.net`). The committed `server/Caddyfile` matches the
-default domain for local use.
+Deploy renders `server/Caddyfile.template` and
+`server/element-call-config.json.template` by replacing `__MATRIX_DOMAIN__`
+with `MATRIX_DOMAIN` or `DOMAIN` (default `testhighlife.strangled.net`). The
+committed `server/Caddyfile` and `server/element-call-config.json` match that
+default for local use.
 
 Optional GitHub Environment secrets (either works; `MATRIX_DOMAIN` wins when both
 are set):
 
 - `DOMAIN` — public base domain
-- `MATRIX_DOMAIN` — same value written into Caddy / well-known / smoke URLs
-
-Compose still pins Synapse `SYNAPSE_SERVER_NAME`, LiveKit JWT homeserver, coturn
-realm, and bot MXID to `testhighlife.strangled.net`. Retarget those strings in
-`server/docker-compose.prod.yml` (and Element Call config) together when moving
-off the test domain.
+- `MATRIX_DOMAIN` — public hostname for Caddy, well-known, Vite, Flutter
+  dart-defines, Synapse `server_name`, LiveKit, coturn realm, bot MXID, and
+  smoke URLs. Compose interpolates `${MATRIX_DOMAIN:-testhighlife.strangled.net}`.
 
 ## Required GitHub Environment secrets
 
@@ -44,11 +42,11 @@ off the test domain.
   (`matrix.secret` / `matrix_authentication_service.secret`). Generate with
   `openssl rand -hex 64`. Do not rotate without planning a MAS/Synapse re-pair.
 - `BOT_MATRIX_PASSWORD`: password for
-  `@highlifebot:testhighlife.strangled.net`.
+  `@highlifebot:<MATRIX_DOMAIN>` (demo: `testhighlife.strangled.net`).
 - `BOT_CRYPTO_STORE_PASSPHRASE`: stable random passphrase encrypting the bot's
   persistent Matrix crypto store. Back it up with the `bot-data` volume.
 - `DEMO_MATRIX_PASSWORD`: password for
-  `@demo:testhighlife.strangled.net`.
+  `@demo:<MATRIX_DOMAIN>` (demo: `testhighlife.strangled.net`).
 - `LIVEKIT_KEY`: LiveKit API key; use a simple URL-safe identifier.
 - `LIVEKIT_SECRET`: matching LiveKit API secret.
 - `TURN_SHARED_SECRET`: shared by Synapse and coturn for expiring TURN
@@ -62,18 +60,22 @@ Actions and is not a manually configured secret.
 
 ## Optional secrets / env
 
+- `REDIS_PASSWORD` (optional GitHub Environment secret): Redis `requirepass`.
+  When unset, deploy generates one on the host and persists it in
+  `/opt/highlife/redis.pass` so it survives later deploys.
 - `MATRIX_MINIAPP_SECRET` (optional GitHub Environment secret): stable signing
-  secret for FormSpace / MiniApp tokens. When unset, aiomatrix may persist a
-  generated secret under `bot-data`. Prefer setting this so token signing
-  survives volume rebuilds and stays operator-controlled. Deploy copies it into
-  `.env` only when the secret is present.
+  secret for FormSpace / MiniApp tokens. When unset, deploy generates one on
+  the host (`/opt/highlife/miniapp.secret`) so signing survives volume rebuilds.
+- `FORMSPACE_ANONYMITY_SALT` (optional): stable salt for anonymous FormSpace
+  respondent hashes. When unset, the bot persists a generated salt under
+  `bot-data` (`anonymity-salt`).
 - `MATRIX_MINIAPP_CORS_ORIGIN` (optional; default
-  `https://testhighlife.strangled.net`): comma-separated allowlist for FormSpace
+  `https://<MATRIX_DOMAIN>`): comma-separated allowlist for FormSpace
   HTTP `Access-Control-Allow-Origin`. Request `Origin` is reflected only when it
   matches this list.
-- `SYNAPSE_ENABLE_REGISTRATION` (optional; default `true` after MAS cutover):
+- `SYNAPSE_ENABLE_REGISTRATION` (optional; default `false`):
   toggles MAS password self-registration (no email required on this demo). Set
-  `false` to close public signup.
+  `true` only for a public demo.
 - **Upstream SSO** belongs in Matrix Authentication Service, not Synapse
   `oidc_providers`. Edit the generated MAS config / add an `upstream_oauth2`
   overlay if you need an external IdP; register the IdP redirect against
@@ -152,14 +154,14 @@ crypto state while keeping `formspace.json` / `crypto-passphrase.json`.
 ## DNS actions
 
 Before the first deploy, create DNS `A` records pointing to
-`DEPLOY_PUBLIC_IP` (currently `178.215.236.95`):
+`DEPLOY_PUBLIC_IP` (the environment secret, not a value in git):
 
-- `testhighlife.strangled.net` — present
-- `auth.testhighlife.strangled.net` — **required** for Matrix Authentication
-  Service / Element X (`A` → `178.215.236.95`)
-- `call.testhighlife.strangled.net` — **live** (`A` → `178.215.236.95`)
-- `rtc.testhighlife.strangled.net` — **live** (`A` → `178.215.236.95`)
-- `push.testhighlife.strangled.net` — **optional** (only when enabling Compose
+- `<MATRIX_DOMAIN>` — present
+- `auth.<MATRIX_DOMAIN>` — **required** for Matrix Authentication
+  Service / Element X
+- `call.<MATRIX_DOMAIN>` — Element Call
+- `rtc.<MATRIX_DOMAIN>` — LiveKit JWT / SFU
+- `push.<MATRIX_DOMAIN>` — **optional** (only when enabling Compose
   profile `push` for on-host Sygnal)
 
 `auth` / `call` / `rtc` DNS must resolve before deploy so Caddy can finish
@@ -172,8 +174,9 @@ records. Wait for public resolution before deploy so Caddy can complete
 ACME validation and obtain certificates.
 
 Before the first HighLife deploy, let the `Bot` workflow finish successfully
-so GHCR contains `highlife-bot:<last-bot-source-commit>`. Deploy pins that
-content tag rather than using `latest`.
+so GHCR contains `highlife-formspace-bot:<last-bot-source-commit>`. Deploy pins
+that content tag rather than using `latest`. The image owner is
+`${GITHUB_REPOSITORY_OWNER}` (required in compose; no hardcoded namespace).
 
 ## Firewall actions
 
@@ -186,6 +189,10 @@ Allow inbound traffic to the VPS:
 - TCP `7881` for LiveKit ICE-over-TCP fallback.
 - UDP `50000-50100` for LiveKit media.
 - UDP `49160-49200` for coturn relayed media.
+
+coturn listens on `3478` with `--no-tls --no-dtls`. Public HTTPS/443 is Caddy;
+do not enable coturn TLS on 443. `turns:` is a residual demo limit unless you
+add a dedicated TURN certificate and `ENABLE_TURN_TLS` later.
 
 Do not expose PostgreSQL `5432`, Redis `6379`, Synapse `8008`, MAS `8080`,
 LiveKit signalling `7880`, JWT service `8080`, or Sygnal `5000`; those stay

@@ -20,6 +20,7 @@ import {
   listSpaces,
   markRead,
   paginateRoomHistory,
+  paginateThreadHistory,
   rejectInvite,
   respondToIncomingVerification,
   requestUserVerification,
@@ -103,8 +104,30 @@ export function Workspace() {
   const menuRef = useRef<HTMLDivElement>(null);
   const timeline = useTimeline(activeId);
   const history = useHistoryState(activeId);
+  const threadHistory = useHistoryState(activeId, threadRootId);
   const spaces = useMemo(() => listSpaces(), [matrix.version]);
   const incoming = useSyncExternalStore(subscribeIncomingVerification, getIncomingVerification, () => null);
+
+  useEffect(() => {
+    function onPopState() {
+      setActiveId(roomIdFromLocation());
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const source = navigator.serviceWorker;
+    if (!source) return;
+    function onMessage(event: MessageEvent) {
+      const data = event.data as { type?: string; roomId?: string } | null;
+      if (data?.type === "open-room" && typeof data.roomId === "string" && data.roomId.startsWith("!")) {
+        setActiveId(data.roomId);
+      }
+    }
+    source.addEventListener("message", onMessage);
+    return () => source.removeEventListener("message", onMessage);
+  }, []);
 
   const filteredRooms = useMemo(() => {
     const withoutSpaces = rooms.filter((room) => !room.isSpace);
@@ -568,7 +591,7 @@ export function Workspace() {
                 <MessageTimeline
                   items={timeline}
                   roomId={activeRoom.roomId}
-                  onComposeMode={setMode}
+                  onComposeMode={threadRootId ? () => undefined : setMode}
                   onMiniApp={(miniApp, item) => setSurface({ miniApp, item })}
                   history={history}
                   onLoadOlder={() => paginateRoomHistory(activeRoom.roomId)}
@@ -579,7 +602,10 @@ export function Workspace() {
                   onForward={(item) => setForwardEventId(item.eventId)}
                   onOpenProfile={(item) => setProfileUserId(item.senderId)}
                   onJumpToEvent={setHighlightEventId}
-                  onOpenThread={(item) => setThreadRootId(item.threadRootId ?? item.eventId)}
+                  onOpenThread={(item) => {
+                    setMode(null);
+                    setThreadRootId(item.threadRootId ?? item.eventId);
+                  }}
                 />
                 <Composer roomId={activeRoom.roomId} mode={threadRootId ? null : mode} onMode={setMode} />
                 {threadRootId && (
@@ -609,8 +635,8 @@ export function Workspace() {
                       roomId={activeRoom.roomId}
                       onComposeMode={setMode}
                       onMiniApp={(miniApp, item) => setSurface({ miniApp, item })}
-                      history={{ loading: false, exhausted: true, error: null }}
-                      onLoadOlder={async () => undefined}
+                      history={threadHistory}
+                      onLoadOlder={() => paginateThreadHistory(activeRoom.roomId, threadRootId)}
                       highlightEventId={highlightEventId}
                       onJumpToEvent={setHighlightEventId}
                       onOpenProfile={(item) => setProfileUserId(item.senderId)}

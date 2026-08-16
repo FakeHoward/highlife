@@ -1351,6 +1351,7 @@ export function GroupCallSurface({ roomId, onClose }: { roomId: string; onClose:
             className="call-frame"
             src={url}
             title={t("call.frameTitle")}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
             allow="camera; microphone; display-capture; autoplay; fullscreen"
           />
         </>

@@ -16,4 +16,11 @@ describe("markdownToHtml", () => {
   it("strips markdown markers for plain previews", () => {
     expect(markdownToPlain("**FormSpace** — try `/start`")).toBe("FormSpace — try /start");
   });
+
+  it("renders https markdown links after escaping", () => {
+    expect(markdownToHtml("see [docs](https://example.org/a)")).toContain(
+      '<a href="https://example.org/a" rel="noreferrer noopener" target="_blank">docs</a>',
+    );
+    expect(markdownToHtml("[x](javascript:alert(1))")).not.toContain("javascript:");
+  });
 });

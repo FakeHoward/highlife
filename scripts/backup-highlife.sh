@@ -11,14 +11,24 @@ COMPOSE="${HIGHLIFE_COMPOSE:-docker-compose.prod.yml}"
 mkdir -p "$OUT"
 cd "$ROOT"
 
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 echo "Backing up to $OUT"
 
 if docker compose -f "$COMPOSE" ps postgres >/dev/null 2>&1; then
   docker compose -f "$COMPOSE" exec -T postgres \
     pg_dump -U "${POSTGRES_USER:-synapse}" "${POSTGRES_DB:-synapse}" \
     | gzip >"$OUT/synapse.sql.gz"
-  docker compose -f "$COMPOSE" exec -T postgres \
-    pg_dump -U "${POSTGRES_USER:-synapse}" mas \
+  # MAS DB is owned by role `mas`, not synapse.
+  docker compose -f "$COMPOSE" exec -T \
+    -e PGPASSWORD="${MAS_POSTGRES_PASSWORD:?MAS_POSTGRES_PASSWORD is required}" \
+    postgres \
+    pg_dump -U mas -d mas \
     | gzip >"$OUT/mas.sql.gz"
 fi
 
@@ -30,9 +40,13 @@ for volume in highlife_synapse-data highlife_mas-data highlife_bot-data highlife
   fi
 done
 
-# Keep last 14 backups
-if [[ -d "$(dirname "$OUT")" ]]; then
-  ls -1dt "$(dirname "$OUT")"/*/ 2>/dev/null | tail -n +15 | xargs -r rm -rf
+# Keep last 14 backups (stamp dirs sort lexicographically).
+backup_root="$(dirname "$OUT")"
+if [[ -d "$backup_root" ]]; then
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    | sort \
+    | head -n -14 \
+    | xargs -r rm -rf
 fi
 
 echo "Backup complete: $OUT"

@@ -956,7 +956,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _startCall(HighLifeSession session, {bool video = false}) async {
-    if (outgoingCallKind(isDirectChat: widget.room.isDirectChat) ==
+    final s = context.read<HighLifeLocales>().strings;
+    if (outgoingCallKind(
+          isDirectChat: widget.room.isDirectChat,
+          matrixRtcAvailable: session.rtcAvailable,
+        ) ==
         OutgoingCallKind.nativeDirect) {
       final peer = widget.room.directChatMatrixID;
       final calls = session.nativeCalls;
@@ -968,10 +972,28 @@ class _ChatScreenState extends State<ChatScreen> {
             video: video,
           );
           return;
-        } catch (_) {}
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(_callErrorMessage(s, error))),
+            );
+          }
+        }
       }
     }
     await _joinMatrixRtc(session, camera: video);
+  }
+
+  String _callErrorMessage(AppStrings s, Object error) {
+    final text = error.toString();
+    if (RegExp(r'permission denied|NotAllowedError|NotFoundError', caseSensitive: false)
+        .hasMatch(text)) {
+      return s.callMicBlocked;
+    }
+    if (RegExp(r'crypto|encryption', caseSensitive: false).hasMatch(text)) {
+      return s.callCryptoUnavailable;
+    }
+    return s.callFailedDetail(text);
   }
 
   Future<void> _joinMatrixRtc(
@@ -980,12 +1002,17 @@ class _ChatScreenState extends State<ChatScreen> {
   }) async {
     final s = context.read<HighLifeLocales>().strings;
     final rtc = session.matrixRtc;
-    if (rtc != null) {
+    if (rtc != null && session.rtcAvailable) {
       try {
         await rtc.join(widget.room, camera: camera);
         return;
-      } catch (_) {
+      } catch (error) {
         await rtc.leave();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_callErrorMessage(s, error))),
+          );
+        }
       }
     }
     final uri = session.buildCallUri(widget.room);

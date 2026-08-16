@@ -77,7 +77,8 @@ const EMPTY: MatrixRtcSnapshot = {
   fallbackAvailable: false,
 };
 
-export const DEFAULT_LIVEKIT_JWT_URL = "https://rtc.testhighlife.strangled.net/livekit/jwt";
+/** Only used when a build explicitly sets VITE_LIVEKIT_JWT_URL. Never a hidden demo host. */
+export const DEFAULT_LIVEKIT_JWT_URL = "";
 
 export function discoverLivekitFocus(
   wellKnown: Record<string, unknown> | undefined,

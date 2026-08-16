@@ -3,19 +3,19 @@ name: highlife
 x-synapse-environment: &synapse-environment
   # Keep SYNAPSE_SERVER_NAME in sync with DOMAIN / MATRIX_DOMAIN in deploy.env
   # and the rendered Caddyfile (see docs/SECRETS.md).
-  SYNAPSE_SERVER_NAME: testhighlife.strangled.net
+  SYNAPSE_SERVER_NAME: ${MATRIX_DOMAIN:-testhighlife.strangled.net}
   SYNAPSE_DATA_DIR: /data
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
   SYNAPSE_REGISTRATION_SECRET: ${SYNAPSE_REGISTRATION_SECRET:?SYNAPSE_REGISTRATION_SECRET is required}
   TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:?TURN_SHARED_SECRET is required}
-  # Open signup by default after MAS cutover; set false to close public registration.
-  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
+  # Closed by default; set true for a public demo.
+  SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-false}
   MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:?MAS_MATRIX_SECRET is required}
 
 x-mas-environment: &mas-environment
-  SYNAPSE_SERVER_NAME: testhighlife.strangled.net
+  SYNAPSE_SERVER_NAME: ${MATRIX_DOMAIN:-testhighlife.strangled.net}
   MAS_DATA_DIR: /data
-  MAS_PUBLIC_BASE: https://auth.testhighlife.strangled.net/
+  MAS_PUBLIC_BASE: https://auth.${MATRIX_DOMAIN:-testhighlife.strangled.net}/
   MAS_POSTGRES_PASSWORD: ${MAS_POSTGRES_PASSWORD:?MAS_POSTGRES_PASSWORD is required}
   MAS_MATRIX_SECRET: ${MAS_MATRIX_SECRET:?MAS_MATRIX_SECRET is required}
   SYNAPSE_ENABLE_REGISTRATION: ${SYNAPSE_ENABLE_REGISTRATION:-true}
@@ -189,11 +189,23 @@ services:
   redis:
     image: redis:8.8.0-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--save",
+        "60",
+        "1",
+        "--requirepass",
+        "${REDIS_PASSWORD:?REDIS_PASSWORD is required}",
+      ]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: [CMD, "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -234,10 +246,10 @@ services:
     environment:
       LIVEKIT_JWT_BIND: ":8080"
       # Public SFU URL embedded in client tokens (trailing slash required by some builds).
-      LIVEKIT_URL: wss://rtc.testhighlife.strangled.net/livekit/sfu/
+      LIVEKIT_URL: wss://rtc.${MATRIX_DOMAIN:-testhighlife.strangled.net}/livekit/sfu/
       LIVEKIT_KEY: ${LIVEKIT_KEY:?LIVEKIT_KEY is required}
       LIVEKIT_SECRET: ${LIVEKIT_SECRET:?LIVEKIT_SECRET is required}
-      LIVEKIT_FULL_ACCESS_HOMESERVERS: testhighlife.strangled.net
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: ${MATRIX_DOMAIN:-testhighlife.strangled.net}
     depends_on:
       livekit:
         condition: service_healthy
@@ -274,8 +286,8 @@ services:
       - --use-auth-secret
       - --static-auth-secret=${TURN_SHARED_SECRET:?TURN_SHARED_SECRET is required}
       - --stale-nonce=600
-      - --realm=testhighlife.strangled.net
-      - --server-name=testhighlife.strangled.net
+      - --realm=${MATRIX_DOMAIN:-testhighlife.strangled.net}
+      - --server-name=${MATRIX_DOMAIN:-testhighlife.strangled.net}
       - --external-ip=${DEPLOY_PUBLIC_IP:?DEPLOY_PUBLIC_IP is required}
       - --min-port=49160
       - --max-port=49200
@@ -324,28 +336,28 @@ services:
     networks:
       backend:
         aliases:
-          - testhighlife.strangled.net
-          - auth.testhighlife.strangled.net
+          - ${MATRIX_DOMAIN:-testhighlife.strangled.net}
+          - auth.${MATRIX_DOMAIN:-testhighlife.strangled.net}
 
   bot:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-fakehoward}/highlife-formspace-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:?GITHUB_REPOSITORY_OWNER is required}/highlife-formspace-bot:${BOT_IMAGE_TAG:?BOT_IMAGE_TAG is required}
     restart: unless-stopped
     expose:
       - "8090"
     environment:
       # Reach the public client API via Caddy so login/logout/refresh hit MAS
       # compat while other CS API paths reach Synapse.
-      MATRIX_HOMESERVER: https://testhighlife.strangled.net
+      MATRIX_HOMESERVER: https://${MATRIX_DOMAIN:-testhighlife.strangled.net}
       ALLOW_INSECURE_HOMESERVER: "false"
-      MATRIX_USER_ID: "@${BOT_LOCALPART:-highlifebot}:testhighlife.strangled.net"
+      MATRIX_USER_ID: "@${BOT_LOCALPART:-highlifebot}:${MATRIX_DOMAIN:-testhighlife.strangled.net}"
       MATRIX_PASSWORD: ${BOT_MATRIX_PASSWORD:?BOT_MATRIX_PASSWORD is required}
       MATRIX_CRYPTO_STORE_PASSPHRASE: ${BOT_CRYPTO_STORE_PASSPHRASE:?BOT_CRYPTO_STORE_PASSPHRASE is required}
       MATRIX_CRYPTO: "true"
-      MATRIX_MINIAPP_URL: https://testhighlife.strangled.net/miniapp/
+      MATRIX_MINIAPP_URL: https://${MATRIX_DOMAIN:-testhighlife.strangled.net}/miniapp/
       MATRIX_MINIAPP_SECRET: ${MATRIX_MINIAPP_SECRET:-}
-      MATRIX_MINIAPP_CORS_ORIGIN: ${MATRIX_MINIAPP_CORS_ORIGIN:-https://testhighlife.strangled.net}
+      MATRIX_MINIAPP_CORS_ORIGIN: ${MATRIX_MINIAPP_CORS_ORIGIN:-https://${MATRIX_DOMAIN:-testhighlife.strangled.net}}
       MINIAPP_HTTP_PORT: "8090"
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       FORMSPACE_ANONYMITY_SALT: ${FORMSPACE_ANONYMITY_SALT:-}
     volumes:
       - bot-data:/app/data

@@ -38,13 +38,16 @@ jobs:
           DEPLOY_PUBLIC_IP: 203.0.113.10
           GITHUB_REPOSITORY_OWNER: validation
           BOT_IMAGE_TAG: validation
+          REDIS_PASSWORD: validation-only
+          BOT_CRYPTO_STORE_PASSPHRASE: validation-only
         run: |
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python scripts/validate-infrastructure.py
           python -m py_compile scripts/validate-infrastructure.py \
             server/render-synapse-config.py server/render-mas-config.py
           shellcheck server/bootstrap-bot.sh server/generate-synapse-config.sh \
-            server/generate-mas-config.sh server/init-mas-db.sh server/migrate-syn2mas.sh
+            server/generate-mas-config.sh server/init-mas-db.sh server/migrate-syn2mas.sh \
+            scripts/backup-highlife.sh
           docker run --rm --entrypoint caddy \
             -v "$PWD/server/Caddyfile:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0-alpine validate --config /etc/caddy/Caddyfile

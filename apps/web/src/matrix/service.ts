@@ -60,7 +60,6 @@ import {
 } from "./directCall";
 import { BrowserLivekitMedia } from "./livekitMedia";
 import {
-  DEFAULT_LIVEKIT_JWT_URL,
   MatrixRtcController,
   createBrowserMatrixRtcClient,
   discoverLivekitFocus,
@@ -280,7 +279,7 @@ function callMemberEventsFromRoom(room: Room): CallMemberEventLike[] {
 }
 
 function livekitFallbackUrl(): string {
-  return (import.meta.env.VITE_LIVEKIT_JWT_URL as string | undefined)?.trim() || DEFAULT_LIVEKIT_JWT_URL;
+  return (import.meta.env.VITE_LIVEKIT_JWT_URL as string | undefined)?.trim() || "";
 }
 
 function attachCallControllers(active: MatrixClient): void {
@@ -977,6 +976,44 @@ export async function paginateRoomHistory(roomId: string): Promise<void> {
     historyStates.set(roomId, { loading: false, exhausted: !hasMore, error: null });
   } catch (error) {
     historyStates.set(roomId, {
+      loading: false,
+      exhausted: false,
+      error: messageOf(error),
+    });
+    throw error;
+  } finally {
+    publish();
+  }
+}
+
+export function threadHistoryKey(roomId: string, rootId: string): string {
+  return `${roomId}::thread::${rootId}`;
+}
+
+export async function paginateThreadHistory(roomId: string, rootId: string): Promise<void> {
+  const active = requiredClient();
+  const room = active.getRoom(roomId);
+  if (!room) throw new Error("Room is not available");
+  const key = threadHistoryKey(roomId, rootId);
+  const current = getHistoryState(key);
+  if (current.loading || current.exhausted) return;
+  historyStates.set(key, { ...current, loading: true, error: null });
+  publish();
+  try {
+    const rootEvent = room.findEventById(rootId);
+    const thread = room.getThread(rootId)
+      ?? (rootEvent ? room.createThread(rootId, rootEvent, [rootEvent], true) : undefined);
+    if (!thread) {
+      historyStates.set(key, { loading: false, exhausted: true, error: null });
+      return;
+    }
+    const hasMore = await active.paginateEventTimeline(thread.liveTimeline, {
+      backwards: true,
+      limit: 50,
+    });
+    historyStates.set(key, { loading: false, exhausted: !hasMore, error: null });
+  } catch (error) {
+    historyStates.set(key, {
       loading: false,
       exhausted: false,
       error: messageOf(error),

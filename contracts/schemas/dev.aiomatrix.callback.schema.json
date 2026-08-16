@@ -8,15 +8,6 @@
     "data": { "type": "string", "minLength": 1 },
     "message_id": { "type": "string" }
   },
-  "anyOf": [
-    {
-      "required": ["token"],
-      "properties": { "token": {} }
-    },
-    {
-      "required": ["data"],
-      "properties": { "data": {} }
-    }
-  ],
+  "required": ["token"],
   "additionalProperties": false
 }

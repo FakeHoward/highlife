@@ -7,9 +7,6 @@ on:
         description: Matrix localpart to create (no @)
         required: true
         default: viewer
-      password:
-        description: Password for that account
-        required: true
 
 concurrency:
   group: highlife-provision-account
@@ -27,25 +24,30 @@ jobs:
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
           LOCALPART: ${{ inputs.localpart }}
-          PASSWORD: ${{ inputs.password }}
+          MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           password: ${{ secrets.DEPLOY_PASSWORD }}
           port: 22
-          envs: LOCALPART,PASSWORD
+          envs: LOCALPART,MATRIX_DOMAIN,DOMAIN
           script: |
             set -eu
             cd /opt/highlife
             localpart="${LOCALPART}"
-            password="${PASSWORD}"
             case "$localpart" in
               *[!a-zA-Z0-9._=-]*|"")
                 echo "Invalid localpart" >&2
                 exit 1
                 ;;
             esac
+            domain="${MATRIX_DOMAIN:-${DOMAIN:-testhighlife.strangled.net}}"
+            password="$(openssl rand -base64 24)"
+            umask 077
+            printf '%s\n' "$password" > "/opt/highlife/provisioned-${localpart}.pass"
+            chmod 600 "/opt/highlife/provisioned-${localpart}.pass"
             # docker compose exec does not use the image ENTRYPOINT.
             if output="$(docker compose -f docker-compose.prod.yml exec -T mas \
               /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \
@@ -54,12 +56,15 @@ jobs:
               --no-admin \
               --ignore-password-complexity \
               "$localpart" 2>&1)"; then
-              echo "Created @${localpart}:testhighlife.strangled.net"
+              echo "Created @${localpart}:${domain}"
+              echo "Password written to /opt/highlife/provisioned-${localpart}.pass on the host"
               exit 0
             fi
             if printf '%s' "$output" | grep -qiE 'already exists|already taken|M_USER_IN_USE|Username already taken|user already exists'; then
-              echo "Account already exists; password was not changed"
+              echo "Account already exists; password file was not applied to MAS"
+              rm -f "/opt/highlife/provisioned-${localpart}.pass"
               exit 0
             fi
+            rm -f "/opt/highlife/provisioned-${localpart}.pass"
             printf '%s\n' "$output" >&2
             exit 1

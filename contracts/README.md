@@ -13,6 +13,6 @@ Aware hosts (0.6.2+) should also handle ephemeral `dev.aiomatrix.callback_answer
 Compatibility rules:
 
 1. Event type names and existing fields are additive contracts; consumers must tolerate unknown fields.
-2. `dev.aiomatrix.callback` accepts either a signed/opaque `token` or direct `data`, matching the library's callback reader.
+2. `dev.aiomatrix.callback` requires a signed/opaque `token`. Unsigned `data`-only payloads are rejected unless `allowUnsignedCallbacks` is explicitly enabled.
 3. Callback keyboard buttons may contain both raw `data` and a generated `token`; fallback clients send `!cb <token>`.
 4. MiniApp cards remain ordinary `m.room.message` events with plaintext and HTML fallback.
