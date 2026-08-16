@@ -14,6 +14,7 @@ PY
 rm -rf .vodozemac
 git clone --depth 1 --branch "${version}" https://github.com/famedly/dart-vodozemac.git .vodozemac
 cd .vodozemac
+rustup toolchain install nightly --component rust-src
 cargo install flutter_rust_bridge_codegen --locked || cargo install flutter_rust_bridge_codegen
 flutter_rust_bridge_codegen build-web --dart-root dart --rust-root "$(pwd)/rust" --release
 cd "$ROOT"

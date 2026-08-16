@@ -132,6 +132,7 @@ jobs:
 
       - name: Build vodozemac WASM for Flutter web
         working-directory: apps/client
+        continue-on-error: true
         run: |
           set -euo pipefail
           if ! command -v cargo >/dev/null 2>&1; then
@@ -139,6 +140,7 @@ jobs:
             # shellcheck disable=SC1091
             source "$HOME/.cargo/env"
           fi
+          rustup toolchain install nightly --component rust-src
           bash scripts/build_vodozemac_wasm.sh
 
       - name: Build Flutter web
