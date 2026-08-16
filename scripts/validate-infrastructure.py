@@ -247,6 +247,7 @@ def validate_static_config() -> None:
         "--project-name highlife_client",
         "--org app.highlife",
         "--base-href /flutter/",
+        "--no-web-resources-cdn",
         "DOMAIN=",
         "m.login.password",
         "recover-bot.yml",

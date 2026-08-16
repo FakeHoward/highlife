@@ -13,6 +13,12 @@ export type QrLoginFlow = {
   close?(): Promise<void>;
 };
 
+function qrFailureText(reason: unknown, fallback: string): string | null {
+  const message = reason instanceof Error ? reason.message : String(reason ?? "");
+  if (/abort|cancel|404|not found/i.test(message)) return null;
+  return message.trim() || fallback;
+}
+
 export function QrLoginPanel({
   start,
   onClose,
@@ -34,7 +40,9 @@ export function QrLoginPanel({
       try {
         setStatus(t("settings.qrWaiting"));
         flow = await start((reason) => {
-          if (!abort.signal.aborted) setError(String(reason));
+          if (abort.signal.aborted) return;
+          const text = qrFailureText(reason, t("login.qrUnavailable"));
+          if (text) setError(text);
         }, abort.signal);
         await flow.generateCode();
         if (abort.signal.aborted) return;
@@ -49,10 +57,10 @@ export function QrLoginPanel({
         await flow.shareSecrets();
         if (!abort.signal.aborted) setStatus(t("settings.qrDone"));
       } catch (reason) {
-        if (!abort.signal.aborted) {
-          setError(reason instanceof Error ? reason.message : t("login.qrUnavailable"));
-          setStatus(null);
-        }
+        if (abort.signal.aborted) return;
+        const text = qrFailureText(reason, t("login.qrUnavailable"));
+        setError(text);
+        setStatus(null);
       }
     })();
     return () => {

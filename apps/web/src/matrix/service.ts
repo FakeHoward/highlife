@@ -131,6 +131,7 @@ import {
   startLinkNewDeviceQr,
   startNewDeviceQr,
 } from "./qrLogin";
+import { localpartOf } from "./identity";
 import { assertCryptoForEncryptedRoom } from "./cryptoGuard";
 import { matrixRtcCameraOptions, outgoingCallMode } from "./callRouting";
 import { registerPushAfterLogin } from "./push";
@@ -654,9 +655,15 @@ export async function login(input: {
   password: string;
 }): Promise<void> {
   const baseUrl = resolveHomeserver(input.homeserver);
+  const user = localpartOf(input.userId);
+  if (!user) {
+    throw Object.assign(new Error("USERNAME_REQUIRED"), { code: "USERNAME_REQUIRED" as const });
+  }
   const guest = createClient({ baseUrl });
+  // MAS compat login is picky: full MXID here 403s while the same password
+  // works on Android, which already sends localpart.
   const response = await guest.login("m.login.password", {
-    identifier: { type: "m.id.user", user: input.userId.trim() },
+    identifier: { type: "m.id.user", user },
     password: input.password,
     initial_device_display_name: DEVICE_DISPLAY_NAME,
   });
@@ -716,7 +723,7 @@ export async function register(input: {
   password: string;
 }): Promise<void> {
   const baseUrl = resolveHomeserver(input.homeserver);
-  const username = input.username.trim().replace(/^@/, "").split(":")[0] ?? "";
+  const username = localpartOf(input.username);
   if (!username) {
     throw Object.assign(new Error("USERNAME_REQUIRED"), { code: "USERNAME_REQUIRED" as const });
   }
@@ -2465,7 +2472,7 @@ export async function beginLoginQr(
   onFailure: (reason: string) => void,
   signal: AbortSignal,
 ) {
-  return startNewDeviceQr(homeserver, onFailure, signal);
+  return startNewDeviceQr(resolveHomeserver(homeserver), onFailure, signal);
 }
 
 export async function isQrLoginAvailable(): Promise<boolean> {

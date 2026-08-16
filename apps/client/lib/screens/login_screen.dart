@@ -107,7 +107,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       DecoratedBox(
                         decoration: BoxDecoration(
                           color: tokens.surface,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: tokens.hairline),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
@@ -117,21 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Center(
                   child: Column(
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        alignment: Alignment.center,
-                        color: tokens.accent,
-                        child: const Text(
-                          'H',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
-                          ),
-                        ),
-                      ),
+                      const HlBrandMark(),
                       const SizedBox(height: 14),
                       Text(
                         s.appName,

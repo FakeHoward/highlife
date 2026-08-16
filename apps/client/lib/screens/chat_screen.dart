@@ -753,9 +753,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             controller: _composer,
                             minLines: 1,
                             maxLines: 4,
-                            decoration: InputDecoration(
+                            decoration: highLifePillField(
                               hintText: s.messageHint,
-                              filled: true,
+                              tokens: tokens,
                             ),
                             onChanged: (_) => _onComposerChanged(session),
                             onSubmitted: (_) => _send(session),
@@ -2790,9 +2790,9 @@ class _ThreadSheetState extends State<_ThreadSheet> {
                         controller: _composer,
                         minLines: 1,
                         maxLines: 4,
-                        decoration: InputDecoration(
+                        decoration: highLifePillField(
                           hintText: s.messageHint,
-                          filled: true,
+                          tokens: tokens,
                         ),
                         onSubmitted: (_) => _send(),
                       ),

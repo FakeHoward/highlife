@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useI18n } from "../i18n";
 import { beginOidcOrSsoLogin, discoverMasIssuer } from "../matrix/oidc";
+import { isInvalidCredentialsError } from "../matrix/identity";
 import { beginLoginQr, login, loginWithSsoToken, probeSsoAvailable, register } from "../matrix/service";
 import { probeBrowserCrypto } from "../matrix/browserCrypto";
 import { IconEye, IconEyeOff } from "./Icons";
@@ -77,6 +78,7 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
     if (code === "USERNAME_REQUIRED") return t("login.usernameRequired");
     if (code === "REGISTER_DISABLED") return t("login.registerDisabled");
     if (code === "REGISTER_NEEDS_EXTRA") return t("login.registerNeedsExtra");
+    if (!forRegister && isInvalidCredentialsError(reason)) return t("login.invalidCredentials");
     if (reason instanceof Error && reason.message) return reason.message;
     return forRegister ? t("login.registerFailed") : t("login.failed");
   }
@@ -291,10 +293,13 @@ export function LoginScreen({ initialError }: { initialError: string | null }) {
             <div className="login-extras">
               <div className="qr-login-block">
                 {qrOpen ? (
-                  <QrLoginPanel
-                    start={startLoginQr}
-                    onClose={() => setQrOpen(false)}
-                  />
+                  <>
+                    <p className="muted small">{t("login.qrHint")}</p>
+                    <QrLoginPanel
+                      start={startLoginQr}
+                      onClose={() => setQrOpen(false)}
+                    />
+                  </>
                 ) : (
                   <button
                     type="button"

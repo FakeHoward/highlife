@@ -145,6 +145,7 @@ export function RoomSidebar({
         <nav className="room-list">
           {invites.length === 0 && joined.length === 0 && (
             <div className="empty-small">
+              <span className="welcome-glyph" aria-hidden="true">H</span>
               <strong>{t("sidebar.emptyTitle")}</strong>
               <span>{t("sidebar.emptyHint")}</span>
             </div>

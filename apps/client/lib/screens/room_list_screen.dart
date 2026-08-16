@@ -117,14 +117,14 @@ class _RoomListScreenState extends State<RoomListScreen> {
               child: TextField(
                 key: const ValueKey('room-search'),
                 onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
+                decoration: highLifePillField(
                   hintText: s.searchConversations,
+                  tokens: tokens,
                   prefixIcon: Icon(
                     Icons.search,
                     size: 18,
                     color: tokens.muted,
                   ),
-                  filled: true,
                 ),
               ),
             ),
@@ -1043,6 +1043,8 @@ class _EmptyRooms extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const HlBrandMark(size: 36),
+              const SizedBox(height: 16),
               Text(
                 title,
                 textAlign: TextAlign.center,

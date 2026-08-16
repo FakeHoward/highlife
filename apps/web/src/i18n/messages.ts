@@ -16,7 +16,7 @@ const en = {
   // Login
   "login.headline": "Sign in to HighLife",
   "login.blurb":
-    "Sign in to any Matrix server. Some rooms only accept accounts from servers they allow.",
+    "Use the same username and password as the Android app.",
   "login.title": "Sign in",
   "login.registerTitle": "Create account",
   "login.hint": "Server URL and your account on that server.",
@@ -29,7 +29,7 @@ const en = {
   "login.homeserver": "Homeserver",
   "login.homeserverPlaceholder": "https://matrix.example.org",
   "login.userId": "Username or Matrix ID",
-  "login.userIdPlaceholder": "@name:matrix.example.org",
+  "login.userIdPlaceholder": "alice",
   "login.username": "Username",
   "login.usernamePlaceholder": "yourname",
   "login.usernameRequired": "Username is required",
@@ -42,6 +42,7 @@ const en = {
   "login.note":
     "Session stays in this browser. If a room blocks this server, sign in on another one.",
   "login.failed": "Sign-in failed",
+  "login.invalidCredentials": "Incorrect username or password.",
   "login.registerFailed": "Registration failed",
   "login.registerDisabled": "This server has registration turned off. Sign in with an existing account, or ask the server admin to enable signup.",
   "login.registerNeedsExtra":
@@ -56,7 +57,8 @@ const en = {
   "login.cryptoBanner":
     "This browser cannot run Matrix encryption (needs HTTPS, WebAssembly, and IndexedDB). Encrypted rooms will stay unreadable until those are available.",
   "login.signInQr": "Sign in with QR",
-  "login.qrHint": "Show a QR code for an already signed-in HighLife or Element X session to scan.",
+  "login.qrHint":
+    "Show a QR for Element X or another already signed-in HighLife web session. The Android app cannot scan this code yet.",
   "login.qrUnavailable": "QR sign-in is not available on this server.",
   "login.confirmOnOtherDevice": "Confirm on the other device",
   "login.moreOptions": "More sign-in options",
@@ -263,7 +265,7 @@ const en = {
   "settings.anotherDevice": "another device",
   "settings.noDevices": "No devices listed yet.",
   "settings.linkNewDevice": "Link a new device",
-  "settings.linkNewDeviceHint": "Show a QR code for Element X or another HighLife session to scan.",
+  "settings.linkNewDeviceHint": "Show a QR for Element X to scan. HighLife Android cannot complete this handshake yet.",
   "settings.qrCheckCode": "Check code",
   "settings.qrWaiting": "Waiting for the other device…",
   "settings.qrDone": "Device linked",
@@ -464,7 +466,7 @@ const ru: Record<MessageKey, string> = {
 
   "login.headline": "Вход в HighLife",
   "login.blurb":
-    "Войдите на любой сервер Matrix. В некоторые комнаты пускают только с серверов, которые они разрешают.",
+    "Тот же логин и пароль, что в приложении на телефоне.",
   "login.title": "Вход",
   "login.registerTitle": "Регистрация",
   "login.hint": "Адрес сервера и ваш аккаунт на нём.",
@@ -477,7 +479,7 @@ const ru: Record<MessageKey, string> = {
   "login.homeserver": "Сервер",
   "login.homeserverPlaceholder": "https://matrix.example.org",
   "login.userId": "Имя или Matrix ID",
-  "login.userIdPlaceholder": "@name:matrix.example.org",
+  "login.userIdPlaceholder": "alice",
   "login.username": "Имя пользователя",
   "login.usernamePlaceholder": "вашеимя",
   "login.usernameRequired": "Укажите имя пользователя",
@@ -490,6 +492,7 @@ const ru: Record<MessageKey, string> = {
   "login.note":
     "Сессия остаётся в этом браузере. Если комната блокирует этот сервер — войдите с другого.",
   "login.failed": "Не удалось войти",
+  "login.invalidCredentials": "Неверное имя пользователя или пароль.",
   "login.registerFailed": "Не удалось зарегистрироваться",
   "login.registerDisabled":
     "На этом сервере регистрация выключена. Войдите с существующим аккаунтом или попросите администратора включить регистрацию.",
@@ -505,7 +508,8 @@ const ru: Record<MessageKey, string> = {
   "login.cryptoBanner":
     "Этот браузер не может запустить шифрование Matrix (нужны HTTPS, WebAssembly и IndexedDB). Зашифрованные комнаты останутся нечитаемыми.",
   "login.signInQr": "Войти по QR",
-  "login.qrHint": "Показать QR для уже открытой сессии HighLife или Element X.",
+  "login.qrHint":
+    "QR для Element X или уже открытой веб-сессии HighLife. Приложение Android этот код пока не сканирует.",
   "login.qrUnavailable": "Вход по QR на этом сервере недоступен.",
   "login.confirmOnOtherDevice": "Подтвердите на другом устройстве",
   "login.moreOptions": "Другие способы входа",
@@ -705,7 +709,7 @@ const ru: Record<MessageKey, string> = {
   "settings.anotherDevice": "другое устройство",
   "settings.noDevices": "Список устройств пока пуст.",
   "settings.linkNewDevice": "Привязать устройство",
-  "settings.linkNewDeviceHint": "Показать QR, который отсканирует Element X или другой HighLife.",
+  "settings.linkNewDeviceHint": "QR для Element X. Приложение Android этот handshake пока не завершает.",
   "settings.qrCheckCode": "Код проверки",
   "settings.qrWaiting": "Ждём другое устройство…",
   "settings.qrDone": "Устройство привязано",

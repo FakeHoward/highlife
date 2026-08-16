@@ -65,6 +65,60 @@ class HighLifeTokens {
   }
 }
 
+class HlBrandMark extends StatelessWidget {
+  const HlBrandMark({super.key, this.size = 40});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = HighLifeTokens.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.accent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: Text(
+            'H',
+            style: TextStyle(
+              color: const Color(0xFFFFFFFF),
+              fontSize: size * 0.45,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+InputDecoration highLifePillField({
+  required String hintText,
+  required HighLifeTokens tokens,
+  Widget? prefixIcon,
+}) {
+  final none = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(18),
+    borderSide: BorderSide.none,
+  );
+  return InputDecoration(
+    hintText: hintText,
+    prefixIcon: prefixIcon,
+    filled: true,
+    fillColor: tokens.surfaceMuted,
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    border: none,
+    enabledBorder: none,
+    focusedBorder: none,
+  );
+}
+
 class HighLifeTextStyles {
   const HighLifeTextStyles();
 

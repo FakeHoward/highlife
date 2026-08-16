@@ -155,7 +155,7 @@ jobs:
           flutter create . --project-name highlife_client --org app.highlife --platforms=web
           flutter pub get
           flutter analyze --no-fatal-infos
-          flutter build web --release --base-href /flutter/ \
+          flutter build web --release --no-web-resources-cdn --base-href /flutter/ \
             --dart-define=HIGHLIFE_DEFAULT_HOMESERVER="https://${MATRIX_DOMAIN}" \
             --dart-define=HIGHLIFE_LIVEKIT_JWT_URL="https://rtc.${MATRIX_DOMAIN}/livekit/jwt" \
             --dart-define=HIGHLIFE_ELEMENT_CALL_URL="https://call.${MATRIX_DOMAIN}" \

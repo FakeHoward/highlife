@@ -355,7 +355,7 @@ jobs:
         working-directory: apps/client
         shell: bash
         run: |
-          flutter build web --release --base-href / \
+          flutter build web --release --no-web-resources-cdn --base-href / \
             --dart-define=HIGHLIFE_DEFAULT_HOMESERVER=https://testhighlife.strangled.net \
             --dart-define=HIGHLIFE_LIVEKIT_JWT_URL=https://rtc.testhighlife.strangled.net/livekit/jwt \
             --dart-define=HIGHLIFE_ELEMENT_CALL_URL=https://call.testhighlife.strangled.net \

@@ -436,8 +436,8 @@ const Map<String, Map<AppLocale, String>> _messages = {
   'deviceId': {AppLocale.en: 'Device ID', AppLocale.ru: 'ID устройства'},
   'retry': {AppLocale.en: 'Retry', AppLocale.ru: 'Повторить'},
   'loginTagline': {
-    AppLocale.en: 'Sign in to any Matrix server.',
-    AppLocale.ru: 'Войдите на любой сервер Matrix.',
+    AppLocale.en: 'Use the same username and password as on the web.',
+    AppLocale.ru: 'Тот же логин и пароль, что в веб-клиенте.',
   },
   'homeserver': {AppLocale.en: 'Homeserver', AppLocale.ru: 'Сервер'},
   'homeserverHint': {
@@ -445,8 +445,8 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'https://matrix.example.org',
   },
   'userIdHint': {
-    AppLocale.en: '@name:matrix.example.org',
-    AppLocale.ru: '@name:matrix.example.org',
+    AppLocale.en: 'alice',
+    AppLocale.ru: 'alice',
   },
   'usernameHint': {
     AppLocale.en: 'alice',
@@ -1279,9 +1279,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'qrLoginUnsupported': {
     AppLocale.en:
-        'QR login needs MSC4108 rendezvous, which this Flutter build does not implement yet. Use password or SSO.',
+        'QR login needs Element X or HighLife web — this Android build cannot scan MSC4108 codes. Use password or SSO.',
     AppLocale.ru:
-        'Вход по QR требует MSC4108 rendezvous — в этой сборке Flutter его ещё нет. Войдите паролем или SSO.',
+        'Вход по QR — через Element X или веб HighLife. Android этот код пока не сканирует. Войдите паролем или SSO.',
   },
   'callMicBlocked': {
     AppLocale.en: 'Microphone permission was denied.',

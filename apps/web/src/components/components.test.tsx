@@ -127,6 +127,10 @@ describe("deployment defaults", () => {
     expect(screen.getByRole("textbox", { name: "Homeserver" })).toHaveValue(
       "https://testhighlife.strangled.net",
     );
+    expect(screen.getByRole("textbox", { name: "Username or Matrix ID" })).toHaveAttribute(
+      "placeholder",
+      "alice",
+    );
     expect(screen.getByRole("tab", { name: "Create account" })).toBeInTheDocument();
     vi.unstubAllEnvs();
   });
