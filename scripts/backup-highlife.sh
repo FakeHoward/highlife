@@ -40,9 +40,13 @@ for volume in highlife_synapse-data highlife_mas-data highlife_bot-data highlife
   fi
 done
 
-# Keep last 14 backups
-if [[ -d "$(dirname "$OUT")" ]]; then
-  ls -1dt "$(dirname "$OUT")"/*/ 2>/dev/null | tail -n +15 | xargs -r rm -rf
+# Keep last 14 backups (stamp dirs sort lexicographically).
+backup_root="$(dirname "$OUT")"
+if [[ -d "$backup_root" ]]; then
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    | sort \
+    | head -n -14 \
+    | xargs -r rm -rf
 fi
 
 echo "Backup complete: $OUT"

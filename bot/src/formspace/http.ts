@@ -55,13 +55,17 @@ function sendJson(
   req: IncomingMessage,
 ): void {
   const payload = JSON.stringify(body);
-  res.writeHead(status, {
+  const headers: Record<string, string> = {
     "content-type": "application/json; charset=utf-8",
-    "access-control-allow-origin": resolveCorsOrigin(req),
     "access-control-allow-headers": "authorization, content-type",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-    vary: "Origin",
-  });
+  };
+  const cors = resolveCorsOrigin(req);
+  if (cors) {
+    headers["access-control-allow-origin"] = cors;
+    headers.vary = "Origin";
+  }
+  res.writeHead(status, headers);
   res.end(payload);
 }
 

@@ -233,6 +233,8 @@ test("HTTP rate limit returns 429", async () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     assert.ok(address && typeof address === "object");
+    const previousCors = process.env.MATRIX_MINIAPP_CORS_ORIGIN;
+    process.env.MATRIX_MINIAPP_CORS_ORIGIN = "https://example.org";
 
     try {
       const url = `http://127.0.0.1:${address.port}/forms/${form.id}`;
@@ -244,8 +246,10 @@ test("HTTP rate limit returns 429", async () => {
       assert.equal(third.status, 429);
       const body = (await third.json()) as { error?: string };
       assert.equal(body.error, "rate_limited");
-      assert.ok(third.headers.get("access-control-allow-origin"));
+      assert.equal(third.headers.get("access-control-allow-origin"), "https://example.org");
     } finally {
+      if (previousCors === undefined) delete process.env.MATRIX_MINIAPP_CORS_ORIGIN;
+      else process.env.MATRIX_MINIAPP_CORS_ORIGIN = previousCors;
       await new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       );

@@ -32,6 +32,7 @@ export function markdownToHtml(source: string): string {
     /\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
     '<a href="$2" rel="noreferrer noopener" target="_blank">$1</a>',
   );
+  html = html.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
   return html
     .split(/\n{2,}/)
     .map((block) => `<p>${block.replace(/\n/g, "<br/>")}</p>`)
