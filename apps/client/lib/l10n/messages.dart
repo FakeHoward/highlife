@@ -338,7 +338,11 @@ class AppStrings {
   String get linkNewDevice => _('linkNewDevice');
   String get signInQr => _('signInQr');
   String get qrLoginHint => _('qrLoginHint');
+  String get qrLoginUnsupported => _('qrLoginUnsupported');
   String get linkNewDeviceHint => _('linkNewDeviceHint');
+  String get callMicBlocked => _('callMicBlocked');
+  String get callCryptoUnavailable => _('callCryptoUnavailable');
+  String callFailed(String detail) => _('callFailed').replaceAll('{detail}', detail);
   String get openMap => _('openMap');
   String get prompts => _('prompts');
   String get latitude => _('latitude');
@@ -1271,6 +1275,24 @@ const Map<String, Map<AppLocale, String>> _messages = {
         'Scan this with an existing Element X or HighLife session. The dart Matrix SDK has no MSC4108 rendezvous yet, so this QR carries a local matrix: login payload.',
     AppLocale.ru:
         'Отсканируйте это существующей сессией Element X или HighLife. В dart SDK пока нет MSC4108 rendezvous, поэтому QR содержит локальный matrix: payload для входа.',
+  },
+  'qrLoginUnsupported': {
+    AppLocale.en:
+        'QR login needs MSC4108 rendezvous, which this Flutter build does not implement yet. Use password or SSO.',
+    AppLocale.ru:
+        'Вход по QR требует MSC4108 rendezvous — в этой сборке Flutter его ещё нет. Войдите паролем или SSO.',
+  },
+  'callMicBlocked': {
+    AppLocale.en: 'Microphone permission was denied.',
+    AppLocale.ru: 'Нет доступа к микрофону.',
+  },
+  'callCryptoUnavailable': {
+    AppLocale.en: 'Encryption is not ready for this call.',
+    AppLocale.ru: 'Шифрование для звонка ещё не готово.',
+  },
+  'callFailed': {
+    AppLocale.en: 'Call failed: {detail}',
+    AppLocale.ru: 'Звонок не удался: {detail}',
   },
   'linkNewDeviceHint': {
     AppLocale.en:

@@ -56,6 +56,7 @@ export function createProtocolFixtures(): ProtocolFixtures {
   return {
     keyboard: buildShowcaseKeyboard().toContent(),
     callback: {
+      token: "signed-callback-token",
       data: "fs:rsvp:demo:going",
       message_id: "$keyboard-message",
     },

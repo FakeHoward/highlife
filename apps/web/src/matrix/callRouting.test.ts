@@ -2,12 +2,31 @@ import { describe, expect, it } from "vitest";
 import { matrixRtcCameraOptions, outgoingCallMode } from "./callRouting";
 
 describe("outgoingCallMode", () => {
-  it("uses MatrixRTC for DMs so Element X can join", () => {
-    expect(outgoingCallMode({ isDirect: true, encrypted: true, cryptoReady: true })).toBe("matrixrtc");
+  it("uses MatrixRTC for DMs so Element X can join when a focus exists", () => {
+    expect(
+      outgoingCallMode({
+        isDirect: true,
+        encrypted: true,
+        cryptoReady: true,
+        matrixRtcAvailable: true,
+      }),
+    ).toBe("matrixrtc");
   });
 
-  it("uses MatrixRTC for group rooms", () => {
-    expect(outgoingCallMode({ isDirect: false, encrypted: true, cryptoReady: true })).toBe("matrixrtc");
+  it("uses MatrixRTC for group rooms when a focus exists", () => {
+    expect(
+      outgoingCallMode({
+        isDirect: false,
+        encrypted: true,
+        cryptoReady: true,
+        matrixRtcAvailable: true,
+      }),
+    ).toBe("matrixrtc");
+  });
+
+  it("does not assume MatrixRTC without an explicit focus", () => {
+    expect(outgoingCallMode({ isDirect: true, encrypted: true, cryptoReady: true })).toBe("direct");
+    expect(outgoingCallMode({ isDirect: false, encrypted: true, cryptoReady: true })).toBe("blocked");
   });
 
   it("falls back to classic 1:1 WebRTC only when MatrixRTC is unavailable in a DM", () => {

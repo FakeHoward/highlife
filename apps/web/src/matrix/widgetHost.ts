@@ -1,6 +1,8 @@
 /**
  * Minimal Matrix Widget API host bridge for Element Call embeds.
  * Protocol: https://github.com/matrix-org/matrix-widget-api
+ *
+ * Capability grants and send_event room pinning match the Flutter host.
  */
 
 export type WidgetSendEventFn = (roomId: string, type: string, content: Record<string, unknown>, stateKey?: string) => Promise<{ event_id?: string }>;
@@ -63,6 +65,60 @@ const DEFAULT_CAPABILITIES = [
   "org.matrix.msc4039.download_file",
 ];
 
+const SEND_EVENT_PREFIX = "org.matrix.msc2762.send.event:";
+const SEND_STATE_PREFIX = "org.matrix.msc2762.send.state_event:";
+const RECEIVE_EVENT_PREFIX = "org.matrix.msc2762.receive.event:";
+const RECEIVE_STATE_PREFIX = "org.matrix.msc2762.receive.state_event:";
+
+export function isAllowedCallEventType(type: string): boolean {
+  if (type === "m.room.message" || type === "m.sticker") return true;
+  if (type === "org.matrix.msc4075.rtc.notification") return true;
+  if (type === "org.matrix.rageshake.request") return true;
+  if (type === "org.matrix.msc3401.call" || type === "org.matrix.msc3401.call.member") return true;
+  if (type.startsWith("m.call.")) return true;
+  if (type.startsWith("org.matrix.msc3401.call")) return true;
+  return false;
+}
+
+export function isGrantableWidgetCapability(capability: string): boolean {
+  if (DEFAULT_CAPABILITIES.includes(capability)) return true;
+  if (capability === "m.always_on_screen") return true;
+  if (capability === "org.matrix.msc4039.upload_file" || capability === "org.matrix.msc4039.download_file") {
+    return true;
+  }
+  if (capability.startsWith("org.matrix.msc2762.timeline")) return true;
+  if (capability === "org.matrix.msc2762.send.to_device" || capability === "org.matrix.msc2762.receive.to_device") {
+    return true;
+  }
+
+  let eventType: string | undefined;
+  if (capability.startsWith(SEND_EVENT_PREFIX)) eventType = capability.slice(SEND_EVENT_PREFIX.length);
+  else if (capability.startsWith(RECEIVE_EVENT_PREFIX)) eventType = capability.slice(RECEIVE_EVENT_PREFIX.length);
+  else if (capability.startsWith(SEND_STATE_PREFIX)) eventType = capability.slice(SEND_STATE_PREFIX.length);
+  else if (capability.startsWith(RECEIVE_STATE_PREFIX)) eventType = capability.slice(RECEIVE_STATE_PREFIX.length);
+  else return false;
+
+  if (eventType === "*" || eventType.length === 0) return false;
+  return isAllowedCallEventType(eventType);
+}
+
+export function hasSendEventCapability(
+  approved: Iterable<string>,
+  type: string,
+  isState: boolean,
+): boolean {
+  if (!type) return false;
+  const set = approved instanceof Set ? approved : new Set(approved);
+  const exact = `${isState ? SEND_STATE_PREFIX : SEND_EVENT_PREFIX}${type}`;
+  const wildcard = `${isState ? SEND_STATE_PREFIX : SEND_EVENT_PREFIX}*`;
+  return set.has(exact) || set.has(wildcard);
+}
+
+/** Always send into the host call room; ignore widget-supplied room_id. */
+export function resolveWidgetSendRoomId(hostRoomId: string, _requested?: string): string {
+  return hostRoomId;
+}
+
 function isWidgetRequest(data: unknown): data is WidgetApiMessage {
   if (!data || typeof data !== "object") return false;
   const message = data as WidgetApiMessage;
@@ -122,7 +178,9 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
       const requested = Array.isArray(request.data?.capabilities)
         ? (request.data!.capabilities as string[])
         : DEFAULT_CAPABILITIES;
-      for (const capability of requested) approved.add(capability);
+      for (const capability of requested) {
+        if (isGrantableWidgetCapability(capability)) approved.add(capability);
+      }
       reply(request, { capabilities: [...approved] });
       notifyCapabilities();
       return;
@@ -156,10 +214,17 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
       const content = (request.data?.content && typeof request.data.content === "object"
         ? request.data.content
         : {}) as Record<string, unknown>;
+      const isState = request.data != null && Object.prototype.hasOwnProperty.call(request.data, "state_key");
       const stateKey = typeof request.data?.state_key === "string" ? request.data.state_key : undefined;
-      const roomId = typeof request.data?.room_id === "string" ? request.data.room_id : options.roomId;
+      const roomId = resolveWidgetSendRoomId(options.roomId, typeof request.data?.room_id === "string" ? request.data.room_id : undefined);
       if (!options.sendEvent || !type) {
         reply(request, { error: { message: "send_event is not available", url: "", http_status: 400 } });
+        return;
+      }
+      if (!hasSendEventCapability(approved, type, isState)) {
+        reply(request, {
+          error: { message: `send_event capability not approved for ${type}`, url: "", http_status: 403 },
+        });
         return;
       }
       try {
@@ -178,7 +243,6 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
     }
 
     if (action === "send_to_device") {
-      // Element Call may request to-device; acknowledge without inventing crypto APIs.
       reply(request, {});
       return;
     }
@@ -230,7 +294,6 @@ export function attachElementCallWidgetHost(options: WidgetHostOptions): () => v
       return;
     }
 
-    // Acknowledge unknown fromWidget actions so the widget does not hang.
     reply(request, {});
   }
 

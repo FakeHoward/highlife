@@ -11,14 +11,24 @@ COMPOSE="${HIGHLIFE_COMPOSE:-docker-compose.prod.yml}"
 mkdir -p "$OUT"
 cd "$ROOT"
 
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 echo "Backing up to $OUT"
 
 if docker compose -f "$COMPOSE" ps postgres >/dev/null 2>&1; then
   docker compose -f "$COMPOSE" exec -T postgres \
     pg_dump -U "${POSTGRES_USER:-synapse}" "${POSTGRES_DB:-synapse}" \
     | gzip >"$OUT/synapse.sql.gz"
-  docker compose -f "$COMPOSE" exec -T postgres \
-    pg_dump -U "${POSTGRES_USER:-synapse}" mas \
+  # MAS DB is owned by role `mas`, not synapse.
+  docker compose -f "$COMPOSE" exec -T \
+    -e PGPASSWORD="${MAS_POSTGRES_PASSWORD:?MAS_POSTGRES_PASSWORD is required}" \
+    postgres \
+    pg_dump -U mas -d mas \
     | gzip >"$OUT/mas.sql.gz"
 fi
 

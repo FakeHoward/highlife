@@ -1,4 +1,5 @@
 {
+  "token": "signed-callback-token",
   "data": "fs:rsvp:demo:going",
   "message_id": "$keyboard-message"
 }

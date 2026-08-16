@@ -2,8 +2,7 @@ import 'package:matrix/matrix.dart';
 
 import 'call_uri.dart';
 
-const String defaultLivekitJwtUrl =
-    'https://rtc.testhighlife.strangled.net/livekit/jwt';
+const String defaultLivekitJwtUrl = '';
 
 class LivekitFocus {
   const LivekitFocus({

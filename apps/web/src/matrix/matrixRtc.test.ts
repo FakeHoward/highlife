@@ -22,7 +22,6 @@ vi.mock("./livekitE2ee", () => {
 
 import { MatrixRTCSessionEvent } from "matrix-js-sdk/lib/matrixrtc";
 import {
-  DEFAULT_LIVEKIT_JWT_URL,
   MatrixRtcController,
   discoverLivekitFocus,
   jwtRequestUrl,
@@ -128,9 +127,12 @@ describe("MatrixRTC LiveKit discovery", () => {
     });
   });
 
-  it("falls back to the homeserver JWT service when well-known has no focus", () => {
-    expect(discoverLivekitFocus(undefined)?.livekit_service_url).toBe(DEFAULT_LIVEKIT_JWT_URL);
+  it("does not invent a LiveKit focus without well-known or an explicit fallback", () => {
+    expect(discoverLivekitFocus(undefined)).toBeNull();
     expect(discoverLivekitFocus({}, "")).toBeNull();
+    expect(discoverLivekitFocus({}, "https://rtc.example.org/livekit/jwt")?.livekit_service_url).toBe(
+      "https://rtc.example.org/livekit/jwt",
+    );
   });
 
   it("builds the legacy lk-jwt-service body Element Call still uses", () => {

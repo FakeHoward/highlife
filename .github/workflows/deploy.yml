@@ -82,6 +82,7 @@ jobs:
           DEPLOY_PUBLIC_IP: 203.0.113.10
           GITHUB_REPOSITORY_OWNER: validation
           BOT_IMAGE_TAG: validation
+          REDIS_PASSWORD: validation-only
         run: |
           python -m pip install --disable-pip-version-check PyYAML==6.0.2
           python scripts/validate-infrastructure.py
@@ -93,10 +94,6 @@ jobs:
 
       - name: Test and build React web + FormSpace MiniApp
         env:
-          VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net
-          VITE_LIVEKIT_JWT_URL: https://rtc.testhighlife.strangled.net/livekit/jwt
-          VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net
-          VITE_MINIAPP_ALLOWED_ORIGINS: https://testhighlife.strangled.net
           VITE_PUSH_GATEWAY_URL: ${{ secrets.VITE_PUSH_GATEWAY_URL }}
           VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
           ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
@@ -105,6 +102,10 @@ jobs:
         run: |
           DOMAIN="${DOMAIN:-testhighlife.strangled.net}"
           MATRIX_DOMAIN="${MATRIX_DOMAIN:-$DOMAIN}"
+          export VITE_ELEMENT_CALL_URL="https://call.${MATRIX_DOMAIN}"
+          export VITE_LIVEKIT_JWT_URL="https://rtc.${MATRIX_DOMAIN}/livekit/jwt"
+          export VITE_DEFAULT_HOMESERVER="https://${MATRIX_DOMAIN}"
+          export VITE_MINIAPP_ALLOWED_ORIGINS="https://${MATRIX_DOMAIN}"
           # Default push gateway when Sygnal is on (ENABLE_PUSH) or VAPID is set.
           if [ -z "${VITE_PUSH_GATEWAY_URL:-}" ]; then
             if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ] || \
@@ -131,7 +132,6 @@ jobs:
 
       - name: Build vodozemac WASM for Flutter web
         working-directory: apps/client
-        continue-on-error: true
         run: |
           set -euo pipefail
           if ! command -v cargo >/dev/null 2>&1; then
@@ -144,12 +144,21 @@ jobs:
       - name: Build Flutter web
         id: flutter_web
         working-directory: apps/client
-        continue-on-error: true
+        env:
+          MATRIX_DOMAIN: ${{ secrets.MATRIX_DOMAIN }}
+          DOMAIN: ${{ secrets.DOMAIN }}
         run: |
+          DOMAIN="${DOMAIN:-testhighlife.strangled.net}"
+          MATRIX_DOMAIN="${MATRIX_DOMAIN:-$DOMAIN}"
           flutter create . --project-name highlife_client --org app.highlife --platforms=web
           flutter pub get
           flutter analyze --no-fatal-infos
-          flutter build web --release --base-href /flutter/
+          flutter build web --release --base-href /flutter/ \
+            --dart-define=HIGHLIFE_DEFAULT_HOMESERVER="https://${MATRIX_DOMAIN}" \
+            --dart-define=HIGHLIFE_LIVEKIT_JWT_URL="https://rtc.${MATRIX_DOMAIN}/livekit/jwt" \
+            --dart-define=HIGHLIFE_ELEMENT_CALL_URL="https://call.${MATRIX_DOMAIN}" \
+            --dart-define=HIGHLIFE_LATEST_JSON_URL="https://${MATRIX_DOMAIN}/client/latest.json" \
+            --dart-define=HIGHLIFE_RTC_AVAILABLE=true
 
       - name: Pack deployment bundle
         env:
@@ -174,10 +183,10 @@ jobs:
           ENABLE_PUSH: ${{ secrets.ENABLE_PUSH }}
           SYGNAL_VAPID_PRIVATE_KEY: ${{ secrets.SYGNAL_VAPID_PRIVATE_KEY }}
           SYNAPSE_ENABLE_REGISTRATION: ${{ secrets.SYNAPSE_ENABLE_REGISTRATION }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
         run: |
-          # Public Matrix domain: Caddyfile is rendered from Caddyfile.template.
-          # Compose service host pins (Synapse server_name, LiveKit JWT, bot MXID)
-          # still default to testhighlife.strangled.net — retarget those together.
+          # Public Matrix domain: Caddyfile and Element Call config are rendered
+          # from templates. Compose interpolates MATRIX_DOMAIN at runtime.
           DOMAIN="${DOMAIN:-testhighlife.strangled.net}"
           MATRIX_DOMAIN="${MATRIX_DOMAIN:-$DOMAIN}"
           owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
@@ -260,11 +269,23 @@ jobs:
                   + "\n"
               )
           PY
-          grep -R -F "https://call.${MATRIX_DOMAIN}" out/www/react >/dev/null || \
-            grep -R -F 'https://call.testhighlife.strangled.net' out/www/react >/dev/null
+          grep -R -F "https://call.${MATRIX_DOMAIN}" out/www/react >/dev/null
           cp server/docker-compose.prod.yml out/
-          # Render Caddy hostnames from template (keeps local Caddyfile in sync via default domain).
-          sed "s/__MATRIX_DOMAIN__/${MATRIX_DOMAIN}/g" server/Caddyfile.template > out/Caddyfile
+          export MATRIX_DOMAIN
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          domain = os.environ["MATRIX_DOMAIN"]
+          Path("out/Caddyfile").write_text(
+              Path("server/Caddyfile.template").read_text().replace("__MATRIX_DOMAIN__", domain)
+          )
+          Path("out/element-call-config.json").write_text(
+              Path("server/element-call-config.json.template")
+              .read_text()
+              .replace("__MATRIX_DOMAIN__", domain)
+          )
+          PY
           grep -F "default-src 'self'" out/Caddyfile >/dev/null
           grep -F "push.${MATRIX_DOMAIN}" out/Caddyfile >/dev/null
           cp server/sygnal.yaml out/
@@ -289,7 +310,6 @@ jobs:
           cp server/init-mas-db.sh out/
           cp server/render-synapse-config.py out/
           cp server/render-mas-config.py out/
-          cp server/element-call-config.json out/
           chmod +x out/bootstrap-bot.sh out/migrate-syn2mas.sh \
             out/generate-synapse-config.sh out/generate-mas-config.sh out/init-mas-db.sh
           # Shell scripts must be LF for the remote Linux host.
@@ -315,11 +335,14 @@ jobs:
             printf 'GITHUB_REPOSITORY=%s\n' "${{ github.repository }}"
             printf 'DOMAIN=%s\n' "$DOMAIN"
             printf 'MATRIX_DOMAIN=%s\n' "$MATRIX_DOMAIN"
-            # Open by default after MAS cutover; set false to close public signup.
-            printf 'SYNAPSE_ENABLE_REGISTRATION=%s\n' "${SYNAPSE_ENABLE_REGISTRATION:-true}"
+            # Closed by default; set true for a public demo.
+            printf 'SYNAPSE_ENABLE_REGISTRATION=%s\n' "${SYNAPSE_ENABLE_REGISTRATION:-false}"
             printf 'ENABLE_PUSH=%s\n' "${ENABLE_PUSH:-false}"
             printf 'MATRIX_MINIAPP_CORS_ORIGIN=%s\n' \
-              "${MATRIX_MINIAPP_CORS_ORIGIN:-https://${DOMAIN}}"
+              "${MATRIX_MINIAPP_CORS_ORIGIN:-https://${MATRIX_DOMAIN}}"
+            if [ -n "${REDIS_PASSWORD:-}" ]; then
+              printf 'REDIS_PASSWORD=%s\n' "$REDIS_PASSWORD"
+            fi
             if [ -n "${MATRIX_MINIAPP_SECRET:-}" ]; then
               printf 'MATRIX_MINIAPP_SECRET=%s\n' "$MATRIX_MINIAPP_SECRET"
             fi
@@ -327,8 +350,7 @@ jobs:
               printf 'FORMSPACE_ANONYMITY_SALT=%s\n' "$FORMSPACE_ANONYMITY_SALT"
             fi
           } > out/deploy.env
-          # Keep world-unreadable locally but readable by the SCP action container.
-          chmod 644 out/deploy.env
+          chmod 600 out/deploy.env
 
           # One compressed stream beats thousands of SCP file round-trips (Flutter web).
           tar -C out -czf out/deploy-bundle.tgz \
@@ -393,6 +415,59 @@ jobs:
             rm -f deploy-bundle.tgz
             mv deploy.env .env
             chmod 600 .env
+            python3 - <<'PY'
+            import os, secrets
+            from pathlib import Path
+
+            env_path = Path(".env")
+            lines = env_path.read_text().splitlines()
+            values = {}
+            for line in lines:
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                values[key] = value
+
+            def ensure(name: str, filename: str) -> str:
+                file = Path(filename)
+                value = os.environ.get(name) or values.get(name) or ""
+                if not value and file.is_file():
+                    value = file.read_text().strip()
+                if not value:
+                    value = secrets.token_hex(32)
+                file.write_text(value + "\n")
+                file.chmod(0o600)
+                return value
+
+            updates = {
+                "REDIS_PASSWORD": ensure("REDIS_PASSWORD", "redis.pass"),
+                "MATRIX_MINIAPP_SECRET": ensure("MATRIX_MINIAPP_SECRET", "miniapp.secret"),
+            }
+            salt = os.environ.get("FORMSPACE_ANONYMITY_SALT") or values.get(
+                "FORMSPACE_ANONYMITY_SALT", ""
+            )
+            if salt:
+                updates["FORMSPACE_ANONYMITY_SALT"] = salt
+
+            kept = []
+            seen = set()
+            for line in lines:
+                if not line or line.startswith("#") or "=" not in line:
+                    kept.append(line)
+                    continue
+                key, _, _ = line.partition("=")
+                if key in updates:
+                    kept.append(f"{key}={updates[key]}")
+                    seen.add(key)
+                else:
+                    kept.append(line)
+            for key, value in updates.items():
+                if key not in seen:
+                    kept.append(f"{key}={value}")
+            env_path.write_text("\n".join(kept) + "\n")
+            env_path.chmod(0o600)
+            print("host secrets persisted")
+            PY
             set -a
             . ./.env
             set +a
@@ -594,9 +669,11 @@ jobs:
               attempt=1
               while [ "$attempt" -le 6 ]; do
                 # Compat login is served by MAS (proxied on the public HS URL).
+                payload="$(LOGIN_USER="$localpart" LOGIN_PASS="$password" python3 -c \
+                  'import json,os; print(json.dumps({"type":"m.login.password","identifier":{"type":"m.id.user","user":os.environ["LOGIN_USER"]},"password":os.environ["LOGIN_PASS"]}))')"
                 if curl --fail --silent --show-error \
                   -H 'Content-Type: application/json' \
-                  --data "{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"${localpart}\"},\"password\":\"${password}\"}" \
+                  --data "$payload" \
                   "${PRIMARY}/_matrix/client/v3/login" |
                   grep -F '"access_token"' >/dev/null; then
                   echo "login ${localpart} ok"

@@ -101,16 +101,29 @@ def validate_compose(path: Path, production: bool) -> None:
         require(bot_environment.get("MATRIX_CRYPTO") == "true", "production bot crypto must be enabled")
         # Public client API via Caddy so login/logout/refresh hit MAS compat.
         require(
-            bot_environment.get("MATRIX_HOMESERVER") == f"https://{DOMAIN}",
-            "production bot must use the public homeserver URL (MAS compat)",
+            "${MATRIX_DOMAIN" in bot_environment.get("MATRIX_HOMESERVER", ""),
+            "production bot homeserver must use MATRIX_DOMAIN",
         )
         require(
             "${BOT_CRYPTO_STORE_PASSPHRASE" in bot_environment.get("MATRIX_CRYPTO_STORE_PASSPHRASE", ""),
             "bot crypto store passphrase must be injected",
         )
         require(
-            bot_environment.get("MATRIX_MINIAPP_URL") == f"https://{DOMAIN}/miniapp/",
-            "production bot MiniApp URL must be /miniapp/",
+            "${MATRIX_DOMAIN" in bot_environment.get("MATRIX_MINIAPP_URL", ""),
+            "production bot MiniApp URL must use MATRIX_DOMAIN /miniapp/",
+        )
+        require(
+            "${REDIS_PASSWORD" in bot_environment.get("REDIS_URL", ""),
+            "production bot Redis URL must require REDIS_PASSWORD",
+        )
+        require(
+            "${GITHUB_REPOSITORY_OWNER:?" in bot.get("image", ""),
+            "production bot image owner must be required GITHUB_REPOSITORY_OWNER",
+        )
+        require("${REDIS_PASSWORD" in rendered, f"{path}: REDIS_PASSWORD must be injected")
+        require(
+            "${SYNAPSE_ENABLE_REGISTRATION:-false}" in rendered,
+            f"{path}: registration must default closed",
         )
         require(
             "${MATRIX_MINIAPP_SECRET" in bot_environment.get("MATRIX_MINIAPP_SECRET", ""),
@@ -147,6 +160,12 @@ def validate_static_config() -> None:
         element["livekit"]["livekit_service_url"] == f"https://rtc.{DOMAIN}/livekit/jwt",
         "Element Call LiveKit URL is incorrect",
     )
+    call_template = (SERVER / "element-call-config.json.template").read_text(encoding="utf-8")
+    require("__MATRIX_DOMAIN__" in call_template, "element-call-config.json.template must use __MATRIX_DOMAIN__")
+    require(
+        json.loads(call_template.replace("__MATRIX_DOMAIN__", DOMAIN)) == element,
+        "element-call-config.json must match the template rendered with the default domain",
+    )
 
     template = (SERVER / "Caddyfile.template").read_text(encoding="utf-8")
     require("__MATRIX_DOMAIN__" in template, "Caddyfile.template must use __MATRIX_DOMAIN__ placeholders")
@@ -173,7 +192,7 @@ def validate_static_config() -> None:
         "org.matrix.msc2965.authentication",
         "Strict-Transport-Security",
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'wasm-unsafe-eval'",
         "worker-src 'self' blob:",
         'frame-ancestors https://testhighlife.strangled.net',
         'camera=(self \\"https://call.testhighlife.strangled.net\\")',
@@ -218,9 +237,13 @@ def validate_static_config() -> None:
     for fragment in (
         "npm ci",
         "npm run build",
-        "VITE_ELEMENT_CALL_URL: https://call.testhighlife.strangled.net",
-        "VITE_LIVEKIT_JWT_URL: https://rtc.testhighlife.strangled.net/livekit/jwt",
-        "VITE_DEFAULT_HOMESERVER: https://testhighlife.strangled.net",
+        'export VITE_ELEMENT_CALL_URL="https://call.${MATRIX_DOMAIN}"',
+        'export VITE_LIVEKIT_JWT_URL="https://rtc.${MATRIX_DOMAIN}/livekit/jwt"',
+        'export VITE_DEFAULT_HOMESERVER="https://${MATRIX_DOMAIN}"',
+        "element-call-config.json.template",
+        "LOGIN_USER",
+        "REDIS_PASSWORD",
+        "chmod 600 out/deploy.env",
         "--project-name highlife_client",
         "--org app.highlife",
         "--base-href /flutter/",
@@ -316,6 +339,7 @@ def docker_compose_config(path: Path) -> None:
             "DEPLOY_PUBLIC_IP": "203.0.113.10",
             "GITHUB_REPOSITORY_OWNER": "validation",
             "BOT_IMAGE_TAG": "validation",
+            "REDIS_PASSWORD": "validation-only",
         }
     )
     subprocess.run(

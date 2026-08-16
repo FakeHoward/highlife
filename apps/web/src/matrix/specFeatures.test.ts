@@ -157,8 +157,12 @@ describe("homeserver helpers", () => {
     expect(urlPreviewCapabilityEnabled({ "m.url_preview": { enabled: false } })).toBe(false);
     expect(firstHttpUrl("see https://example.org/a, then text")).toBe("https://example.org/a");
     expect(parseUrlPreview({ "og:title": "Example" }, "https://example.org")).toEqual({
-      url: "https://example.org",
+      url: "https://example.org/",
       title: "Example",
+    });
+    expect(parseUrlPreview({ "og:title": "Bad", "og:url": "javascript:alert(1)" }, "https://example.org")).toEqual({
+      url: "https://example.org/",
+      title: "Bad",
     });
   });
 });

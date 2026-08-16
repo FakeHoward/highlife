@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { randomBytes } from "node:crypto";
 import http from "node:http";
 
 import {
@@ -181,13 +180,10 @@ async function runBot(): Promise<void> {
   const anonymitySalt = process.env.FORMSPACE_ANONYMITY_SALT?.trim();
   if (!anonymitySalt) {
     console.warn(
-      "FORMSPACE_ANONYMITY_SALT unset; using ephemeral salt — anonymous identity hashes will not survive restart",
+      "FORMSPACE_ANONYMITY_SALT unset; persisting a generated salt under bot-data",
     );
   }
-  const store = new FormSpaceStore(
-    dataDir,
-    anonymitySalt || randomBytes(32).toString("hex"),
-  );
+  const store = new FormSpaceStore(dataDir, anonymitySalt);
   const router = createFormSpaceRouter({ bot, store, miniAppUrl });
 
   const dispatcher = new Dispatcher({
@@ -207,8 +203,7 @@ async function runBot(): Promise<void> {
   dispatcher.errors(async (error, ctx) => {
     console.error("FormSpace handler failed", error);
     if (ctx?.updateType === "message" && !ctx.signal.aborted) {
-      const detail = error instanceof Error ? error.message : "unknown error";
-      await ctx.reply(`FormSpace could not complete that action: ${detail}`);
+      await ctx.reply("FormSpace could not complete that action. Try again or /form help.");
     }
     return true;
   });
@@ -224,7 +219,7 @@ async function runBot(): Promise<void> {
   });
 
   const miniServer = bot.createMiniAppServer({
-    allowedOrigins: [new URL(miniAppUrl).origin, "https://testhighlife.strangled.net"],
+    allowedOrigins: [new URL(miniAppUrl).origin],
     basePath: "/",
     includeRoomAuthInSession: true,
     resolveRoomAuth,

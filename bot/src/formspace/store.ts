@@ -58,7 +58,26 @@ function id(prefix: string): string {
 }
 
 export function hashUser(userId: string, salt: string): string {
-  return createHash("sha256").update(`${salt}:${userId}`).digest("hex").slice(0, 16);
+  return createHash("sha256").update(`${salt}:${userId}`).digest("hex");
+}
+
+function resolveAnonymitySalt(dataDir: string, salt?: string): string {
+  const saltFile = join(dataDir, "anonymity-salt");
+  const trimmed = salt?.trim();
+  mkdirSync(dataDir, { recursive: true });
+  if (trimmed) {
+    writeFileSync(saltFile, trimmed, { encoding: "utf8", mode: 0o600 });
+    return trimmed;
+  }
+  try {
+    const existing = readFileSync(saltFile, "utf8").trim();
+    if (existing) return existing;
+  } catch {
+    /* generate below */
+  }
+  const generated = randomBytes(32).toString("hex");
+  writeFileSync(saltFile, generated, { encoding: "utf8", mode: 0o600 });
+  return generated;
 }
 
 export class FormSpaceStore {
@@ -69,8 +88,7 @@ export class FormSpaceStore {
 
   constructor(dataDir: string, salt?: string, limits?: Partial<StoreLimits>) {
     this.path = join(dataDir, "formspace.json");
-    const trimmed = salt?.trim();
-    this.salt = trimmed && trimmed.length > 0 ? trimmed : randomBytes(32).toString("hex");
+    this.salt = resolveAnonymitySalt(dataDir, salt);
     this.limits = { ...DEFAULT_STORE_LIMITS, ...limits };
     mkdirSync(dirname(this.path), { recursive: true });
     this.db = this.load();

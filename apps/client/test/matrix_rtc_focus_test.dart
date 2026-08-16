@@ -12,12 +12,14 @@ void main() {
     expect(focus?.serviceUrl, 'https://rtc.example.org/livekit/jwt');
   });
 
-  test('falls back to the homeserver JWT service', () {
-    expect(
-      discoverLivekitFocus(null)?.serviceUrl,
-      defaultLivekitJwtUrl,
-    );
+  test('does not invent a LiveKit focus without well-known or an explicit fallback', () {
+    expect(discoverLivekitFocus(null), isNull);
     expect(discoverLivekitFocus(null, fallbackUrl: ''), isNull);
+    expect(
+      discoverLivekitFocus(null, fallbackUrl: 'https://rtc.example.org/livekit/jwt')
+          ?.serviceUrl,
+      'https://rtc.example.org/livekit/jwt',
+    );
   });
 
   test('builds Element-compatible MSC3401 membership for LiveKit', () {

@@ -22,7 +22,8 @@ register_account() {
     return 1
   }
 
-  echo "Ensuring @${localpart}:testhighlife.strangled.net exists via MAS"
+  domain="${MATRIX_DOMAIN:-${DOMAIN:-testhighlife.strangled.net}}"
+  echo "Ensuring @${localpart}:${domain} exists via MAS"
   # docker compose exec does not use the image ENTRYPOINT.
   if output="$(docker compose -f "$compose_file" exec -T mas \
     /usr/local/bin/mas-cli --config /data/config.yaml manage register-user \

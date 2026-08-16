@@ -116,12 +116,12 @@ class HighLifeSession extends ChangeNotifier {
 
   String get livekitJwtUrl => const String.fromEnvironment(
         'HIGHLIFE_LIVEKIT_JWT_URL',
-        defaultValue: 'https://rtc.testhighlife.strangled.net/livekit/jwt',
+        defaultValue: '',
       );
 
   String get elementCallUrl => const String.fromEnvironment(
         'HIGHLIFE_ELEMENT_CALL_URL',
-        defaultValue: 'https://call.testhighlife.strangled.net',
+        defaultValue: '',
       );
 
   String get elementCallParentUrl => const String.fromEnvironment(

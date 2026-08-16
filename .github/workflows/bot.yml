@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "bot/**"
+      - "contracts/**"
       - ".github/workflows/bot.yml"
   pull_request:
     paths:
       - "bot/**"
+      - "contracts/**"
       - ".github/workflows/bot.yml"
   workflow_dispatch:
 

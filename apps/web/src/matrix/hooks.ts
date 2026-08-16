@@ -8,6 +8,7 @@ import {
   restoreSession,
   roomTimeline,
   subscribe,
+  threadHistoryKey,
 } from "./service";
 
 export function useMatrix() {
@@ -24,11 +25,11 @@ export function useTimeline(roomId: string | null) {
   return roomId ? roomTimeline(roomId) : [];
 }
 
-export function useHistoryState(roomId: string | null) {
+export function useHistoryState(roomId: string | null, threadRootId?: string | null) {
   useMatrix();
-  return roomId
-    ? getHistoryState(roomId)
-    : { loading: false, exhausted: true, error: null };
+  if (!roomId) return { loading: false, exhausted: true, error: null };
+  const key = threadRootId ? threadHistoryKey(roomId, threadRootId) : roomId;
+  return getHistoryState(key);
 }
 
 export function useBootstrap(): boolean {

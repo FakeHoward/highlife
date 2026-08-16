@@ -6,7 +6,7 @@ import { assertMiniAppPowerLive } from "aiomatrix/miniapp";
 import { canViewRawAnswers, countRsvp, isFormInRoom, publicSummary } from "./engine.js";
 import type { FormSpaceStore } from "./store.js";
 
-const DEFAULT_CORS_ORIGIN = "https://testhighlife.strangled.net";
+const DEFAULT_CORS_ORIGIN = "";
 
 const HTTP_RATE_LIMIT = 60;
 const HTTP_RATE_WINDOW_MS = 60_000;
@@ -67,12 +67,10 @@ function sendJson(
 
 function clientIp(req: IncomingMessage): string {
   const xff = req.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.trim()) {
-    return xff.split(",")[0]!.trim();
-  }
-  if (Array.isArray(xff) && xff[0]) {
-    return xff[0].split(",")[0]!.trim();
-  }
+  const raw = typeof xff === "string" ? xff : Array.isArray(xff) ? xff.join(",") : "";
+  const hops = raw.split(",").map((part) => part.trim()).filter(Boolean);
+  // Caddy appends the connecting client; the last hop is the trusted peer.
+  if (hops.length > 0) return hops[hops.length - 1]!;
   return req.socket.remoteAddress ?? "unknown";
 }
 
@@ -176,23 +174,20 @@ export function wrapMiniAppHandler(
             }
             let power =
               typeof session.powerLevel === "number" ? session.powerLevel : 0;
-            if (session.userId !== form.creatorId && form.policy !== "public") {
-              try {
-                const fresh = await assertMiniAppPowerLive(session, 0, resolveRoomAuth);
-                power =
-                  typeof fresh.powerLevel === "number" ? fresh.powerLevel : power;
-              } catch (error) {
-                if (error instanceof MiniAppAuthError) {
-                  sendJson(res, 403, { error: "forbidden" }, req);
-                  return;
-                }
-                throw error;
+            try {
+              const fresh = await assertMiniAppPowerLive(session, 0, resolveRoomAuth);
+              power =
+                typeof fresh.powerLevel === "number" ? fresh.powerLevel : power;
+            } catch (error) {
+              if (error instanceof MiniAppAuthError) {
+                sendJson(res, 403, { error: "forbidden" }, req);
+                return;
               }
+              throw error;
             }
             const allowed =
               session.userId === form.creatorId ||
-              canViewRawAnswers(form, session.userId, power) ||
-              form.policy === "public";
+              canViewRawAnswers(form, session.userId, power);
             if (!allowed) {
               sendJson(res, 403, { error: "forbidden" }, req);
               return;
