@@ -6,6 +6,7 @@ import {
   type MatrixRTCSession,
 } from "matrix-js-sdk/lib/matrixrtc";
 import { MatrixLivekitKeyProvider } from "./livekitE2ee";
+import { classifyDirectCallFailure, DIRECT_CALL_MIC_BLOCKED } from "./directCallErrors";
 import {
   MSC3401_MEMBER_EVENT,
   remoteLivekitFocusFromEvents,
@@ -248,14 +249,24 @@ export class MatrixRtcController {
 
   async toggleMicrophone(): Promise<void> {
     const muted = !this.current.microphoneMuted;
-    await this.media.setMicrophoneEnabled(!muted);
-    this.refresh({ microphoneMuted: muted });
+    try {
+      await this.media.setMicrophoneEnabled(!muted);
+      this.refresh({ microphoneMuted: muted });
+    } catch (reason) {
+      if (classifyDirectCallFailure(reason) === DIRECT_CALL_MIC_BLOCKED) return;
+      throw reason;
+    }
   }
 
   async toggleCamera(): Promise<void> {
     const muted = !(this.current.cameraMuted ?? true);
-    await this.media.setCameraEnabled?.(!muted);
-    this.refresh({ cameraMuted: muted });
+    try {
+      await this.media.setCameraEnabled?.(!muted);
+      this.refresh({ cameraMuted: muted });
+    } catch (reason) {
+      if (classifyDirectCallFailure(reason) === DIRECT_CALL_MIC_BLOCKED) return;
+      throw reason;
+    }
   }
 
   dispose(): void {

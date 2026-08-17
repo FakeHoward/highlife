@@ -29,6 +29,7 @@ import {
   type MatrixClient,
   type MatrixEvent,
   type Room,
+  type RoomMember,
 } from "matrix-js-sdk";
 import { SlidingSync } from "matrix-js-sdk/lib/sliding-sync";
 import {
@@ -108,6 +109,7 @@ import {
   firstHttpUrl,
   parseProfileAbout,
   parseUrlPreview,
+  appendAccessToken,
   PROFILE_ABOUT_KEY,
   type AdvertisedCommand,
   type ImagePackItem,
@@ -808,6 +810,37 @@ function requiredClient(): MatrixClient {
   return client;
 }
 
+/** MSC3916 media for `<img src>`: authenticated path plus access_token (no Authorization header). */
+function signedMediaUrl(http: string | null | undefined, token?: string | null): string | undefined {
+  if (!http) return undefined;
+  const access = token ?? client?.getAccessToken();
+  return access ? appendAccessToken(http, access) : http;
+}
+
+function mxcHttp(
+  active: MatrixClient,
+  mxcUrl: string,
+  width?: number,
+  height?: number,
+  resizeMethod?: string,
+): string | undefined {
+  return signedMediaUrl(
+    active.mxcUrlToHttp(mxcUrl, width, height, resizeMethod, false, true, true),
+    active.getAccessToken(),
+  );
+}
+
+function roomAvatarHttp(active: MatrixClient, room: Room, size: number): string | undefined {
+  return signedMediaUrl(room.getAvatarUrl(active.baseUrl, size, size, "crop", true, true), active.getAccessToken());
+}
+
+function memberAvatarHttp(active: MatrixClient, member: RoomMember, size: number): string | undefined {
+  return signedMediaUrl(
+    member.getAvatarUrl(active.baseUrl, size, size, "crop", false, true),
+    active.getAccessToken(),
+  );
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Matrix request failed";
 }
@@ -838,7 +871,7 @@ export function listRooms(query = ""): RoomListItem[] {
         roomId: room.roomId,
         name,
         topic: room.currentState.getStateEvents(EventType.RoomTopic, "")?.getContent().topic as string | undefined,
-        avatarUrl: room.getAvatarUrl(active.baseUrl, 72, 72, "crop") ?? undefined,
+        avatarUrl: roomAvatarHttp(active, room, 72),
         canonicalAlias: (
           room.currentState
             .getStateEvents(EventType.RoomCanonicalAlias, "")
@@ -875,7 +908,7 @@ export function listSpaces(): SpaceSummary[] {
         roomId: room.roomId,
         name: room.name || room.roomId,
         topic: room.currentState.getStateEvents(EventType.RoomTopic, "")?.getContent().topic as string | undefined,
-        avatarUrl: room.getAvatarUrl(active.baseUrl, 72, 72, "crop") ?? undefined,
+        avatarUrl: roomAvatarHttp(active, room, 72),
         childRoomIds: children,
       };
     })
@@ -950,7 +983,7 @@ export function roomTimeline(roomId: string): TimelineItem[] {
   );
   const avatars: Record<string, string> = {};
   for (const member of room.getJoinedMembers()) {
-    const avatar = member.getAvatarUrl(active.baseUrl, 64, 64, "crop", false, false);
+    const avatar = memberAvatarHttp(active, member, 64);
     if (avatar) avatars[member.userId] = avatar;
   }
   return normalizeTimeline(
@@ -1163,7 +1196,7 @@ export async function resolveMediaObjectUrl(media: {
   };
 }): Promise<string> {
   const active = requiredClient();
-  const http = active.mxcUrlToHttp(media.mxcUrl, undefined, undefined, undefined, true);
+  const http = mxcHttp(active, media.mxcUrl);
   if (!http) throw new Error("Media URL unavailable");
   if (!media.encrypted) return http;
 
@@ -1284,7 +1317,7 @@ export function getUserProfileInfo(userId: string): {
     return {
       userId,
       displayName: member.name || userId,
-      avatarUrl: member.getAvatarUrl(active.baseUrl, 96, 96, "crop", false, false) ?? undefined,
+      avatarUrl: memberAvatarHttp(active, member, 96),
     };
   }
   const user = active.getUser(userId);
@@ -1528,7 +1561,7 @@ export function getJoinedMembers(roomId: string): RoomMemberInfo[] {
     .map((member) => ({
       userId: member.userId,
       displayName: member.name || member.userId,
-      avatarUrl: member.getAvatarUrl(active.baseUrl, 64, 64, "crop", false, false) ?? undefined,
+      avatarUrl: memberAvatarHttp(active, member, 64),
       membership: member.membership ?? "join",
       powerLevel: member.powerLevel,
     }))
@@ -1567,7 +1600,7 @@ export async function widgetDownloadContent(mxcUrl: string): Promise<{
   contentType?: string;
   data: string;
 }> {
-  const http = requiredClient().mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, true);
+  const http = mxcHttp(requiredClient(), mxcUrl);
   if (!http) throw new Error("Media URL unavailable");
   const response = await fetch(http);
   if (!response.ok) throw new Error(`Download failed (${response.status})`);
@@ -1598,7 +1631,7 @@ export function getOwnAvatarUrl(): string | undefined {
   const userId = active.getUserId();
   if (!userId) return undefined;
   const mxc = active.getUser(userId)?.avatarUrl;
-  return mxc ? active.mxcUrlToHttp(mxc, 96, 96, "crop", true) ?? undefined : undefined;
+  return mxc ? mxcHttp(active, mxc, 96, 96, "crop") : undefined;
 }
 
 export function getOwnPresence(): "online" | "unavailable" | "offline" {
@@ -1672,10 +1705,10 @@ export async function fetchUrlPreview(bodyOrUrl: string): Promise<UrlPreview | n
   }).getUrlPreview;
   if (!preview) return null;
   try {
-    const payload = await preview.call(active, url);
+    const payload = await preview.call(active, url, Date.now());
     const parsed = parseUrlPreview(payload, url);
     if (parsed && parsed.image?.startsWith("mxc://")) {
-      parsed.image = active.mxcUrlToHttp(parsed.image, 240, 240, "scale", true) ?? parsed.image;
+      parsed.image = mxcHttp(active, parsed.image, 240, 240, "scale") ?? parsed.image;
     }
     urlPreviewCache.set(url, parsed);
     return parsed;
@@ -2405,7 +2438,7 @@ export function getSessionIdentity(): {
 }
 
 export function mediaUrl(mxcUrl: string): string {
-  return requiredClient().mxcUrlToHttp(mxcUrl, undefined, undefined, undefined, true) ?? "";
+  return mxcHttp(requiredClient(), mxcUrl) ?? "";
 }
 
 export function threadTimeline(roomId: string, rootId: string): TimelineItem[] {

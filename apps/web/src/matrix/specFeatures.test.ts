@@ -26,6 +26,7 @@ import {
   parseUrlPreview,
   PROFILE_ABOUT_KEY,
   urlPreviewCapabilityEnabled,
+  appendAccessToken,
 } from "./specFeatures";
 
 describe("intentional mentions (MSC3952)", () => {
@@ -166,6 +167,21 @@ describe("homeserver helpers", () => {
     expect(urlPreviewCapabilityEnabled({ "org.matrix.msc4452": { enabled: true } })).toBe(true);
     expect(urlPreviewCapabilityEnabled({ "m.url_preview": { enabled: false } })).toBe(false);
     expect(firstHttpUrl("see https://example.org/a, then text")).toBe("https://example.org/a");
+    expect(parseUrlPreview({ "og:title": "Example" }, "https://example.org")).toEqual({
+      url: "https://example.org/",
+      title: "Example",
+    });
+    expect(parseUrlPreview({ "og:title": "Bad", "og:url": "javascript:alert(1)" }, "https://example.org")).toEqual({
+      url: "https://example.org/",
+      title: "Bad",
+    });
+    expect(appendAccessToken("https://hs.example/_matrix/client/v1/media/download/a/b", "tok")).toBe(
+      "https://hs.example/_matrix/client/v1/media/download/a/b?access_token=tok",
+    );
+    expect(appendAccessToken("https://hs.example/_matrix/client/v1/media/thumbnail/a/b?width=64", "tok")).toContain(
+      "access_token=tok",
+    );
+    expect(appendAccessToken("https://hs.example/x?access_token=old", "tok")).toBe("https://hs.example/x?access_token=old");
     expect(parseUrlPreview({ "og:title": "Example" }, "https://example.org")).toEqual({
       url: "https://example.org/",
       title: "Example",

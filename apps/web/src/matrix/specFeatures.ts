@@ -329,6 +329,12 @@ export function parseUrlPreview(payload: Record<string, unknown>, fallbackUrl: s
   return { url, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(image ? { image } : {}) };
 }
 
+/** `<img>` cannot send Authorization; MSC3916 media URLs need the access token in the query. */
+export function appendAccessToken(httpUrl: string, token: string): string {
+  if (!token || /[?&]access_token=/.test(httpUrl)) return httpUrl;
+  return `${httpUrl}${httpUrl.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
+}
+
 function safeHttpUrl(value: string): string | null {
   try {
     const parsed = new URL(value);
