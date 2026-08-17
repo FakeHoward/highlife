@@ -225,6 +225,7 @@ services:
           use_external_ip: true
         redis:
           address: redis:6379
+          password: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
         keys:
           ${LIVEKIT_KEY:?LIVEKIT_KEY is required}: ${LIVEKIT_SECRET:?LIVEKIT_SECRET is required}
     ports:
@@ -238,6 +239,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 20s
     networks: [backend]
 
   lk-jwt-service:

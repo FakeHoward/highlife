@@ -589,7 +589,11 @@ jobs:
             fi
 
             docker compose -f docker-compose.prod.yml up -d --remove-orphans --force-recreate caddy
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            if ! docker compose -f docker-compose.prod.yml up -d --remove-orphans; then
+              docker compose -f docker-compose.prod.yml ps -a
+              docker compose -f docker-compose.prod.yml logs --tail=120 livekit redis
+              exit 1
+            fi
             # Optional Matrix push gateway (Sygnal). Set ENABLE_PUSH=true in deploy.env
             # and create DNS A record for push.<domain>. Does not affect SSH auth.
             if [ "${ENABLE_PUSH:-}" = "true" ] || [ "${ENABLE_PUSH:-}" = "1" ]; then

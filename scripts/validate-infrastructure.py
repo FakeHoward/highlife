@@ -121,6 +121,11 @@ def validate_compose(path: Path, production: bool) -> None:
             "production bot image owner must be required GITHUB_REPOSITORY_OWNER",
         )
         require("${REDIS_PASSWORD" in rendered, f"{path}: REDIS_PASSWORD must be injected")
+        livekit_cfg = (services["livekit"].get("environment") or {}).get("LIVEKIT_CONFIG") or ""
+        require(
+            "${REDIS_PASSWORD" in str(livekit_cfg),
+            "LiveKit must authenticate to Redis with REDIS_PASSWORD",
+        )
         require(
             "${SYNAPSE_ENABLE_REGISTRATION:-false}" in rendered,
             f"{path}: registration must default closed",
