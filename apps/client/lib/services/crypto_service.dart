@@ -81,8 +81,8 @@ class CryptoService {
 
   static String unavailableReason({required bool isWeb}) {
     if (isWeb || kIsWeb) {
-      return 'E2EE unavailable: vodozemac WASM failed or is not deployed (dummy crypto backend).';
+      return 'Could not start encryption in this browser.';
     }
-    return 'E2EE unavailable: native vodozemac init failed or encryption is disabled.';
+    return 'Could not start encryption on this device.';
   }
 }

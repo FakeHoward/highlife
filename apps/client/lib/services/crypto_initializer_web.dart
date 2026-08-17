@@ -34,14 +34,11 @@ Future<CryptoInitResult> initializeCryptoImplementations() async {
       available: true,
     );
   } catch (error, stack) {
-    final message =
-        'E2EE unavailable: vodozemac WASM init failed ($error). '
-        'Build web/pkg with scripts/build_vodozemac_wasm.sh or the Client CI web job.';
-    debugPrint('$message\n$stack');
+    debugPrint('vodozemac WASM init failed: $error\n$stack');
     return CryptoInitResult(
       implementations: NativeImplementations.dummy,
       available: false,
-      error: message,
+      error: 'Could not start encryption in this browser.',
     );
   }
 }

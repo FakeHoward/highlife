@@ -21,9 +21,9 @@ const en = {
   "login.registerTitle": "Create account",
   "login.hint": "Server URL and your account on that server.",
   "login.registerHint":
-    "Works when the server allows open signup (no email or captcha). Otherwise create the account there, then sign in here.",
+    "If this server lets anyone sign up, you can do it here. Otherwise create the account on the server, then come back.",
   "login.registerMasHint":
-    "This server creates accounts in Matrix Authentication Service. Finish signup in the next screen, then sign in here with the same username and password.",
+    "Finish signup on the next page, then sign in here with the same username and password.",
   "login.createAccountOnServer": "Create account on server",
   "login.mode": "Sign-in or registration",
   "login.homeserver": "Homeserver",
@@ -55,7 +55,7 @@ const en = {
   "login.ssoTokenPlaceholder": "Paste loginToken from the redirect",
   "login.useToken": "Sign in with token",
   "login.cryptoBanner":
-    "This browser cannot run Matrix encryption (needs HTTPS, WebAssembly, and IndexedDB). Encrypted rooms will stay unreadable until those are available.",
+    "This browser can't decrypt chats. Use HTTPS, or open HighLife on your phone.",
   "login.signInQr": "Sign in with QR",
   "login.qrHint":
     "Show a QR for Element X or another already signed-in HighLife web session. The Android app cannot scan this code yet.",
@@ -78,11 +78,11 @@ const en = {
   "sidebar.profile": "Profile",
 
   // Spaces (= chat folders)
-  "spaces.hint": "Like Telegram folders — group chats in the sidebar.",
+  "spaces.hint": "Put chats in a sidebar folder.",
   "spaces.empty": "No spaces yet. Use the folder button to add one.",
   "spaces.createTitle": "New space",
   "spaces.blurb":
-    "A space is a folder for chats: pick it in the sidebar to show only those rooms. It is not a chat itself.",
+    "Pick a space on the left to show only those chats. A space is not a chat.",
   "spaces.name": "Space name",
   "spaces.namePlaceholder": "Work, Friends, …",
   "spaces.topicOptional": "Description (optional)",
@@ -246,8 +246,8 @@ const en = {
   "settings.save": "Save",
   "settings.chooseAvatar": "Choose avatar",
   "settings.encryption": "Encryption",
-  "settings.encryptionSummary": "Devices, recovery, and key backup",
-  "settings.rustCrypto": "Encryption engine",
+  "settings.encryptionSummary": "Sessions, recovery key, and message backup",
+  "settings.rustCrypto": "Encryption",
   "settings.ready": "Ready",
   "settings.unavailable": "Unavailable",
   "settings.device": "Device",
@@ -260,12 +260,12 @@ const en = {
   "settings.checking": "Checking…",
   "settings.backupUnavailable": "unavailable",
   "settings.encryptionNote":
-    "Set up recovery to enable key backup. HighLife only reports backup as enabled after the SDK confirms an active local backup version.",
+    "Old messages in this browser need a recovery key or a check from a device you already trust. Backup on the server does nothing until this session trusts it.",
   "settings.thisDevice": "this device",
   "settings.anotherDevice": "another device",
   "settings.noDevices": "No devices listed yet.",
   "settings.linkNewDevice": "Link a new device",
-  "settings.linkNewDeviceHint": "Show a QR for Element X to scan. HighLife Android cannot complete this handshake yet.",
+  "settings.linkNewDeviceHint": "QR for Element X. The Android app cannot finish this yet.",
   "settings.qrCheckCode": "Check code",
   "settings.qrWaiting": "Waiting for the other device…",
   "settings.qrDone": "Device linked",
@@ -289,7 +289,7 @@ const en = {
   "settings.deviceSignedOut": "Session ended",
   "settings.signThisDevice": "Trust this session",
   "settings.thisDeviceUnsigned":
-    "Other clients will warn that this device is not signed by you until you trust this session or verify it from Element.",
+    "Other apps will treat this browser as new until you trust it here or confirm it from your phone.",
   "settings.backupEnabled": "enabled (v{version})",
   "settings.backupConfigured": "on server, not active here",
   "settings.backupMissing": "missing",
@@ -447,10 +447,10 @@ const en = {
   "call.micBlocked":
     "Microphone is blocked by Windows. Allow it for this browser in Settings → Privacy → Microphone, then try again.",
   "call.cryptoUnavailable":
-    "This encrypted chat needs working encryption before a classic invite can be sent. HighLife uses MatrixRTC for Element X; set up recovery in Profile if messages also fail.",
+    "This chat is encrypted, so a call invite has to wait until encryption is working. If old messages also fail, open Profile and restore recovery.",
   "call.cameraOn": "Camera on",
   "call.cameraOff": "Camera off",
-  "update.available": "A newer HighLife web build is published ({version}).",
+  "update.available": "A newer HighLife web version is out ({version}).",
   "update.open": "Open download",
 
   // Common / errors / modal
@@ -471,9 +471,9 @@ const ru: Record<MessageKey, string> = {
   "login.registerTitle": "Регистрация",
   "login.hint": "Адрес сервера и ваш аккаунт на нём.",
   "login.registerHint":
-    "Работает, если сервер разрешает открытую регистрацию (без email и captcha). Иначе создайте аккаунт у них и войдите здесь.",
+    "Если сервер пускает всех — можно зарегистрироваться здесь. Иначе сначала аккаунт на сервере, потом вход.",
   "login.registerMasHint":
-    "Этот сервер создаёт аккаунты через Matrix Authentication Service. Завершите регистрацию на следующем экране, затем войдите здесь тем же именем и паролем.",
+    "Дорегистрируйтесь на следующей странице, затем войдите здесь тем же именем и паролем.",
   "login.createAccountOnServer": "Создать аккаунт на сервере",
   "login.mode": "Вход или регистрация",
   "login.homeserver": "Сервер",
@@ -506,7 +506,7 @@ const ru: Record<MessageKey, string> = {
   "login.ssoTokenPlaceholder": "Вставьте loginToken из редиректа",
   "login.useToken": "Войти по токену",
   "login.cryptoBanner":
-    "Этот браузер не может запустить шифрование Matrix (нужны HTTPS, WebAssembly и IndexedDB). Зашифрованные комнаты останутся нечитаемыми.",
+    "Этот браузер не расшифрует чаты. Откройте сайт по HTTPS или зайдите с телефона.",
   "login.signInQr": "Войти по QR",
   "login.qrHint":
     "QR для Element X или уже открытой веб-сессии HighLife. Приложение Android этот код пока не сканирует.",
@@ -527,11 +527,11 @@ const ru: Record<MessageKey, string> = {
   "sidebar.spaces": "Пространства",
   "sidebar.profile": "Профиль",
 
-  "spaces.hint": "Как папки в Telegram — группируют чаты в списке слева.",
+  "spaces.hint": "Соберите чаты в папку слева.",
   "spaces.empty": "Пока нет пространств. Кнопка с папкой создаёт новое.",
   "spaces.createTitle": "Новое пространство",
   "spaces.blurb":
-    "Пространство — это папка для чатов: выберите его слева, чтобы видеть только нужные комнаты. Само по себе это не переписка.",
+    "Выберите пространство слева, чтобы видеть только эти чаты. Само пространство — не переписка.",
   "spaces.name": "Название",
   "spaces.namePlaceholder": "Работа, Друзья, …",
   "spaces.topicOptional": "Описание (необязательно)",
@@ -690,8 +690,8 @@ const ru: Record<MessageKey, string> = {
   "settings.save": "Сохранить",
   "settings.chooseAvatar": "Выбрать аватар",
   "settings.encryption": "Шифрование",
-  "settings.encryptionSummary": "Устройства, восстановление и резерв ключей",
-  "settings.rustCrypto": "Движок шифрования",
+  "settings.encryptionSummary": "Сессии, ключ восстановления и бэкап сообщений",
+  "settings.rustCrypto": "Шифрование",
   "settings.ready": "Готово",
   "settings.unavailable": "Недоступно",
   "settings.device": "Устройство",
@@ -704,12 +704,12 @@ const ru: Record<MessageKey, string> = {
   "settings.checking": "Проверка…",
   "settings.backupUnavailable": "недоступно",
   "settings.encryptionNote":
-    "Настройте восстановление, чтобы включить резерв ключей. HighLife показывает «включён» только после подтверждения активной локальной версии бэкапа.",
+    "Старые сообщения в этом браузере откроются по ключу восстановления или после проверки с телефона. Бэкап на сервере сам по себе не поможет, пока эта сессия ему не доверяет.",
   "settings.thisDevice": "это устройство",
   "settings.anotherDevice": "другое устройство",
   "settings.noDevices": "Список устройств пока пуст.",
   "settings.linkNewDevice": "Привязать устройство",
-  "settings.linkNewDeviceHint": "QR для Element X. Приложение Android этот handshake пока не завершает.",
+  "settings.linkNewDeviceHint": "QR для Element X. Приложение Android это пока не заканчивает.",
   "settings.qrCheckCode": "Код проверки",
   "settings.qrWaiting": "Ждём другое устройство…",
   "settings.qrDone": "Устройство привязано",
@@ -733,7 +733,7 @@ const ru: Record<MessageKey, string> = {
   "settings.deviceSignedOut": "Сессия завершена",
   "settings.signThisDevice": "Доверить эту сессию",
   "settings.thisDeviceUnsigned":
-    "Другие клиенты будут предупреждать, что это устройство не подписано вами, пока вы не доверите сессию или не проверите её из Element.",
+    "Другие приложения будут считать этот браузер новым, пока вы не доверите его здесь или не подтвердите с телефона.",
   "settings.backupEnabled": "включён (v{version})",
   "settings.backupConfigured": "на сервере, здесь не активен",
   "settings.backupMissing": "отсутствует",
@@ -888,10 +888,10 @@ const ru: Record<MessageKey, string> = {
   "call.micBlocked":
     "Микрофон заблокирован Windows. Разрешите его для этого браузера в Параметры → Конфиденциальность → Микрофон и попробуйте снова.",
   "call.cryptoUnavailable":
-    "Для классического invite в этом зашифрованном чате нужно рабочее шифрование. Для Element X HighLife звонит через MatrixRTC. Если не уходят и сообщения, настройте восстановление в Профиле.",
+    "Чат зашифрован, поэтому приглашение в звонок подождёт, пока заработает шифрование. Если не открываются и старые сообщения — в Профиле восстановите ключ.",
   "call.cameraOn": "Камера вкл.",
   "call.cameraOff": "Камера выкл.",
-  "update.available": "Опубликована новая веб-сборка HighLife ({version}).",
+  "update.available": "Вышла новая веб-версия HighLife ({version}).",
   "update.open": "Открыть загрузку",
 
   "common.close": "Закрыть",

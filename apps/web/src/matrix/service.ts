@@ -30,6 +30,7 @@ import {
   type MatrixEvent,
   type Room,
 } from "matrix-js-sdk";
+import { logger } from "matrix-js-sdk/lib/logger";
 import { SlidingSync } from "matrix-js-sdk/lib/sliding-sync";
 import {
   CryptoEvent,
@@ -85,6 +86,7 @@ import {
   conversationReplyContent,
   defaultSlidingLists,
   filterCommandSuggestions,
+  slidingSyncRoomSubscription,
   locationContent,
   MSC2545_PACK_STATE,
   MSC2545_USER_EMOTES,
@@ -482,6 +484,10 @@ function attachIncomingVerification(active: MatrixClient): void {
   });
 }
 
+if (!import.meta.env.DEV) {
+  logger.setLevel("warn");
+}
+
 async function start(session: StoredSession): Promise<void> {
   disposeCallControllers();
   if (client) {
@@ -513,6 +519,7 @@ async function start(session: StoredSession): Promise<void> {
     });
     if (state === "PREPARED") {
       void scrubHostCapabilityLeftovers();
+      void ensureOwnDeviceCrossSigned().catch(() => undefined);
     }
   });
   client.on(RoomEvent.MyMembership, (room, membership) => {
@@ -564,7 +571,6 @@ async function start(session: StoredSession): Promise<void> {
     if (cachedSecretStorageKey) {
       void restoreFromKeyBackup().catch(() => undefined);
     }
-    void ensureOwnDeviceCrossSigned().catch(() => undefined);
   } catch (error) {
     publish({ error: `Encryption unavailable: ${messageOf(error)}` });
   }
@@ -585,7 +591,7 @@ async function startSync(active: MatrixClient): Promise<void> {
       const slidingSync = new SlidingSync(
         active.baseUrl,
         defaultSlidingLists() as never,
-        { timeline_limit: 50, required_state: [["*", "*"]] },
+        slidingSyncRoomSubscription(),
         active,
         30_000,
       );
@@ -2070,12 +2076,12 @@ export async function ensureOwnDeviceCrossSigned(password?: string): Promise<voi
   const userId = active.getSafeUserId();
   const status = await crypto.getDeviceVerificationStatus(userId, deviceId);
   if (status?.signedByOwner) return;
-  const crossSigning = await crypto.getCrossSigningStatus();
-  const hasLocalMaster = Boolean(crossSigning.privateKeysCachedLocally.masterKey);
-  const hasPublicKeys = crossSigning.publicKeysOnDevice;
   try {
+    // Never mint a new identity on login. A new device that races
+    // /keys/query will otherwise replace the phone's keys and leave
+    // server backup untrusted.
     await crypto.bootstrapCrossSigning({
-      setupNewCrossSigning: !hasPublicKeys && !hasLocalMaster,
+      setupNewCrossSigning: false,
       authUploadDeviceSigningKeys: signingKeyUploader(password),
     });
   } catch {

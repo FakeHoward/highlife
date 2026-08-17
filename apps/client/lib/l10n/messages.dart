@@ -471,8 +471,8 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Шифрование',
   },
   'encryptionSectionHint': {
-    AppLocale.en: 'Devices, verification, and key backup',
-    AppLocale.ru: 'Устройства, проверка и резерв ключей',
+    AppLocale.en: 'Sessions, recovery key, and message backup',
+    AppLocale.ru: 'Сессии, ключ восстановления и бэкап сообщений',
   },
   'signIn': {AppLocale.en: 'Sign in', AppLocale.ru: 'Войти'},
   'signingIn': {AppLocale.en: 'Signing in…', AppLocale.ru: 'Вход…'},
@@ -482,9 +482,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'registerHint': {
     AppLocale.en:
-        'Open registration only (no email/captcha). Many public servers need Sign in instead.',
+        'If this server lets anyone sign up, you can do it here. Otherwise create the account on the server, then come back.',
     AppLocale.ru:
-        'Только открытая регистрация (без email/captcha). На многих серверах нужен обычный вход.',
+        'Если сервер пускает всех — можно зарегистрироваться здесь. Иначе сначала аккаунт на сервере, потом вход.',
   },
   'username': {AppLocale.en: 'Username', AppLocale.ru: 'Имя пользователя'},
   'createAccount': {
@@ -497,9 +497,9 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'registerMasHint': {
     AppLocale.en:
-        'This server creates accounts in Matrix Authentication Service. Finish signup in the next screen, then sign in here with the same username and password.',
+        'Finish signup on the next page, then sign in here with the same username and password.',
     AppLocale.ru:
-        'Этот сервер создаёт аккаунты через Matrix Authentication Service. Завершите регистрацию на следующем экране, затем войдите здесь тем же именем и паролем.',
+        'Дорегистрируйтесь на следующей странице, затем войдите здесь тем же именем и паролем.',
   },
   'registerMasOpened': {
     AppLocale.en:
@@ -784,8 +784,8 @@ const Map<String, Map<AppLocale, String>> _messages = {
     AppLocale.ru: 'Название пространства',
   },
   'spacesFolderHint': {
-    AppLocale.en: 'Like Telegram folders — create a space, then add chats to it.',
-    AppLocale.ru: 'Как папки в Telegram: создайте пространство и добавьте чаты.',
+    AppLocale.en: 'Create a space, then add chats to it.',
+    AppLocale.ru: 'Создайте пространство и добавьте в него чаты.',
   },
   'folderSection': {
     AppLocale.en: 'Folder (space)',
@@ -821,17 +821,17 @@ const Map<String, Map<AppLocale, String>> _messages = {
   },
   'webEncryptionHint': {
     AppLocale.en:
-        'Crypto backend failed to initialize. Encrypted messages will not decrypt until vodozemac is available.',
+        'Encrypted chats will not open until this page can load its crypto files. Refresh, or use the Android app.',
     AppLocale.ru:
-        'Не удалось инициализировать crypto. Зашифрованные сообщения не будут расшифрованы, пока недоступен vodozemac.',
+        'Зашифрованные чаты не откроются, пока страница не подгрузит шифрование. Обновите или зайдите с телефона.',
   },
   'cryptoUnavailableBanner': {
-    AppLocale.en: 'End-to-end encryption is unavailable on this device',
-    AppLocale.ru: 'Сквозное шифрование на этом устройстве недоступно',
+    AppLocale.en: 'This browser cannot decrypt chats',
+    AppLocale.ru: 'Этот браузер не расшифрует чаты',
   },
   'cryptoInitErrorDetail': {
-    AppLocale.en: 'Crypto init failed: {detail}',
-    AppLocale.ru: 'Ошибка инициализации crypto: {detail}',
+    AppLocale.en: '{detail}',
+    AppLocale.ru: '{detail}',
   },
   'elementCallConfigured': {
     AppLocale.en: 'Element Call configured',

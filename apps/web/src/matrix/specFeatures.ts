@@ -358,6 +358,40 @@ export function slidingSyncSupported(unstable: Record<string, unknown> | undefin
     || unstable["org.matrix.msc3575"] === true;
 }
 
+/**
+ * Room state Sliding Sync should keep. `["*", "*"]` dumps every membership
+ * change and makes Megolm rotate on historical leaves.
+ */
+export const SLIDING_SYNC_REQUIRED_STATE: string[][] = [
+  ["m.room.create", ""],
+  ["m.room.name", ""],
+  ["m.room.avatar", ""],
+  ["m.room.topic", ""],
+  ["m.room.canonical_alias", ""],
+  ["m.room.encryption", ""],
+  ["m.room.power_levels", ""],
+  ["m.room.join_rules", ""],
+  ["m.room.guest_access", ""],
+  ["m.room.history_visibility", ""],
+  ["m.room.tombstone", ""],
+  ["m.room.member", "$LAZY"],
+  ["m.room.member", "$ME"],
+  ["m.space.child", "*"],
+  ["m.space.parent", "*"],
+  ["org.matrix.msc3401.call", "*"],
+  ["org.matrix.msc3401.call.member", "*"],
+  ["dev.aiomatrix.host", "*"],
+  ["im.vector.modular.widgets", "*"],
+  [MSC2545_PACK_STATE, "*"],
+];
+
+export function slidingSyncRoomSubscription(): {
+  timeline_limit: number;
+  required_state: string[][];
+} {
+  return { timeline_limit: 50, required_state: SLIDING_SYNC_REQUIRED_STATE };
+}
+
 export function defaultSlidingLists(): Map<string, {
   ranges: number[][];
   sort: string[];
@@ -368,8 +402,7 @@ export function defaultSlidingLists(): Map<string, {
     ["all", {
       ranges: [[0, 99]],
       sort: ["by_notification_level", "by_recency"],
-      timeline_limit: 50,
-      required_state: [["*", "*"]],
+      ...slidingSyncRoomSubscription(),
     }],
   ]);
 }

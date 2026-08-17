@@ -15,6 +15,8 @@ import {
   parseMsc4139Prompts,
   parseRoomSummary,
   slidingSyncSupported,
+  defaultSlidingLists,
+  slidingSyncRoomSubscription,
   stickerContent,
   threadRelation,
   threadRootId,
@@ -140,6 +142,14 @@ describe("homeserver helpers", () => {
     expect(slidingSyncSupported({ "org.matrix.simplified_msc3575": true })).toBe(true);
     expect(slidingSyncSupported({ "org.matrix.msc4186": true })).toBe(true);
     expect(slidingSyncSupported({})).toBe(false);
+  });
+
+  it("does not subscribe sliding sync to every membership event", () => {
+    const lists = defaultSlidingLists().get("all");
+    expect(lists?.required_state).not.toContainEqual(["*", "*"]);
+    expect(lists?.required_state).toContainEqual(["m.room.member", "$LAZY"]);
+    expect(lists?.required_state).toContainEqual(["org.matrix.msc3401.call.member", "*"]);
+    expect(slidingSyncRoomSubscription().required_state).toEqual(lists?.required_state);
   });
 
   it("builds the MSC4306 subscription path and room summary", () => {

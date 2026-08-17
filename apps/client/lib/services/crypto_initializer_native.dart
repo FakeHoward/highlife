@@ -28,14 +28,11 @@ Future<CryptoInitResult> initializeCryptoImplementations() async {
       available: true,
     );
   } catch (error, stack) {
-    final message =
-        'E2EE unavailable: vodozemac init failed ($error). '
-        'Encrypted rooms will not decrypt on this device.';
-    debugPrint('$message\n$stack');
+    debugPrint('vodozemac init failed: $error\n$stack');
     return CryptoInitResult(
       implementations: NativeImplementations.dummy,
       available: false,
-      error: message,
+      error: 'Could not start encryption on this device.',
     );
   }
 }

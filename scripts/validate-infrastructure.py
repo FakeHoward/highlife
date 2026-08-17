@@ -198,6 +198,9 @@ def validate_static_config() -> None:
         "Strict-Transport-Security",
         "default-src 'self'",
         "script-src 'self' 'wasm-unsafe-eval'",
+        "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:",
+        'Cross-Origin-Opener-Policy "same-origin"',
+        'Cross-Origin-Embedder-Policy "credentialless"',
         "worker-src 'self' blob:",
         'frame-ancestors https://testhighlife.strangled.net',
         'camera=(self \\"https://call.testhighlife.strangled.net\\")',
@@ -205,6 +208,8 @@ def validate_static_config() -> None:
         "handle_path /flutter/*",
         "handle_path /miniapp/*",
         "handle_path /miniapp-api/*",
+        "import flutter_csp",
+        "import spa_csp",
         "root * /srv/react",
         "root * /srv/flutter",
         "root * /srv/miniapp",
@@ -215,6 +220,22 @@ def validate_static_config() -> None:
         require(fragment in caddy, f"Caddyfile is missing {fragment}")
     require("fonts.googleapis.com" not in caddy, "Caddy CSP must not allow Google Fonts")
     require("fonts.gstatic.com" not in caddy, "Caddy CSP must not allow remote Google font files")
+
+    main_site = caddy.split(f"{DOMAIN} {{", 1)[1].split(f"auth.{DOMAIN} {{", 1)[0]
+    site_preamble = main_site.split("handle /.well-known/matrix/server", 1)[0]
+    require(
+        "Content-Security-Policy" not in site_preamble,
+        "site-wide CSP would AND with /flutter/ and block dart2js eval",
+    )
+    flutter_block = main_site.split("handle_path /flutter/* {", 1)[1].split("handle /miniapp {", 1)[0]
+    require("import flutter_csp" in flutter_block, "/flutter/ must use the Flutter CSP snippet")
+    flutter_snippet = caddy.split("(flutter_csp) {", 1)[1].split("auth.", 1)[0]
+    require("'unsafe-eval'" in flutter_snippet, "/flutter/ CSP must allow dart2js new Function()")
+    require("Cross-Origin-Opener-Policy" in flutter_snippet, "/flutter/ needs COOP for SharedArrayBuffer")
+    spa_snippet = caddy.split("(spa_csp) {", 1)[1].split("(flutter_csp)", 1)[0]
+    require("'unsafe-eval'" not in spa_snippet, "React CSP must not allow unsafe-eval")
+    spa_handle = main_site.split("handle {", 1)[1].split("}", 1)[0]
+    require("import spa_csp" in spa_handle, "React handle must use the SPA CSP snippet")
 
     call_block = caddy.split(f"call.{DOMAIN} {{", 1)[1].split(f"rtc.{DOMAIN} {{", 1)[0]
     require("-X-Frame-Options" in call_block, "Element Call must strip upstream X-Frame-Options")

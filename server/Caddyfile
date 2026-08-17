@@ -7,14 +7,29 @@
 	}
 }
 
+# React / Mini App. wasm-unsafe-eval is for rust-crypto; do not add unsafe-eval here.
+# Keep this off the site-wide header block: browsers AND multiple CSPs, so a
+# parent policy without unsafe-eval would still block Flutter's dart2js glue.
+(spa_csp) {
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+}
+
+# Flutter web: vodozemac/wasm-bindgen uses `new Function()` (needs unsafe-eval).
+# COOP/COEP lets SharedArrayBuffer work for flutter_rust_bridge.
+(flutter_csp) {
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "credentialless"
+	}
+}
+
 # Rendered to Caddyfile by deploy (replace MATRIX_DOMAIN placeholders) or kept
 # in sync locally with the default domain. See docs/SECRETS.md.
 testhighlife.strangled.net {
 	import base_security_headers
 	header {
 		X-Frame-Options "SAMEORIGIN"
-		# script-src is 'self' + wasm-unsafe-eval (Rust crypto). No unsafe-inline.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://call.testhighlife.strangled.net; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		Permissions-Policy "camera=(self \"https://call.testhighlife.strangled.net\"), microphone=(self \"https://call.testhighlife.strangled.net\"), display-capture=(self \"https://call.testhighlife.strangled.net\"), fullscreen=(self \"https://call.testhighlife.strangled.net\"), geolocation=()"
 	}
 	encode zstd gzip
@@ -52,6 +67,7 @@ testhighlife.strangled.net {
 	}
 
 	handle_path /flutter/* {
+		import flutter_csp
 		root * /srv/flutter
 		try_files {path} /index.html
 		file_server
@@ -62,6 +78,7 @@ testhighlife.strangled.net {
 	}
 
 	handle_path /miniapp/* {
+		import spa_csp
 		root * /srv/miniapp
 		try_files {path} /index.html
 		file_server
@@ -72,6 +89,7 @@ testhighlife.strangled.net {
 	}
 
 	handle_path /client/* {
+		import spa_csp
 		root * /srv/client
 		file_server
 	}
@@ -81,6 +99,7 @@ testhighlife.strangled.net {
 	}
 
 	handle {
+		import spa_csp
 		root * /srv/react
 		try_files {path} /index.html
 		file_server
