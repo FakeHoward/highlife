@@ -30,7 +30,6 @@ import {
   type MatrixEvent,
   type Room,
 } from "matrix-js-sdk";
-import { logger } from "matrix-js-sdk/lib/logger";
 import { SlidingSync } from "matrix-js-sdk/lib/sliding-sync";
 import {
   CryptoEvent,
@@ -482,10 +481,6 @@ function attachIncomingVerification(active: MatrixClient): void {
     });
     publishVerification();
   });
-}
-
-if (!import.meta.env.DEV) {
-  logger.setLevel("warn");
 }
 
 async function start(session: StoredSession): Promise<void> {
